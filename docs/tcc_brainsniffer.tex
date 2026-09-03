@@ -1,0 +1,235 @@
+\documentclass[12pt]{article}
+
+% Modelo de artigos da Sociedade Brasileira de Computação (SBC).
+% O pacote sbc-template.sty e os arquivos de bibliografia ficam em docs/latex/.
+\makeatletter
+\def\input@path{{latex/}}
+\makeatother
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{amsmath}
+
+\sloppy
+
+% TODO: substituir os campos abaixo pelos dados reais antes da entrega institucional.
+\title{BrainSniffer: um protótipo reproduzível para estimativa da profundidade anestésica a partir de EEG}
+
+\author{Nome do Autor\inst{1}}
+
+\address{Curso de Computação -- Nome da Instituição\\
+  Cidade -- Estado -- Brasil\\
+  \email{email@exemplo.com}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper presents BrainSniffer, an open research prototype for estimating an operational anesthesia-depth reference from frontal electroencephalography (EEG). The system downloads a public EEG and bispectral-index (BIS) corpus, applies documented causal preprocessing, trains a compact one-dimensional convolutional neural network (CNN), and exposes replay and laboratory streaming interfaces. Evaluation is performed by case-level split, avoiding leakage when adjacent windows from the same surgery are distributed across partitions. In the engineering run, the CNN obtained MAE 7.03, RMSE 11.08, Pearson correlation 0.784, stage accuracy 0.585, and macro-F1 0.548 in a five-case holdout. An exploratory evaluation on 15 VitalDB cases without retraining obtained MAE 12.43 and Pearson correlation 0.024, highlighting domain-shift limitations. The prototype is not a clinical decision system and does not prescribe anesthetic dose; it provides an auditable basis for future validation with real hardware, anesthesiology supervision, ethics approval, and a prospective protocol \cite{ma2017,li2022,tripodai}.
+\end{abstract}
+
+\begin{resumo}
+Este trabalho apresenta o BrainSniffer, um protótipo aberto de pesquisa para estimar, a partir de eletroencefalografia (EEG) frontal, uma referência operacional relacionada à profundidade anestésica. O sistema baixa um corpus público de EEG e índice bispectral (BIS), aplica pré-processamento causal documentado, treina uma rede neural convolucional unidimensional (CNN) compacta e oferece interfaces de replay e streaming em laboratório. A avaliação usa separação por caso para evitar vazamento entre janelas da mesma cirurgia. Na execução de engenharia, a CNN obteve MAE 7,03, RMSE 11,08, correlação de Pearson 0,784, acurácia de estágio 0,585 e macro-F1 0,548 no holdout. Em uma avaliação exploratória de 15 casos VitalDB sem retreino, obteve MAE 12,43 e correlação 0,024, evidenciando limitações de mudança de domínio. O protótipo não é um sistema de decisão clínica, não recomenda dose e requer validação futura com hardware real, supervisão de anestesiologia, ética e protocolo prospectivo \cite{ma2017,li2022,tripodai}.
+
+\textbf{Palavras-chave:} EEG; anestesia; BIS; CNN; aprendizado profundo; tempo real; validação por paciente.
+\end{resumo}
+
+\section{Introdução}
+
+A avaliação do componente hipnótico da anestesia é um problema de sinais fisiológicos com implicações clínicas e técnicas. O EEG varia com agente anestésico, idade, comorbidades, estímulo cirúrgico, atividade muscular, montagem dos eletrodos e qualidade da aquisição. Monitores de EEG processado, como o BIS, oferecem uma referência operacional útil, mas seus valores dependem do algoritmo, da instrumentação e do contexto. A literatura enfatiza que um índice processado não deve ser interpretado isoladamente como medida universal de consciência ou como substituto do julgamento clínico \cite{hajat2017,openibis}.
+
+Ao mesmo tempo, estudos de aprendizado profundo mostram que redes convolucionais podem extrair informação temporal e espectral de EEG para tarefas de estimativa de profundidade anestésica \cite{li2022,park2020,shi2023}. O desafio, porém, não é apenas obter uma métrica alta em janelas de um conjunto de dados. Janelas adjacentes da mesma cirurgia são correlacionadas; portanto, uma divisão aleatória por janela pode inflar artificialmente a generalização. Também é necessário tratar explicitamente artefatos, atrasos do monitor, mudança de equipamento, perda de amostras e incerteza de domínio \cite{hajat2017,tripodai}.
+
+Este trabalho descreve o BrainSniffer, uma implementação em Python 3.12 que organiza essas preocupações em um pipeline reproduzível. O objetivo do protótipo é avaliar se uma CNN compacta consegue estimar um valor contínuo semelhante ao BIS e derivá-lo em estágios de pesquisa, preservando a distinção entre previsão de um rótulo de monitor e avaliação clínica do paciente. As contribuições são \cite{gmlp,decideai}:
+
+\begin{itemize}
+  \item um fluxo reproduzível de download, integridade, pré-processamento causal e treinamento;
+  \item uma avaliação agrupada por caso, com baseline espectral e métricas contínuas e discretas;
+  \item um caminho de replay e uma interface de streaming por Lab Streaming Layer (LSL), com auditoria e abstenção sob baixa qualidade;
+  \item uma avaliação externa exploratória em VitalDB que explicita mudança de domínio e limites de extrapolação.
+\end{itemize}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\columnwidth]{figures/pipeline.png}
+\caption{Pipeline do BrainSniffer e a barreira de segurança de engenharia. Fonte: elaboração própria a partir das decisões de projeto e dos princípios de desenvolvimento documentados em \cite{gmlp,lsl}.}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Fundamentação e trabalhos relacionados}
+
+O corpus inicial é o conjunto ``EEG and BIS raw data'', disponibilizado por Ma no Figshare, que associa EEG frontal a valores BIS \cite{ma2017}. O trabalho de Nsugbe e Connelly descreve problema relacionado usando EEG frontal amostrado a 128 Hz, valores BIS em intervalos de 5 s e faixas de pesquisa derivadas do índice \cite{li2022}. Esses elementos orientaram a taxa, o tamanho de janela e a apresentação dos estágios no BrainSniffer, sem reutilizar como validação os resultados publicados por outros autores \cite{ma2017,li2022}.
+
+Abordagens anteriores incluem decomposição multiescala, redes convolucionais e arquiteturas de supressão de ruído. O AnesNET, por exemplo, combina uma cadeia de aquisição e uma rede profunda para monitoramento em tempo real \cite{park2020}; o trabalho de Shi et al. investiga uma rede de residual shrinkage para estimativa de profundidade anestésica \cite{shi2023}. Neste TCC, a escolha é mais conservadora: uma CNN 1-D pequena sobre a janela temporal pré-processada, acompanhada de um baseline espectral auditável. Essa escolha permite medir o ganho da rede antes de adicionar atenção, decomposição ou modelos multitarefa \cite{park2020,shi2023}.
+
+O BIS é um índice proprietário. Uma reimplementação aberta dos algoritmos do BIS é relevante para discutir auditabilidade, mas não transforma uma rede treinada sobre o rótulo BIS em uma reimplementação certificada do monitor \cite{openibis}. A revisão de Hajat, Ahmad e Andrzejowski também destaca artefatos, paralisia, agentes farmacológicos e contexto clínico como fontes de interpretação inadequada \cite{hajat2017}. Por isso, a interface do BrainSniffer utiliza a expressão ``referência BIS estimada'' e exibe qualidade e origem do dado \cite{openibis,hajat2017}.
+
+\section{Materiais e métodos}
+
+\subsection{Dados e tarefa de predição}
+
+O downloader consulta a API do Figshare, confere tamanho e MD5 do manifesto e armazena os arquivos de forma atômica. O corpus contém 24 casos anônimos. O caso 24 foi reprovado pelo gate padrão de qualidade por apresentar escala de amplitude incompatível com os demais arquivos: 99,87\% das amostras ficaram fora do limite de aproximadamente $\pm 62{,}5$ observado no corpus. Como não existe metadado confiável para converter essa escala, o caso não é reinserido silenciosamente; o modo de qualidade zero fica restrito à auditoria exploratória \cite{ma2017}.
+
+Cada janela contém 640 amostras, correspondentes a 5 s em 128 Hz. O rótulo contínuo é o valor BIS associado ao início da janela no modo padrão, com \texttt{label\_offset\_seconds=0}. O pipeline permite registrar explicitamente um deslocamento para estudos de sensibilidade, pois um monitor processado pode apresentar atraso e suavização. Valores fora de $[0,100]$, não finitos ou associados a janelas abaixo do limiar de qualidade são descartados \cite{ma2017,li2022,hajat2017}.
+
+Para a análise discreta, o valor contínuo é convertido nos quatro estágios mostrados na Tabela~\ref{tab:stages}. A conversão é um recurso de interpretação e avaliação; não é uma classificação clínica independente \cite{li2022,hajat2017}.
+
+\begin{table}[ht]
+\centering
+\caption{Estágios de pesquisa derivados do valor BIS \cite{li2022}.}
+\label{tab:stages}
+\begin{tabular}{ccl}
+\hline
+Estágio & Intervalo & Interpretação no protótipo\\
+\hline
+Profundo & $[0,40)$ & referência de pesquisa\\
+Geral & $[40,60)$ & referência de pesquisa\\
+Leve & $[60,80)$ & referência de pesquisa\\
+Acordado & $[80,100]$ & referência de pesquisa\\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Pré-processamento causal e modelo}
+
+O sinal é limitado a uma faixa de segurança, filtrado entre 0,5 e 45 Hz e submetido a notch de 50 Hz. A escala de amplitude é registrada na configuração do checkpoint. O treinamento e o replay usam o mesmo pré-processador causal, preservando o estado do filtro entre chunks e por caso. Uma rota zero-phase existe apenas para análise offline explícita; ela não é usada no caminho de streaming, pois teria acesso a amostras futuras \cite{li2022,park2020}.
+
+O score de qualidade combina verificações de finitude, saturação e linha plana. O limiar padrão é 0,20. Abaixo desse limiar, a janela não entra no treinamento e a inferência pode emitir \texttt{ABSTAIN}, sem valor BIS visível. O score é uma barreira heurística de engenharia, não uma confiança calibrada e não deve acionar dose, alarme ou conduta \cite{gmlp,decideai}.
+
+A entrada da rede tem forma $(\text{batch},1,640)$. A CNN possui quatro blocos convolucionais 1-D com normalização, ativação GELU e pooling. Em seguida, utiliza pooling adaptativo, camadas densas e dropout. A saída é limitada ao intervalo $[0,100]$ por uma sigmoide escalada. O treinamento usa perda Smooth L1. A arquitetura foi mantida compacta para permitir comparação com um baseline e medição de latência; não se afirma que ela seja superior a redes temporais dilatadas, atenção, espectrogramas ou modelos multitarefa \cite{park2020,shi2023}.
+
+O baseline espectral extrai potência absoluta e relativa nas bandas delta, teta, alfa, beta e gama, frequência de borda de 90\%, entropia espectral, RMS e comprimento de linha. Um Random Forest recebe essas características. CNN e baseline usam as mesmas janelas, a mesma separação por caso e o mesmo pré-processamento causal \cite{li2022,hajat2017}.
+
+\subsection{Protocolo de avaliação}
+
+Os casos são embaralhados com semente 42 e divididos em treinamento, validação e teste, mantendo todas as janelas de um caso em uma única partição. As métricas contínuas são erro absoluto médio (MAE), raiz do erro quadrático médio (RMSE), viés e correlação de Pearson. Essa unidade de separação é uma decisão conservadora para reduzir dependência entre janelas da mesma cirurgia \cite{tripodai,decideai}:
+
+\begin{equation}
+\mathrm{MAE}=\frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|, \qquad
+\mathrm{RMSE}=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2}.
+\end{equation}
+
+As métricas discretas são acurácia e macro-F1 nos quatro estágios. O número de casos, o número de janelas, a semente e os hashes dos arquivos são registrados nos relatórios JSON. Quando há pelo menos dois casos de teste, o projeto também calcula bootstrap agrupado por caso para indicar incerteza preliminar \cite{tripodai,decideai}.
+
+\subsection{Inferência em fluxo e auditoria}
+
+O replay mantém uma janela circular de 5 s e emite uma previsão a cada 1 s. O valor bruto, o valor suavizado por EWMA, a qualidade, o timestamp e a origem do dado permanecem separados. A interface LSL utiliza descoberta de streams, chunks, timestamps e seleção de canal. LSL é uma camada de transporte e sincronização para pesquisa, não um driver de monitor nem uma garantia de que o canal seja EEG válido \cite{lsl,kothe2025}.
+
+Antes e durante o consumo, o sistema audita metadados, taxa de amostragem, timestamps, lacunas, pontos não finitos, saturação, linha plana e qualidade. Em caso de silêncio superior ao timeout de 2 s ou de falha de auditoria, a saída fica stale/abstain e o estado causal é reiniciado. Essa política evita manter uma estimativa baseada em janela antiga. A latência medida com sinal sintético representa somente o custo de software na máquina local, não a latência de um sistema clínico \cite{gmlp,decideai}.
+
+\section{Interface e reprodutibilidade}
+
+O aplicativo Streamlit organiza o fluxo em abas de visão geral, dados, exploração, treinamento, replay e EEG ao vivo. A visão geral confronta os resultados dos dois corpora; a aba de dados baixa o Figshare e permite selecionar casos VitalDB para avaliação externa. A aba de treinamento registra configuração, semente, partições, versão do ambiente e hashes. A aba LSL exige uma ficha de entrada com fabricante, modelo, montagem, unidade, taxa declarada, canal escolhido, bridge e responsável pela sessão \cite{gmlp,decideai}.
+
+O VitalDB foi usado somente como fonte externa exploratória. Trata-se de um banco perioperatório independente, com milhares de casos e numerosos tracks de sinais, incluindo dados relacionados à cirurgia e à anestesia \cite{lee2022,vitaldb}. O BrainSniffer baixa seletivamente \texttt{BIS/EEG1\_WAV} e \texttt{BIS/BIS}, preserva a unidade declarada e não mistura esses arquivos no treinamento do Figshare. Essa separação impede que uma diferença de aparelho, ganho, montagem ou população seja escondida por retreino automático \cite{lee2022,vitaldb}.
+
+\section{Resultados}
+
+Os resultados desta seção são uma execução de engenharia reproduzível e não uma validação clínica. O treinamento completo usou 23 casos efetivos, após o gate de qualidade, e 31.055 janelas válidas. A divisão produziu 13 casos de treinamento, 5 de validação e 5 de teste. A Tabela~\ref{tab:holdout} resume o holdout Figshare conforme a recomendação de explicitar população, partição e unidade de análise \cite{ma2017,tripodai}.
+
+\begin{table}[ht]
+\centering
+\caption{Holdout Figshare por caso, seed 42, CNN causal \cite{ma2017,tripodai}.}
+\label{tab:holdout}
+\begin{tabular}{lc}
+\hline
+Item & Resultado\\
+\hline
+Casos treinamento / validação / teste & 13 / 5 / 5\\
+Janelas treinamento / validação / teste & 15.894 / 9.638 / 5.523\\
+MAE / RMSE & 7,03 / 11,08\\
+Viés / Pearson & 0,79 / 0,784\\
+Acurácia / macro-F1 & 0,585 / 0,548\\
+\hline
+\end{tabular}
+\end{table}
+
+Na mesma partição, o baseline espectral obteve MAE 8,86, RMSE 13,23, correlação 0,667, acurácia 0,540 e macro-F1 0,480. A CNN apresentou vantagem nas métricas contínuas desse split, enquanto o resultado por estágio não deve ser tratado como evidência de superioridade geral. Não houve ajuste de hiperparâmetros, calibração ou seleção de protocolo depois de observar um conjunto externo \cite{tripodai}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\columnwidth]{figures/comparison.png}
+\caption{Comparação entre o holdout Figshare e a avaliação VitalDB sem retreino. Fonte: relatórios JSON do projeto; a leitura deve respeitar a mudança de domínio descrita em \cite{lee2022,vitaldb}.}
+\label{fig:comparison}
+\end{figure}
+
+O bootstrap exploratório de 1.000 reamostragens por caso no holdout estimou Pearson médio 0,789, intervalo de 95\% entre 0,703 e 0,881, e MAE médio 7,11, intervalo entre 6,38 e 8,24. Esses intervalos refletem somente a variabilidade dos cinco casos de teste e não substituem uma coorte externa maior \cite{tripodai,decideai}.
+
+O benchmark de processamento sintético mediu p50 de 0,57 ms e p95 de 0,79 ms por emissão, com passo de 1 s e CPU local. A medida não inclui aquisição, resampling, rede, visualização, carga do sistema operacional, concorrência ou um dispositivo de EEG; portanto, não é uma garantia de tempo real clínico \cite{gmlp}.
+
+\subsection{Sensibilidade exploratória ao alinhamento}
+
+O comando \texttt{evaluate-offset} reaplicou o checkpoint congelado aos mesmos cinco casos de teste sem retreino, variando apenas o instante do rótulo BIS. Os valores foram MAE 7,22, 7,03 e 6,76 para offsets de -20, 0 e +20 s, respectivamente; a correlação correspondente foi 0,766, 0,784 e 0,799. O crescimento gradual com um rótulo posterior é compatível com uma hipótese de atraso do monitor, mas a análise foi pós-hoc. Portanto, ela não seleciona o offset final nem demonstra uma medida clínica de consciência \cite{hajat2017,li2022}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\columnwidth]{figures/offset_sensitivity.png}
+\caption{Sensibilidade exploratória ao alinhamento do rótulo BIS. Fonte: relatório de offsets do projeto; a tendência não deve ser usada para escolher atraso em pacientes \cite{hajat2017,li2022}.}
+\label{fig:offset}
+\end{figure}
+
+\subsection{Avaliação externa exploratória}
+
+Quinze casos VitalDB compatíveis foram normalizados e avaliados sem retreino, totalizando 38.730 janelas. A CNN obteve MAE 12,43, RMSE 18,80, viés 1,40, correlação 0,024, acurácia de estágio 0,420 e macro-F1 0,398. O bootstrap de 1.000 reamostragens por caso estimou Pearson 0,023, com intervalo de 95\% entre -0,126 e 0,193. O resultado é uma avaliação out-of-dataset e deve ser reportado junto com a população e a partição, não como validação clínica \cite{lee2022,vitaldb,tripodai}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\columnwidth]{figures/bootstrap_intervals.png}
+\caption{Intervalos exploratórios por caso para Pearson e MAE. Fonte: relatórios JSON do projeto; as linhas representam reamostragem de cirurgias inteiras \cite{tripodai,decideai}.}
+\label{fig:bootstrap}
+\end{figure}
+
+O caso 11 foi rejeitado porque não continha simultaneamente os tracks \texttt{BIS/EEG1\_WAV} e \texttt{BIS/BIS}. Os diagnósticos agregados encontraram pontos não finitos nos 15 arquivos; eles foram tratados somente na preparação offline das janelas. No caminho online, entradas não finitas são rejeitadas antes do filtro causal. O resultado externo é, portanto, evidência de mudança de domínio e de necessidade de validação, não uma conclusão sobre o VitalDB inteiro \cite{vitaldb,decideai}.
+
+\section{Discussão e limitações}
+
+O resultado interno demonstra que o software consegue executar download, integridade, treinamento, avaliação, replay e streaming sintético sob um protocolo registrado. Isso não prova que a CNN mede profundidade anestésica em paciente novo. O corpus inicial é pequeno, usa um canal, depende de um índice processado como referência e pode carregar vieses de aparelho, centro, montagem e população. O BIS também pode ser afetado por artefatos, atividade muscular, fármacos, paralisia e atrasos de processamento \cite{hajat2017}.
+
+A baixa correlação no VitalDB sem retreino é coerente com a hipótese de mudança de domínio. Ela impede apresentar a métrica interna como generalização. Também não é lícito melhorar o número externo por adaptação sem antes definir protocolo independente, partição travada e justificativa de transferência. O projeto registra essa limitação e mantém os datasets separados \cite{lee2022,gmlp}.
+
+Do ponto de vista de segurança, o aplicativo não controla bombas, não gera recomendação de dose e não aciona alarme clínico. A abstenção sob baixa qualidade reduz uma classe de falhas de software, mas não cria segurança clínica. A próxima etapa deve incluir estudo com hardware específico, verificação de taxa e unidade, sincronização com o monitor, teste de perdas e reconexão, anotação de qualidade e revisão por anestesiologistas \cite{gmlp,decideai}.
+
+O planejamento de validação segue uma progressão de pesquisa: replay, bancada com sinal conhecido, teste externo travado, modo sombra e somente depois estudo prospectivo supervisionado. Essa postura é consistente com princípios de desenvolvimento de aprendizado de máquina para dispositivos médicos e com orientações de avaliação transparente de sistemas de suporte à decisão \cite{gmlp,decideai,tripodai}.
+
+\section{Conclusão}
+
+O BrainSniffer fornece uma base em Python 3.12 para investigar estimativa de uma referência BIS a partir de EEG frontal com CNN 1-D, pré-processamento causal, separação por paciente, baseline espectral, interface Streamlit e entrada de pesquisa via LSL. O holdout Figshare mostrou uma execução interna reproduzível, enquanto a avaliação VitalDB revelou que o desempenho não se transfere automaticamente para outro corpus \cite{ma2017,lee2022}.
+
+Assim, a contribuição atual é metodológica e de engenharia: tornar explícitos dados, rótulos, qualidade, latência, partições, artefatos e limites de interpretação. Os próximos experimentos devem pré-especificar alinhamento, incluir baseline de entropia e modelos temporais, ampliar a validação externa, calibrar a política de abstenção, medir o hardware alvo e conduzir avaliação prospectiva com equipe de anestesiologia. Até que essas etapas sejam concluídas, o sistema deve permanecer restrito à pesquisa e não pode ser usado para decidir a profundidade anestésica ou a dose de um paciente \cite{gmlp,tripodai}.
+
+\section*{Agradecimentos}
+
+O autor agradece às equipes que disponibilizaram os datasets públicos utilizados para desenvolvimento e avaliação exploratória. Os termos de uso de cada corpus devem ser consultados antes de redistribuição ou novo estudo \cite{ma2017,vitaldb}.
+
+\begin{thebibliography}{99}
+\bibitem[Ma 2017]{ma2017} Ma, L. (2017). \textit{EEG and BIS raw data}. Figshare. DOI: 10.6084/m9.figshare.5589841.v1.
+
+\bibitem[Nsugbe and Connelly 2022]{li2022} Nsugbe, E. and Connelly, S. (2022). Multiscale depth of anaesthesia prediction for surgery using frontal cortex electroencephalography. \textit{Healthcare Technology Letters}, 9, 43--53.
+
+\bibitem[Park et al. 2020]{park2020} Park, Y. et al. (2020). A real-time depth of anesthesia monitoring system based on deep neural network with large EDO tolerant EEG analog front-end. \textit{IEEE Transactions on Biomedical Circuits and Systems}, 14, 825--837.
+
+\bibitem[Shi et al. 2023]{shi2023} Shi, M. et al. (2023). Estimating the depth of anesthesia from EEG signals based on a deep residual shrinkage network. \textit{Sensors}, 23(2), 1008.
+
+\bibitem[Hajat et al. 2017]{hajat2017} Hajat, Z., Ahmad, N. and Andrzejowski, J. (2017). The role and limitations of EEG-based depth of anaesthesia monitoring in theatres and intensive care. \textit{Anaesthesia}, 72, 38--47.
+
+\bibitem[Connor 2022]{openibis} Connor, C. W. (2022). Open reimplementation of the BIS algorithms for depth of anesthesia. \textit{Scientific Reports}.
+
+\bibitem[Lee et al. 2022]{lee2022} Lee, H.-C. et al. (2022). VitalDB, a high-fidelity multi-parameter vital signs database in surgical patients. \textit{Scientific Data}, 9.
+
+\bibitem[VitalDB 2026]{vitaldb} VitalDB (2026). Open Dataset: overview, track units and data-use terms. Documentação online.
+
+\bibitem[Lab Streaming Layer 2026]{lsl} Lab Streaming Layer (2026). Introduction to Lab Streaming Layer. Documentação online.
+
+\bibitem[Kothe et al. 2025]{kothe2025} Kothe, C. et al. (2025). The Lab Streaming Layer for synchronized multimodal recording. \textit{Frontiers in Neuroscience}.
+
+\bibitem[FDA, Health Canada and MHRA 2021]{gmlp} FDA, Health Canada and MHRA (2021). Good machine learning practice for medical device development: guiding principles. Guidance online.
+
+\bibitem[Vasey et al. 2022]{decideai} Vasey, B. et al. (2022). Reporting guideline for the early-stage clinical evaluation of decision support systems driven by artificial intelligence: DECIDE-AI. \textit{Nature Medicine}, 28, 924--933.
+
+\bibitem[Collins et al. 2024]{tripodai} Collins, G. S. et al. (2024). TRIPOD+AI statement: updated guidance for reporting clinical prediction models that use regression or machine learning methods. \textit{BMJ}, 385.
+\end{thebibliography}
+
+\end{document}

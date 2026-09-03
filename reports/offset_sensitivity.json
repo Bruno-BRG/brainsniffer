@@ -1,0 +1,177 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models/brainsniffer_cnn.pt",
+  "checkpoint_sha256": "fde8e45fff2fa5414944686fd086fc3dd42248f247c7fb4ea1e31aa00618ee8c",
+  "data_dir": "data/raw",
+  "test_cases": [
+    "case19",
+    "case3",
+    "case4",
+    "case5",
+    "case9"
+  ],
+  "input_files": [
+    {
+      "path": "data/raw/case19.mat",
+      "size_bytes": 786271,
+      "sha256": "8d681e6704227659bf008554e9a9fd649adc2380528e7d82820fce168c721ad1"
+    },
+    {
+      "path": "data/raw/case3.mat",
+      "size_bytes": 2050259,
+      "sha256": "83e086d5aab4f2e91be004aa19c144922b32bef546e0aa7367923c33b59bc990"
+    },
+    {
+      "path": "data/raw/case4.mat",
+      "size_bytes": 671014,
+      "sha256": "71d72ee18301995a83506fa0173a102d3d176789f22cbdee70e5598af5e4c45c"
+    },
+    {
+      "path": "data/raw/case5.mat",
+      "size_bytes": 466317,
+      "sha256": "596694eb9d197ee1910cc63eb85fa3dee2b6053caeb6efe68cdde01228d9b4de"
+    },
+    {
+      "path": "data/raw/case9.mat",
+      "size_bytes": 1119914,
+      "sha256": "d64d03c87ca1232a51f89a676070a6e7c8c97e090cd99d44cf3463b611dfb8fc"
+    }
+  ],
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "min_quality": 0.2,
+  "label_offset_semantics": "positive associates each EEG window with a later BIS value",
+  "retained_model_and_weights": true,
+  "retained_split_by_case": true,
+  "retrained": false,
+  "results": [
+    {
+      "offset_seconds": -20.0,
+      "n_windows": 5503,
+      "metrics": {
+        "n": 5503.0,
+        "mae": 7.216562556717887,
+        "rmse": 11.468090345063672,
+        "bias": 0.7723896848750336,
+        "pearson_r": 0.7661211918362302,
+        "stage_accuracy": 0.5842267853897873,
+        "stage_macro_f1": 0.5437450561538284
+      }
+    },
+    {
+      "offset_seconds": -15.0,
+      "n_windows": 5508,
+      "metrics": {
+        "n": 5508.0,
+        "mae": 7.185581107198456,
+        "rmse": 11.394997845923287,
+        "bias": 0.7678321337647948,
+        "pearson_r": 0.7695312043591691,
+        "stage_accuracy": 0.584241103848947,
+        "stage_macro_f1": 0.5440346615120968
+      }
+    },
+    {
+      "offset_seconds": -10.0,
+      "n_windows": 5512,
+      "metrics": {
+        "n": 5512.0,
+        "mae": 7.13000301041347,
+        "rmse": 11.283308626500924,
+        "bias": 0.7744000068769745,
+        "pearson_r": 0.7746279340581654,
+        "stage_accuracy": 0.5830914368650217,
+        "stage_macro_f1": 0.5449198938371349
+      }
+    },
+    {
+      "offset_seconds": -5.0,
+      "n_windows": 5518,
+      "metrics": {
+        "n": 5518.0,
+        "mae": 7.075741221050111,
+        "rmse": 11.179955306738037,
+        "bias": 0.7819750444661797,
+        "pearson_r": 0.7792597986975646,
+        "stage_accuracy": 0.582819862268938,
+        "stage_macro_f1": 0.5454382996534335
+      }
+    },
+    {
+      "offset_seconds": 0.0,
+      "n_windows": 5523,
+      "metrics": {
+        "n": 5523.0,
+        "mae": 7.025415136657417,
+        "rmse": 11.084902890156535,
+        "bias": 0.7891835083720607,
+        "pearson_r": 0.7836897686234348,
+        "stage_accuracy": 0.5850081477457904,
+        "stage_macro_f1": 0.5484804424163701
+      }
+    },
+    {
+      "offset_seconds": 5.0,
+      "n_windows": 5524,
+      "metrics": {
+        "n": 5524.0,
+        "mae": 6.964357531821702,
+        "rmse": 10.986049206961553,
+        "bias": 0.7933485302521127,
+        "pearson_r": 0.7877311825337968,
+        "stage_accuracy": 0.5876176683562636,
+        "stage_macro_f1": 0.5524845672193545
+      }
+    },
+    {
+      "offset_seconds": 10.0,
+      "n_windows": 5522,
+      "metrics": {
+        "n": 5522.0,
+        "mae": 6.896546962769815,
+        "rmse": 10.891455377168265,
+        "bias": 0.8099394404167112,
+        "pearson_r": 0.7913924852448531,
+        "stage_accuracy": 0.5894603404563564,
+        "stage_macro_f1": 0.5547161691305436
+      }
+    },
+    {
+      "offset_seconds": 15.0,
+      "n_windows": 5523,
+      "metrics": {
+        "n": 5523.0,
+        "mae": 6.8330418577924625,
+        "rmse": 10.811485619780482,
+        "bias": 0.8265323804682329,
+        "pearson_r": 0.7945089831545418,
+        "stage_accuracy": 0.5909831613253667,
+        "stage_macro_f1": 0.5581453944765592
+      }
+    },
+    {
+      "offset_seconds": 20.0,
+      "n_windows": 5525,
+      "metrics": {
+        "n": 5525.0,
+        "mae": 6.757100832494675,
+        "rmse": 10.6939704436518,
+        "bias": 0.8455297516697672,
+        "pearson_r": 0.799118668247499,
+        "stage_accuracy": 0.589502262443439,
+        "stage_macro_f1": 0.5591483684454274
+      }
+    }
+  ]
+}

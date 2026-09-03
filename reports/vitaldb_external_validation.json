@@ -1,0 +1,515 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models/brainsniffer_cnn.pt",
+  "checkpoint_sha256": "fde8e45fff2fa5414944686fd086fc3dd42248f247c7fb4ea1e31aa00618ee8c",
+  "files": [
+    "data/vitaldb/vitaldb_case1.npz",
+    "data/vitaldb/vitaldb_case10.npz",
+    "data/vitaldb/vitaldb_case12.npz",
+    "data/vitaldb/vitaldb_case13.npz",
+    "data/vitaldb/vitaldb_case14.npz",
+    "data/vitaldb/vitaldb_case16.npz",
+    "data/vitaldb/vitaldb_case17.npz",
+    "data/vitaldb/vitaldb_case2.npz",
+    "data/vitaldb/vitaldb_case3.npz",
+    "data/vitaldb/vitaldb_case4.npz",
+    "data/vitaldb/vitaldb_case5.npz",
+    "data/vitaldb/vitaldb_case6.npz",
+    "data/vitaldb/vitaldb_case7.npz",
+    "data/vitaldb/vitaldb_case8.npz",
+    "data/vitaldb/vitaldb_case9.npz"
+  ],
+  "input_files": [
+    {
+      "path": "data/vitaldb/vitaldb_case1.npz",
+      "size_bytes": 2845816,
+      "sha256": "6dff972a5d1cc3090d7bbc62a2d32e7c38aeddd1c99674bacb8e503023413e30"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case10.npz",
+      "size_bytes": 5224551,
+      "sha256": "fa58f2978a6c66940d671e68213e726fb7aefa087e9d7e1086cf88771bc6b88e"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case12.npz",
+      "size_bytes": 7541976,
+      "sha256": "2547d62c218c3b1301ad6c64ae5f2ff648a872f1f1005c57168d040910d5c479"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case13.npz",
+      "size_bytes": 2594771,
+      "sha256": "64221dd68ba5bc421a04e12cc2fa3c1b0b7e0984a33fc0c4ee924e9d7f5e751f"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case14.npz",
+      "size_bytes": 1014242,
+      "sha256": "4aa1e3975eb22d504cc9c478d1e5259d7a66daba98becd9be5a6dd63daeae063"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case16.npz",
+      "size_bytes": 3352773,
+      "sha256": "11934da5d454617744732f70fd8406bff5295bc166cc0502c6f36598735b1206"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case17.npz",
+      "size_bytes": 5007174,
+      "sha256": "04818063a451da687d85dd87ea45401192b9ad711a42a825842ee2228b8e8a1c"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case2.npz",
+      "size_bytes": 3872405,
+      "sha256": "9b22eaec4cad455e5b31072b53333c43a6aac42d839a0fb44da8a39594c68a61"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case3.npz",
+      "size_bytes": 993467,
+      "sha256": "ba2b77629f11679366775afa3b20ff087784e3bafb9c6a05d98d103fe5642385"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case4.npz",
+      "size_bytes": 5083806,
+      "sha256": "a168b55b3ba9d8af4729613f9ec2873e32184fadf1c06e35eb5ccdb2ab98ea55"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case5.npz",
+      "size_bytes": 5034531,
+      "sha256": "f582305793a10c31f63e8453b3c66452d6a839e0f9b26ff9accd92995eb0fabd"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case6.npz",
+      "size_bytes": 912964,
+      "sha256": "36ad2048664934e7757cdf54c765fc211ec14168d51bb3eba5745b88c5644732"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case7.npz",
+      "size_bytes": 1819813,
+      "sha256": "e4ca3ea7f6bf974ad66f9b354bfc41157f0f82a5cd7d1f07a104f7cd043930a0"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case8.npz",
+      "size_bytes": 1464274,
+      "sha256": "bbb8895e38adb8c3bf532caf6c960137739380bdc2715094c528f27f372adf02"
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case9.npz",
+      "size_bytes": 1061479,
+      "sha256": "2c99d8b505a8ceb6ef27dd2626c0325aa222cb8e41631bfddb15e59544a5fe49"
+    }
+  ],
+  "input_diagnostics": [
+    {
+      "path": "data/vitaldb/vitaldb_case1.npz",
+      "case_id": "vitaldb_case1",
+      "sample_count": 1477268,
+      "nonfinite_count": 164,
+      "finite_fraction": 0.9998889842601343,
+      "raw_min": -1474.9000244140625,
+      "raw_max": 1798.550048828125,
+      "quality": 0.9554785630140287,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case10.npz",
+      "case_id": "vitaldb_case10",
+      "sample_count": 2686996,
+      "nonfinite_count": 692,
+      "finite_fraction": 0.9997424633307976,
+      "raw_min": -1475.800048828125,
+      "raw_max": 1799.949951171875,
+      "quality": 0.9690370113625353,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case12.npz",
+      "case_id": "vitaldb_case12",
+      "sample_count": 3993967,
+      "nonfinite_count": 2463,
+      "finite_fraction": 0.9993833198922275,
+      "raw_min": -1457.949951171875,
+      "raw_max": 1792.199951171875,
+      "quality": 0.9757092237975095,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case13.npz",
+      "case_id": "vitaldb_case13",
+      "sample_count": 1383725,
+      "nonfinite_count": 3853,
+      "finite_fraction": 0.9972154871813402,
+      "raw_min": -1476.1500244140625,
+      "raw_max": 1797.550048828125,
+      "quality": 0.8729519270752972,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case14.npz",
+      "case_id": "vitaldb_case14",
+      "sample_count": 526724,
+      "nonfinite_count": 548,
+      "finite_fraction": 0.998959606928866,
+      "raw_min": -1467.75,
+      "raw_max": 1796.8499755859375,
+      "quality": 0.9176894640380496,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case16.npz",
+      "case_id": "vitaldb_case16",
+      "sample_count": 1646894,
+      "nonfinite_count": 382,
+      "finite_fraction": 0.9997680482168251,
+      "raw_min": -1474.550048828125,
+      "raw_max": 1799.0999755859375,
+      "quality": 0.9237027645475646,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case17.npz",
+      "case_id": "vitaldb_case17",
+      "sample_count": 2607246,
+      "nonfinite_count": 222,
+      "finite_fraction": 0.9999148526836363,
+      "raw_min": -1454.6500244140625,
+      "raw_max": 1569.300048828125,
+      "quality": 0.9495381845015591,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case2.npz",
+      "case_id": "vitaldb_case2",
+      "sample_count": 2014777,
+      "nonfinite_count": 185,
+      "finite_fraction": 0.9999081784237164,
+      "raw_min": -1473.0,
+      "raw_max": 1799.449951171875,
+      "quality": 0.9669608557913834,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case3.npz",
+      "case_id": "vitaldb_case3",
+      "sample_count": 562438,
+      "nonfinite_count": 2358,
+      "finite_fraction": 0.9958075378975105,
+      "raw_min": -1447.050048828125,
+      "raw_max": 1761.3499755859375,
+      "quality": 0.899341314116528,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case4.npz",
+      "case_id": "vitaldb_case4",
+      "sample_count": 2686650,
+      "nonfinite_count": 26986,
+      "finite_fraction": 0.989955520815886,
+      "raw_min": -1474.25,
+      "raw_max": 1799.3499755859375,
+      "quality": 0.9134358689632777,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case5.npz",
+      "case_id": "vitaldb_case5",
+      "sample_count": 2755931,
+      "nonfinite_count": 939,
+      "finite_fraction": 0.9996592802940277,
+      "raw_min": -1473.3499755859375,
+      "raw_max": 1792.199951171875,
+      "quality": 0.959875075523006,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case6.npz",
+      "case_id": "vitaldb_case6",
+      "sample_count": 658439,
+      "nonfinite_count": 212743,
+      "finite_fraction": 0.6768979358756089,
+      "raw_min": -1454.4000244140625,
+      "raw_max": 1774.800048828125,
+      "quality": 0.0141150153845756,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case7.npz",
+      "case_id": "vitaldb_case7",
+      "sample_count": 2018464,
+      "nonfinite_count": 1092976,
+      "finite_fraction": 0.4585110262060656,
+      "raw_min": -1467.300048828125,
+      "raw_max": 1789.0999755859375,
+      "quality": 0.0,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case8.npz",
+      "case_id": "vitaldb_case8",
+      "sample_count": 757419,
+      "nonfinite_count": 187,
+      "finite_fraction": 0.9997531089132964,
+      "raw_min": -1476.699951171875,
+      "raw_max": 1792.4000244140625,
+      "quality": 0.9416080087759221,
+      "imputation_applied_offline": true
+    },
+    {
+      "path": "data/vitaldb/vitaldb_case9.npz",
+      "case_id": "vitaldb_case9",
+      "sample_count": 573508,
+      "nonfinite_count": 180,
+      "finite_fraction": 0.9996861421287934,
+      "raw_min": -1476.4000244140625,
+      "raw_max": 1745.0999755859375,
+      "quality": 0.9249095146752412,
+      "imputation_applied_offline": true
+    }
+  ],
+  "data_handling": {
+    "mode": "offline_evaluation",
+    "nonfinite_samples": "linear_interpolation_during_window_construction",
+    "online_nonfinite_policy": "reject_before_filter_or_resampler",
+    "raw_eeg_in_report": false
+  },
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "retrained": false,
+  "case_ids": [
+    "vitaldb_case1",
+    "vitaldb_case10",
+    "vitaldb_case12",
+    "vitaldb_case13",
+    "vitaldb_case14",
+    "vitaldb_case16",
+    "vitaldb_case17",
+    "vitaldb_case2",
+    "vitaldb_case3",
+    "vitaldb_case4",
+    "vitaldb_case5",
+    "vitaldb_case6",
+    "vitaldb_case7",
+    "vitaldb_case8",
+    "vitaldb_case9"
+  ],
+  "min_quality": 0.2,
+  "n_windows": 38730,
+  "metrics": {
+    "n": 38730.0,
+    "mae": 12.43222882487255,
+    "rmse": 18.800122641788704,
+    "bias": 1.4032592693164372,
+    "pearson_r": 0.02411684686675112,
+    "stage_accuracy": 0.41959721146398143,
+    "stage_macro_f1": 0.3979746951886369
+  },
+  "per_case": [
+    {
+      "case_id": "vitaldb_case1",
+      "n_windows": 2302,
+      "n": 2302.0,
+      "mae": 15.530215380193875,
+      "rmse": 20.12414952128752,
+      "bias": -2.3387127950023716,
+      "pearson_r": -0.1390720497336836,
+      "stage_accuracy": 0.21416159860990444,
+      "stage_macro_f1": 0.2745948803752582
+    },
+    {
+      "case_id": "vitaldb_case10",
+      "n_windows": 4183,
+      "n": 4183.0,
+      "mae": 12.392993664815613,
+      "rmse": 15.00098484376424,
+      "bias": -9.423103329327697,
+      "pearson_r": 0.05810514269277457,
+      "stage_accuracy": 0.07912981114032991,
+      "stage_macro_f1": 0.13195471906201425
+    },
+    {
+      "case_id": "vitaldb_case12",
+      "n_windows": 6230,
+      "n": 6230.0,
+      "mae": 9.931925394906278,
+      "rmse": 13.677200711468908,
+      "bias": -6.433260180747337,
+      "pearson_r": -0.22357827204204703,
+      "stage_accuracy": 0.38892455858747993,
+      "stage_macro_f1": 0.25080839283928985
+    },
+    {
+      "case_id": "vitaldb_case13",
+      "n_windows": 2084,
+      "n": 2084.0,
+      "mae": 19.464635711256236,
+      "rmse": 28.45294870067182,
+      "bias": 15.901882892378003,
+      "pearson_r": 0.013118405738184397,
+      "stage_accuracy": 0.6127639155470249,
+      "stage_macro_f1": 0.40641133281336456
+    },
+    {
+      "case_id": "vitaldb_case14",
+      "n_windows": 810,
+      "n": 810.0,
+      "mae": 20.72617520932798,
+      "rmse": 29.717526582048762,
+      "bias": 14.93939939899209,
+      "pearson_r": -0.12803381829767785,
+      "stage_accuracy": 0.3691358024691358,
+      "stage_macro_f1": 0.3913394055706369
+    },
+    {
+      "case_id": "vitaldb_case16",
+      "n_windows": 2440,
+      "n": 2440.0,
+      "mae": 6.564975166125376,
+      "rmse": 9.713690196855978,
+      "bias": -0.3431116418760331,
+      "pearson_r": 0.5655885365362598,
+      "stage_accuracy": 0.6303278688524591,
+      "stage_macro_f1": 0.47741816250111446
+    },
+    {
+      "case_id": "vitaldb_case17",
+      "n_windows": 4056,
+      "n": 4056.0,
+      "mae": 12.963046539229518,
+      "rmse": 18.57244150016674,
+      "bias": 9.145364920063132,
+      "pearson_r": -0.0110936613873208,
+      "stage_accuracy": 0.3126232741617357,
+      "stage_macro_f1": 0.30023271321257494
+    },
+    {
+      "case_id": "vitaldb_case2",
+      "n_windows": 3125,
+      "n": 3125.0,
+      "mae": 11.22253666381836,
+      "rmse": 16.56471242562851,
+      "bias": -5.293643712158203,
+      "pearson_r": 0.16425218577440778,
+      "stage_accuracy": 0.29952,
+      "stage_macro_f1": 0.3749599580436107
+    },
+    {
+      "case_id": "vitaldb_case3",
+      "n_windows": 863,
+      "n": 863.0,
+      "mae": 18.20822530328744,
+      "rmse": 28.580247551533862,
+      "bias": 13.24918112196762,
+      "pearson_r": 0.20533977193698078,
+      "stage_accuracy": 0.33371958285052145,
+      "stage_macro_f1": 0.37530214985120164
+    },
+    {
+      "case_id": "vitaldb_case4",
+      "n_windows": 4138,
+      "n": 4138.0,
+      "mae": 11.218821726771816,
+      "rmse": 16.649610300276642,
+      "bias": 3.9795761539372574,
+      "pearson_r": 0.46645826302049115,
+      "stage_accuracy": 0.5118414693088449,
+      "stage_macro_f1": 0.35588478618553404
+    },
+    {
+      "case_id": "vitaldb_case5",
+      "n_windows": 4301,
+      "n": 4301.0,
+      "mae": 9.788026122763057,
+      "rmse": 17.98418442959032,
+      "bias": 0.9652511146117909,
+      "pearson_r": -0.4724940355487546,
+      "stage_accuracy": 0.8232969076958847,
+      "stage_macro_f1": 0.25118121622130474
+    },
+    {
+      "case_id": "vitaldb_case6",
+      "n_windows": 691,
+      "n": 691.0,
+      "mae": 13.249762624804086,
+      "rmse": 18.330159449409944,
+      "bias": -2.426876672615018,
+      "pearson_r": 0.07047999989276583,
+      "stage_accuracy": 0.37337192474674386,
+      "stage_macro_f1": 0.30524652258851465
+    },
+    {
+      "case_id": "vitaldb_case7",
+      "n_windows": 1444,
+      "n": 1444.0,
+      "mae": 11.69680746374368,
+      "rmse": 20.740635228342665,
+      "bias": 9.182749818236545,
+      "pearson_r": 0.013210477903232822,
+      "stage_accuracy": 0.5152354570637119,
+      "stage_macro_f1": 0.428312182478752
+    },
+    {
+      "case_id": "vitaldb_case8",
+      "n_windows": 1176,
+      "n": 1176.0,
+      "mae": 18.474973126739062,
+      "rmse": 26.683994327392558,
+      "bias": 15.676793636513406,
+      "pearson_r": -0.18166645725064115,
+      "stage_accuracy": 0.3460884353741497,
+      "stage_macro_f1": 0.22289113707609007
+    },
+    {
+      "case_id": "vitaldb_case9",
+      "n_windows": 887,
+      "n": 887.0,
+      "mae": 21.427807714382716,
+      "rmse": 30.53260879220526,
+      "bias": 13.756357595106122,
+      "pearson_r": 0.038205148329135415,
+      "stage_accuracy": 0.37204058624577224,
+      "stage_macro_f1": 0.3382260498349671
+    }
+  ],
+  "case_bootstrap": {
+    "mae": {
+      "mean": 12.52382404109387,
+      "lower_95": 11.050435602503534,
+      "upper_95": 14.445424091919872
+    },
+    "rmse": {
+      "mean": 18.870559204633466,
+      "lower_95": 16.51423151266808,
+      "upper_95": 21.832685474830182
+    },
+    "bias": {
+      "mean": 1.5259543702646978,
+      "lower_95": -2.6570383921757297,
+      "upper_95": 6.597205402952827
+    },
+    "pearson_r": {
+      "mean": 0.023153080509326376,
+      "lower_95": -0.1261603130524166,
+      "upper_95": 0.19306907538469173
+    },
+    "stage_accuracy": {
+      "mean": 0.4145513932925287,
+      "lower_95": 0.30105675916992625,
+      "upper_95": 0.5426506141949011
+    },
+    "stage_macro_f1": {
+      "mean": 0.39095186117639297,
+      "lower_95": 0.323552462005234,
+      "upper_95": 0.46233032139925223
+    }
+  },
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42
+}

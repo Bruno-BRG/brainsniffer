@@ -1,0 +1,52 @@
+{
+  "validation_metrics": {
+    "n": 129.0,
+    "mae": 14.09456347679907,
+    "rmse": 16.885353812541595,
+    "bias": 6.918860354164774,
+    "pearson_r": 0.02510544175935678,
+    "stage_accuracy": 0.46511627906976744,
+    "stage_macro_f1": 0.15873015873015872
+  },
+  "test_metrics": {
+    "n": 60.0,
+    "mae": 17.735870997111004,
+    "rmse": 21.09120989815026,
+    "bias": -0.4058865865071615,
+    "pearson_r": -0.047066773413201805,
+    "stage_accuracy": 0.2833333333333333,
+    "stage_macro_f1": 0.11038961038961038
+  },
+  "split": {
+    "train_cases": [
+      "case1",
+      "case10",
+      "case11",
+      "case12",
+      "case13",
+      "case14",
+      "case17",
+      "case2",
+      "case20",
+      "case21",
+      "case22",
+      "case6",
+      "case7",
+      "case8"
+    ],
+    "validation_cases": [
+      "case15",
+      "case16",
+      "case19",
+      "case3",
+      "case9"
+    ],
+    "test_cases": [
+      "case18",
+      "case23",
+      "case24",
+      "case4",
+      "case5"
+    ]
+  }
+}

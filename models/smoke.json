@@ -1,0 +1,31 @@
+{
+  "validation_metrics": {
+    "n": 977.0,
+    "mae": 14.187705653960776,
+    "rmse": 17.252514640011626,
+    "bias": -10.370729299992353,
+    "pearson_r": 0.19158592403712332,
+    "stage_accuracy": 0.32446264073694986,
+    "stage_macro_f1": 0.12248840803709428
+  },
+  "test_metrics": {
+    "n": 2551.0,
+    "mae": 13.0861667870821,
+    "rmse": 14.738391364885954,
+    "bias": 7.354124832601932,
+    "pearson_r": 0.03262200646968876,
+    "stage_accuracy": 0.4625637005096041,
+    "stage_macro_f1": 0.1581345483784508
+  },
+  "split": {
+    "train_cases": [
+      "case1"
+    ],
+    "validation_cases": [
+      "case2"
+    ],
+    "test_cases": [
+      "case3"
+    ]
+  }
+}
