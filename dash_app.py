@@ -38,6 +38,13 @@ MODEL_PATH = Path(os.getenv("BRAINSNIFFER_CHECKPOINT", APP_ROOT / "models/brains
 REPORTS_DIR = APP_ROOT / "reports"
 REPLAY_EEG_POINTS = 9000
 REPLAY_INTERVAL_MS = 120
+LEARNING_CURVE_KEY_COUNTS = (13, 20, 30, 40, 50, 60, 80, 100, 150, 250, 500, 1000)
+LEARNING_CURVE_MAX_CASES = 1000
+LEARNING_CURVE_STRONG_RETURN_CASES = 80
+LEARNING_CURVE_CUTOFF_CASES = 100
+LEARNING_CURVE_STRONG_GAIN = 0.15
+LEARNING_CURVE_CUTOFF_GAIN = 0.18
+LEARNING_CURVE_TAIL_GAIN = 0.015
 
 COLORS = {
     "navy": "#102A43",
@@ -790,41 +797,155 @@ def _model_architecture_table() -> html.Table:
     return _table(["Bloco", "Dimensão", "Decisão / função"], rows)
 
 
-def _case_id_sort_key(value: object) -> tuple[int, str]:
-    text = str(value)
-    digits = "".join(character for character in text if character.isdigit())
-    return (int(digits) if digits else 10**9, text)
+def _training_case_anchor() -> tuple[int, float] | None:
+    split = MODEL_METADATA.get("split", {})
+    train_cases = split.get("train_cases", []) if isinstance(split, dict) else []
+    anchor_cases = len(train_cases) if isinstance(train_cases, (list, tuple)) else 0
+    anchor_mae = _metric_value(HOLDOUT_METRICS, "mae")
+    if anchor_cases <= 0 or not np.isfinite(anchor_mae) or anchor_mae <= 0:
+        return None
+    return anchor_cases, float(anchor_mae)
 
 
-def _case_count_mae_figure() -> go.Figure:
-    values = EXTERNAL_REPORT.get("per_case", [])
-    if not isinstance(values, list) or not values:
-        return _empty_figure("MAE acumulado conforme entram os casos", "Métricas externas por caso indisponíveis", height=430)
-    rows = [item for item in values if isinstance(item, dict)]
-    rows.sort(key=lambda item: _case_id_sort_key(item.get("case_id", "")))
-    if not rows:
-        return _empty_figure("MAE acumulado conforme entram os casos", "Métricas externas por caso indisponíveis", height=430)
-    counts = np.arange(1, len(rows) + 1, dtype=int)
-    maes = np.asarray([_finite_number(item.get("mae")) for item in rows], dtype=float)
-    windows = np.asarray([max(0, int(_finite_number(item.get("n_windows"), 0))) for item in rows], dtype=float)
-    valid = np.isfinite(maes) & (windows > 0)
-    if not valid.any():
-        return _empty_figure("MAE acumulado conforme entram os casos", "Métricas externas por caso indisponíveis", height=430)
-    cumulative_mae = np.cumsum(np.where(valid, maes * windows, 0.0)) / np.maximum(np.cumsum(np.where(valid, windows, 0.0)), 1.0)
-    labels = [str(item.get("case_id", "caso")).replace("vitaldb_", "") for item in rows]
-    customdata = np.asarray([[label, int(window)] for label, window in zip(labels, windows, strict=False)], dtype=object)
-    overall_mae = _metric_value(EXTERNAL_METRICS, "mae")
-    figure = go.Figure(
-        [
-            go.Bar(x=counts, y=maes, name="MAE de cada caso", marker_color=COLORS["orange"], opacity=0.58, customdata=customdata, hovertemplate="%{customdata[0]}<br>casos acumulados=%{x}<br>MAE do caso=%{y:.2f} pontos BIS<br>janelas=%{customdata[1]:,}<extra></extra>"),
-            go.Scatter(x=counts, y=cumulative_mae, mode="lines+markers", name="MAE acumulado", line={"color": COLORS["navy"], "width": 2.8}, marker={"color": COLORS["navy"], "size": 7}, hovertemplate="%{x} casos acumulados<br>MAE agregado=%{y:.2f} pontos BIS<extra></extra>"),
-        ]
+def _log_progress(value: float, start: float, end: float) -> float:
+    if end <= start:
+        return 1.0
+    return float(np.clip(np.log(value / start) / np.log(end / start), 0.0, 1.0))
+
+
+def _theoretical_training_mae(case_counts: object, *, anchor_cases: int, anchor_mae: float) -> np.ndarray:
+    """Return a transparent diminishing-returns scenario, not measured retrains.
+
+    The scenario encodes the planning hypothesis shown in the UI: most of the
+    relative gain arrives by 80--100 cases, while 100--1,000 adds only 1.5%.
+    It must never be presented as an observed learning curve because only one
+    checkpoint/training run is currently versioned in the project.
+    """
+
+    counts = np.asarray(case_counts, dtype=float)
+    values = np.full(counts.shape, np.nan, dtype=float)
+    finite = np.isfinite(counts) & (counts > 0)
+    if not finite.any() or not np.isfinite(anchor_mae) or anchor_mae <= 0:
+        return values
+
+    anchor = max(float(anchor_cases), 1.0)
+    strong_return = max(float(LEARNING_CURVE_STRONG_RETURN_CASES), anchor + 1.0)
+    cutoff = max(float(LEARNING_CURVE_CUTOFF_CASES), strong_return + 1.0)
+    tail_end = max(float(LEARNING_CURVE_MAX_CASES), cutoff + 1.0)
+    for index in np.flatnonzero(finite):
+        count = counts[index]
+        if count <= anchor:
+            values[index] = anchor_mae
+            continue
+        if count <= strong_return:
+            progress = _log_progress(count, anchor, strong_return)
+            values[index] = anchor_mae * (1.0 - LEARNING_CURVE_STRONG_GAIN * progress)
+            continue
+        if count <= cutoff:
+            progress = _log_progress(count, strong_return, cutoff)
+            gain = LEARNING_CURVE_STRONG_GAIN + (LEARNING_CURVE_CUTOFF_GAIN - LEARNING_CURVE_STRONG_GAIN) * progress
+            values[index] = anchor_mae * (1.0 - gain)
+            continue
+        progress = _log_progress(count, cutoff, tail_end)
+        cutoff_mae = anchor_mae * (1.0 - LEARNING_CURVE_CUTOFF_GAIN)
+        values[index] = cutoff_mae * (1.0 - LEARNING_CURVE_TAIL_GAIN * progress)
+    return values
+
+
+def _training_case_learning_curve_figure() -> go.Figure:
+    anchor = _training_case_anchor()
+    if anchor is None:
+        return _empty_figure("Curva de aprendizagem por casos de treino", "Ponto medido do checkpoint indisponível", height=500)
+    anchor_cases, anchor_mae = anchor
+    curve_counts = np.unique(np.concatenate(([float(anchor_cases)], np.geomspace(anchor_cases, LEARNING_CURVE_MAX_CASES, 240))))
+    curve_mae = _theoretical_training_mae(curve_counts, anchor_cases=anchor_cases, anchor_mae=anchor_mae)
+    key_counts = np.asarray([count for count in LEARNING_CURVE_KEY_COUNTS if count >= anchor_cases], dtype=float)
+    key_mae = _theoretical_training_mae(key_counts, anchor_cases=anchor_cases, anchor_mae=anchor_mae)
+    curve_positions = np.log10(curve_counts)
+    key_positions = np.log10(key_counts)
+    anchor_position = float(np.log10(anchor_cases))
+    reductions = (anchor_mae - curve_mae) / anchor_mae * 100.0
+    key_reductions = (anchor_mae - key_mae) / anchor_mae * 100.0
+    figure = go.Figure()
+    figure.add_trace(
+        go.Scatter(
+            x=curve_positions,
+            y=curve_mae,
+            mode="lines",
+            name="Projeção teórica",
+            line={"color": COLORS["teal"], "width": 3.2},
+            customdata=np.column_stack((curve_counts, reductions)),
+            hovertemplate="%{customdata[0]:.0f} casos de treino<br>MAE teórica: %{y:.2f} pontos BIS<br>redução vs. hoje: %{customdata[1]:.1f}%<extra></extra>",
+        )
     )
-    figure.add_hline(y=overall_mae, line={"color": COLORS["teal"], "width": 1.5, "dash": "dash"}, annotation_text=f"agregado dos 15 casos = {overall_mae:.2f}", annotation_position="top left", annotation_font_color=COLORS["teal"])
-    figure.update_layout(**_figure_layout("MAE acumulado conforme entram os casos VitalDB", height=430), barmode="overlay")
-    figure.update_xaxes(title="Número de casos acumulados (ordem numérica do relatório)", dtick=1, gridcolor=COLORS["line"])
-    figure.update_yaxes(title="MAE (pontos BIS)", rangemode="tozero", gridcolor=COLORS["line"])
+    figure.add_trace(
+        go.Scatter(
+            x=key_positions,
+            y=key_mae,
+            mode="markers",
+            name="Pontos da projeção",
+            marker={"color": COLORS["teal"], "size": 7, "line": {"color": "white", "width": 1}},
+            customdata=np.column_stack((key_counts, key_reductions)),
+            hovertemplate="%{customdata[0]:.0f} casos de treino<br>MAE projetada: %{y:.2f} pontos BIS<br>redução vs. hoje: %{customdata[1]:.1f}%<extra></extra>",
+        )
+    )
+    figure.add_trace(
+        go.Scatter(
+            x=[anchor_position],
+            y=[anchor_mae],
+            mode="markers",
+            name="Medido · checkpoint atual",
+            marker={"color": COLORS["navy"], "size": 14, "symbol": "diamond", "line": {"color": "white", "width": 2}},
+            hovertemplate=f"{anchor_cases} casos de treino<br>MAE medida no holdout interno: {anchor_mae:.2f} pontos BIS<extra></extra>",
+        )
+    )
+    figure.add_vrect(x0=np.log10(LEARNING_CURVE_STRONG_RETURN_CASES), x1=np.log10(LEARNING_CURVE_CUTOFF_CASES), fillcolor=COLORS["orange"], opacity=0.10, line_width=0, annotation_text="zona de retorno decrescente", annotation_position="top left", annotation_font={"color": COLORS["orange"], "size": 11})
+    figure.add_vline(x=np.log10(LEARNING_CURVE_STRONG_RETURN_CASES), line={"color": COLORS["orange"], "width": 1, "dash": "dot"})
+    figure.add_vline(x=np.log10(LEARNING_CURVE_CUTOFF_CASES), line={"color": COLORS["orange"], "width": 1.5, "dash": "dash"}, annotation_text="corte sugerido", annotation_position="bottom right", annotation_font={"color": COLORS["orange"], "size": 11})
+    figure.update_layout(**_figure_layout("Curva de aprendizagem: quantos casos justificam o treino?", height=500))
+    figure.update_xaxes(title="Casos usados para ajustar os pesos · distância logarítmica", tickmode="array", tickvals=np.log10(LEARNING_CURVE_KEY_COUNTS).tolist(), ticktext=[str(count) for count in LEARNING_CURVE_KEY_COUNTS], gridcolor=COLORS["line"])
+    figure.update_yaxes(title="MAE estimada (pontos BIS · menor é melhor)", rangemode="tozero", gridcolor=COLORS["line"])
     return figure
+
+
+def _training_curve_summary_cards() -> list[html.Div]:
+    anchor = _training_case_anchor()
+    if anchor is None:
+        return [_card("Ponto medido", "—", "holdout interno indisponível", "navy")]
+    anchor_cases, anchor_mae = anchor
+    cutoff_mae = float(_theoretical_training_mae([LEARNING_CURVE_CUTOFF_CASES], anchor_cases=anchor_cases, anchor_mae=anchor_mae)[0])
+    tail_mae = float(_theoretical_training_mae([LEARNING_CURVE_MAX_CASES], anchor_cases=anchor_cases, anchor_mae=anchor_mae)[0])
+    cutoff_to_tail = (cutoff_mae - tail_mae) / cutoff_mae * 100.0
+    return [
+        _card("Ponto medido", f"{anchor_cases} casos", f"MAE holdout = {anchor_mae:.2f} pontos BIS", "navy"),
+        _card("Ganho forte projetado", "até 80", "−15,0% relativo contra o ponto atual", "teal"),
+        _card("Corte sugerido", "100 casos", "a partir daqui o retorno entra em platô", "orange"),
+        _card("100 → 1.000", f"−{cutoff_to_tail:.1f}%", f"só {cutoff_mae - tail_mae:.2f} ponto BIS teórico", "purple"),
+    ]
+
+
+def _training_curve_rows() -> list[list[str]]:
+    anchor = _training_case_anchor()
+    if anchor is None:
+        return [["—", "—", "—", "Ponto medido do checkpoint indisponível"]]
+    anchor_cases, anchor_mae = anchor
+    counts = [count for count in LEARNING_CURVE_KEY_COUNTS if count >= anchor_cases]
+    values = _theoretical_training_mae(counts, anchor_cases=anchor_cases, anchor_mae=anchor_mae)
+    rows = []
+    for count, value in zip(counts, values, strict=False):
+        reduction = (anchor_mae - float(value)) / anchor_mae * 100.0
+        if count == anchor_cases:
+            reading = "observado · holdout interno"
+        elif count == LEARNING_CURVE_STRONG_RETURN_CASES:
+            reading = "hipótese · fim do ganho forte"
+        elif count == LEARNING_CURVE_CUTOFF_CASES:
+            reading = "hipótese · ponto de corte sugerido"
+        elif count == LEARNING_CURVE_MAX_CASES:
+            reading = "hipótese · platô de planejamento"
+        else:
+            reading = "hipótese · interpolação logarítmica"
+        rows.append([f"{count:,}", _format_number(float(value), 2), f"{reduction:.1f}%", reading])
+    return rows
 
 
 def _statistics_cards() -> list[html.Div]:
@@ -970,8 +1091,10 @@ def _build_model_tab() -> html.Div:
             _tab_intro("DADOS DA REDE", "O que está dentro do checkpoint", "Esta aba torna o modelo auditável: arquitetura, quantidade de parâmetros, pré-processamento, divisão de casos, ambiente e histórico de treinamento ficam visíveis sem precisar abrir o arquivo binário."),
             html.Div([_card("Modelo", "Conv1D", f"{model_name} · regressão contínua de BIS", "navy"), _card("Parâmetros treináveis", f"{param_count:,}", "estado atual do checkpoint", "teal"), _card("Casos de treino", f"{len(train_cases)}", "separação por cirurgia", "blue"), _card("Janelas usadas", f"{int(dataset.get('n_windows', 0)):,}" if isinstance(dataset, dict) else "—", "após filtro de qualidade", "orange")], className="metric-grid"),
             html.Div(coverage_cards, className="metric-grid case-coverage-grid"),
-            html.Div(dcc.Graph(figure=_case_count_mae_figure(), config={"displayModeBar": False}), className="chart-card case-count-chart"),
-            html.Div("As barras mostram a MAE de cada caso externo; a linha marinho recalcula a MAE agregada quando cada caso entra. Isso descreve a estabilidade da estimativa com mais casos — não é uma curva de retreinamento e não prova que aumentar a amostra, sozinho, melhora o modelo.", className="legend-note"),
+            html.Div(_training_curve_summary_cards(), className="metric-grid learning-curve-metrics"),
+            html.Div(dcc.Graph(figure=_training_case_learning_curve_figure(), config={"displayModeBar": False}), className="chart-card case-count-chart"),
+            html.Div([html.Strong("Como ler esta curva: "), "o losango marinho é o único ponto realmente medido hoje — o checkpoint treinado com ", html.Strong(f"{len(train_cases)} casos"), ". A linha turquesa é uma projeção teórica para planejamento: ela supõe ganho relativo acumulado de 15% até 80 casos, 18% até 100 e apenas 1,5% adicional de 100 para 1.000. Como não há retreinamentos versionados em 20, 30, 40… casos, esses pontos são hipóteses, não resultados observados nem promessa clínica. O corte de 100 é um limiar de governança: só vale pagar o custo de novo treino além dele se um experimento medido demonstrar ganho suficiente."], className="legend-note learning-curve-note"),
+            html.Div([html.H3("Pontos de planejamento da curva"), _table(["Casos de treino", "MAE", "Redução vs. atual", "Leitura"], _training_curve_rows())], className="table-card learning-curve-table"),
             html.Div([html.H3("Casos utilizados por divisão"), _table(["Divisão", "Quantidade", "Identificadores"], split_rows)], className="table-card"),
             html.Div([html.Div([html.H3("Configuração do checkpoint"), _table(["Campo", "Valor", "Interpretação"], config_rows)], className="table-card"), html.Div([html.H3("Treinamento e ambiente"), _table(["Campo", "Valor", "Interpretação"], train_rows)], className="table-card")], className="table-grid two-col"),
             html.Div([html.H3("Arquitetura declarada"), _model_architecture_table()], className="table-card model-architecture"),

@@ -4,7 +4,7 @@ import torch
 
 from brainsniffer.config import PreprocessConfig
 from brainsniffer.data.mat_reader import EEGCase
-from dash_app import _fast_replay_case
+from dash_app import _fast_replay_case, _theoretical_training_mae
 
 
 class _ConstantModel(torch.nn.Module):
@@ -33,3 +33,14 @@ def test_dashboard_replay_rejects_a_recording_with_no_finite_eeg_sample():
 
     with pytest.raises(ValueError, match="não há amostras EEG finitas"):
         _fast_replay_case(_ConstantModel(), case, config)
+
+
+def test_theoretical_training_curve_is_anchored_and_has_diminishing_returns():
+    counts = np.asarray([13, 20, 30, 40, 50, 60, 80, 100, 1000], dtype=float)
+    values = _theoretical_training_mae(counts, anchor_cases=13, anchor_mae=20.0)
+
+    assert values[0] == pytest.approx(20.0)
+    assert np.all(np.diff(values) <= 0)
+    assert (values[0] - values[6]) / values[0] == pytest.approx(0.15)
+    assert (values[6] - values[7]) / values[6] > (values[7] - values[8]) / values[7]
+    assert (values[7] - values[8]) / values[7] == pytest.approx(0.015)
