@@ -129,6 +129,33 @@ def test_streaming_resampler_preserves_state_and_timestamps():
     assert np.all(np.diff(converted_timestamps) > 0)
 
 
+def test_streaming_resampler_upsampling_flush_keeps_timestamps_strictly_increasing():
+    source_rate = 64.0
+    target_rate = 128.0
+    source = np.sin(np.linspace(0, 8 * np.pi, 101, dtype=np.float32))
+    source_timestamps = 100.0 + np.arange(source.size, dtype=np.float64) / source_rate
+    resampler = StreamingResampler(source_rate, target_rate)
+    outputs = []
+    timestamp_outputs = []
+    for start in range(0, source.size, 11):
+        chunk = resampler.process(
+            source[start : start + 11],
+            timestamps=source_timestamps[start : start + 11],
+        )
+        outputs.append(chunk.samples)
+        timestamp_outputs.append(chunk.timestamps)
+    tail = resampler.flush()
+    outputs.append(tail.samples)
+    timestamp_outputs.append(tail.timestamps)
+
+    converted = np.concatenate(outputs)
+    converted_timestamps = np.concatenate(timestamp_outputs)
+    assert converted.size == int(np.ceil(source.size * target_rate / source_rate))
+    assert converted_timestamps.size == converted.size
+    assert np.all(np.diff(converted_timestamps) > 0)
+    assert converted_timestamps[-1] > source_timestamps[-1]
+
+
 def test_streaming_resampler_rejects_nonmonotonic_timestamps():
     resampler = StreamingResampler(256, 128)
     with pytest.raises(ValueError, match="estritamente crescentes"):

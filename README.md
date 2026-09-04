@@ -161,6 +161,17 @@ interface interpola esses pontos somente para a simulação e mantém o score de
 qualidade calculado no sinal original. Essa conveniência não altera o estimador
 online nem valida uma aquisição ao vivo.
 
+### Experimentos de arquitetura e treino
+
+O checkpoint padrão continua usando `Conv1DDepthEstimator`, preservando a
+compatibilidade dos experimentos existentes. Para novos estudos, o pacote
+também exporta `RobustConv1DDepthEstimator`, uma CNN residual com GroupNorm,
+convoluções depthwise-separable, contexto dilatado e `predict_with_uncertainty`
+via MC Dropout. A configuração de treino registra métricas por época e oferece
+early stopping, redução adaptativa do learning rate, clipping de gradiente,
+reprodutibilidade determinística e mixed precision apenas em CUDA. Esses
+recursos são experimentais e não constituem validação clínica.
+
 ### Ficha do equipamento
 
 Antes de conectar um equipamento físico, copie e preencha o manifesto versionado:

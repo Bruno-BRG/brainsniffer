@@ -19,6 +19,11 @@ def compute_metrics(target: np.ndarray, prediction: np.ndarray) -> dict[str, flo
 
     target = np.asarray(target, dtype=np.float64).reshape(-1)
     prediction = np.asarray(prediction, dtype=np.float64).reshape(-1)
+    if target.size != prediction.size:
+        raise ValueError(
+            "target e prediction devem ter o mesmo número de elementos "
+            f"(obtido {target.size} e {prediction.size})"
+        )
     valid = np.isfinite(target) & np.isfinite(prediction)
     target = target[valid]
     prediction = prediction[valid]

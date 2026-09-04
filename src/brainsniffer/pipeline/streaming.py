@@ -257,7 +257,36 @@ class StreamingResampler:
         output_positions = (
             np.arange(first_output, first_output + count, dtype=np.float64) * self.down / self.up
         )
-        return np.interp(output_positions, source_positions, self._timestamp_buffer)
+        if source_positions.size == 0:
+            return np.empty(0, dtype=np.float64)
+        if source_positions.size == 1:
+            # A one-sample finite stream has no observed interval from which
+            # to interpolate. Use the declared source rate for the tail.
+            return self._timestamp_buffer[0] + (
+                output_positions - source_positions[0]
+            ) / self.source_rate
+
+        # ``np.interp`` clamps outside its domain. That is fine for most
+        # downsampling paths, but upsampling can produce one or more output
+        # positions after the final source sample during ``flush``. Clamping
+        # would duplicate the final timestamp and make the downstream realtime
+        # estimator reject an otherwise valid finite replay. Extrapolate with
+        # the observed edge slope instead, preserving strictly increasing
+        # timestamps even when source timestamps are slightly irregular.
+        timestamps = np.interp(output_positions, source_positions, self._timestamp_buffer)
+        left = output_positions < source_positions[0]
+        right = output_positions > source_positions[-1]
+        if left.any():
+            slope = self._timestamp_buffer[1] - self._timestamp_buffer[0]
+            timestamps[left] = self._timestamp_buffer[0] + (
+                output_positions[left] - source_positions[0]
+            ) * slope
+        if right.any():
+            slope = self._timestamp_buffer[-1] - self._timestamp_buffer[-2]
+            timestamps[right] = self._timestamp_buffer[-1] + (
+                output_positions[right] - source_positions[-1]
+            ) * slope
+        return timestamps
 
     def _trim_buffer(self) -> None:
         if self._source_seen <= self._history_samples:

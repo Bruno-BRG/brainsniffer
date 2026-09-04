@@ -74,12 +74,22 @@ def summarize_windows(windows: WindowedEEG) -> dict[str, object]:
     }
 
 
-def set_seed(seed: int) -> None:
+def set_seed(seed: int, *, deterministic: bool = True) -> None:
+    """Seed every RNG used by training and request deterministic kernels.
+
+    ``warn_only`` keeps this reproducibility setting usable on machines where
+    a newly introduced accelerator kernel has no deterministic implementation;
+    the selected setting is still recorded in the checkpoint metadata.
+    """
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = not deterministic
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
 
 
 def _installed_version(package_name: str) -> str | None:
@@ -99,6 +109,11 @@ def runtime_metadata() -> dict[str, str | None]:
         "numpy": np.__version__,
         "scipy": _installed_version("scipy"),
         "scikit_learn": _installed_version("scikit-learn"),
+        "deterministic_algorithms": str(torch.are_deterministic_algorithms_enabled()),
+        "cuda": torch.version.cuda,
+        "cudnn": str(torch.backends.cudnn.version())
+        if torch.backends.cudnn.is_available()
+        else None,
     }
 
 
@@ -155,6 +170,15 @@ def verify_file_manifest(manifest: object) -> None:
 
 def _mask_for_cases(case_ids: np.ndarray, cases: tuple[str, ...]) -> np.ndarray:
     return np.isin(case_ids.astype(str), np.asarray(cases, dtype=str))
+
+
+def _seed_worker(worker_id: int) -> None:
+    """Seed NumPy/Python RNGs for a deterministic DataLoader worker."""
+
+    del worker_id
+    worker_seed = torch.initial_seed() % (2**32)
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 @torch.inference_mode()
@@ -228,6 +252,8 @@ def _loader(
             generator=torch.Generator().manual_seed(config.seed),
         )
         shuffle = False
+    generator = torch.Generator().manual_seed(config.seed)
+
     return DataLoader(
         dataset,
         batch_size=config.batch_size,
@@ -235,6 +261,8 @@ def _loader(
         sampler=sampler,
         num_workers=config.num_workers,
         pin_memory=False,
+        worker_init_fn=_seed_worker if config.num_workers else None,
+        generator=generator,
     )
 
 
@@ -256,14 +284,38 @@ def train_model(
         raise ValueError("min_quality deve estar entre 0 e 1")
     if windows.signals.shape[0] == 0:
         raise ValueError("Nenhuma janela válida disponível para treinamento")
+    if training_config.epochs < 1:
+        raise ValueError("epochs deve ser positivo")
+    if training_config.batch_size < 1:
+        raise ValueError("batch_size deve ser positivo")
+    if training_config.num_workers < 0:
+        raise ValueError("num_workers não pode ser negativo")
+    if (
+        training_config.early_stopping_patience is not None
+        and training_config.early_stopping_patience < 1
+    ):
+        raise ValueError("early_stopping_patience deve ser positivo ou None")
+    if training_config.early_stopping_min_delta < 0:
+        raise ValueError("early_stopping_min_delta não pode ser negativo")
+    if not 0 < training_config.scheduler_factor < 1:
+        raise ValueError("scheduler_factor deve estar entre 0 e 1")
+    if training_config.scheduler_patience < 0:
+        raise ValueError("scheduler_patience não pode ser negativo")
+    if training_config.scheduler_min_lr < 0:
+        raise ValueError("scheduler_min_lr não pode ser negativo")
+    if (
+        training_config.gradient_clip_norm is not None
+        and training_config.gradient_clip_norm <= 0
+    ):
+        raise ValueError("gradient_clip_norm deve ser positivo ou None")
     if windows.quality.size and float(windows.quality.min()) + 1e-6 < min_quality:
         raise ValueError(
             "As janelas contêm sinais abaixo de min_quality; filtre-as antes do treinamento"
         )
     dataset_summary = summarize_windows(windows)
     input_file_manifest = build_file_manifest(input_files) if input_files is not None else []
+    set_seed(training_config.seed, deterministic=training_config.deterministic)
     environment = runtime_metadata()
-    set_seed(training_config.seed)
     device = resolve_device(training_config.device)
     split_ids = (
         windows.group_ids.astype(str)
@@ -280,12 +332,27 @@ def train_model(
     train_mask = _mask_for_cases(split_ids, split.train_cases)
     validation_mask = _mask_for_cases(split_ids, split.validation_cases)
     test_mask = _mask_for_cases(split_ids, split.test_cases)
+    split_sizes = {
+        "train": int(train_mask.sum()),
+        "validation": int(validation_mask.sum()),
+        "test": int(test_mask.sum()),
+    }
+    empty_splits = [name for name, size in split_sizes.items() if size == 0]
+    if empty_splits:
+        raise ValueError("A divisão não contém janelas válidas em: " + ", ".join(empty_splits))
 
     model = Conv1DDepthEstimator().to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=training_config.learning_rate,
         weight_decay=training_config.weight_decay,
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=training_config.scheduler_factor,
+        patience=training_config.scheduler_patience,
+        min_lr=training_config.scheduler_min_lr,
     )
     criterion = nn.SmoothL1Loss()
     train_loader = _loader(
@@ -307,16 +374,34 @@ def train_model(
     history: list[dict[str, float]] = []
     best_state = copy.deepcopy(model.state_dict())
     best_validation_mae = float("inf")
+    best_epoch = 0
+    epochs_without_improvement = 0
+    use_amp = bool(
+        training_config.mixed_precision
+        and torch.device(device).type == "cuda"
+        and torch.cuda.is_available()
+    )
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    dataset_summary["split_sizes"] = split_sizes
+    dataset_summary["mixed_precision"] = use_amp
+    dataset_summary["deterministic"] = bool(training_config.deterministic)
 
     for epoch in range(1, training_config.epochs + 1):
         model.train()
         losses: list[float] = []
         for batch, labels in train_loader:
             optimizer.zero_grad(set_to_none=True)
-            prediction = model(batch.to(device))
-            loss = criterion(prediction, labels.to(device))
-            loss.backward()
-            optimizer.step()
+            with torch.autocast("cuda", dtype=torch.float16, enabled=use_amp):
+                prediction = model(batch.to(device, non_blocking=use_amp))
+                loss = criterion(prediction, labels.to(device, non_blocking=use_amp))
+            scaler.scale(loss).backward()
+            if training_config.gradient_clip_norm is not None:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), training_config.gradient_clip_norm
+                )
+            scaler.step(optimizer)
+            scaler.update()
             losses.append(float(loss.detach().cpu()))
 
         validation_prediction = predict_model(
@@ -328,11 +413,34 @@ def train_model(
             "train_loss": float(np.mean(losses)) if losses else float("nan"),
             "validation_mae": validation_metrics.get("mae", float("nan")),
             "validation_rmse": validation_metrics.get("rmse", float("nan")),
+            "validation_bias": validation_metrics.get("bias", float("nan")),
+            "validation_pearson_r": validation_metrics.get("pearson_r", float("nan")),
+            "validation_stage_accuracy": validation_metrics.get(
+                "stage_accuracy", float("nan")
+            ),
+            "validation_stage_macro_f1": validation_metrics.get(
+                "stage_macro_f1", float("nan")
+            ),
+            "learning_rate": float(optimizer.param_groups[0]["lr"]),
         }
         history.append(row)
-        if row["validation_mae"] < best_validation_mae:
-            best_validation_mae = row["validation_mae"]
+        validation_mae = row["validation_mae"]
+        if np.isfinite(validation_mae):
+            scheduler.step(validation_mae)
+        if np.isfinite(validation_mae) and validation_mae < (
+            best_validation_mae - training_config.early_stopping_min_delta
+        ):
+            best_validation_mae = validation_mae
             best_state = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+        if (
+            training_config.early_stopping_patience is not None
+            and epochs_without_improvement >= training_config.early_stopping_patience
+        ):
+            break
 
     model.load_state_dict(best_state)
     validation_prediction = predict_model(model, windows.signals[validation_mask], device=device)
@@ -365,6 +473,10 @@ def train_model(
                 else None
             ),
             "split_unit": split_unit,
+            "best_epoch": best_epoch,
+            "stopped_early": len(history) < training_config.epochs,
+            "mixed_precision": use_amp,
+            "split_sizes": split_sizes,
         }
         torch.save(checkpoint_payload, checkpoint)
         checkpoint_sha256 = sha256_file(checkpoint)
@@ -392,6 +504,10 @@ def train_model(
                     ),
                     "split_unit": split_unit,
                     "checkpoint_sha256": checkpoint_sha256,
+                    "best_epoch": best_epoch,
+                    "stopped_early": len(history) < training_config.epochs,
+                    "mixed_precision": use_amp,
+                    "split_sizes": split_sizes,
                 },
                 indent=2,
                 ensure_ascii=False,

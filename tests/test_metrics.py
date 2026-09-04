@@ -1,7 +1,21 @@
 import numpy as np
 import pytest
 
-from brainsniffer.pipeline.metrics import bootstrap_case_metrics
+from brainsniffer.pipeline.metrics import bootstrap_case_metrics, compute_metrics
+
+
+def test_compute_metrics_rejects_misaligned_vectors():
+    with pytest.raises(ValueError, match="mesmo número de elementos"):
+        compute_metrics(np.asarray([40.0, 50.0]), np.asarray([40.0]))
+
+
+def test_compute_metrics_ignores_nonfinite_pairs_without_broadcasting():
+    result = compute_metrics(
+        np.asarray([40.0, np.nan, 60.0]),
+        np.asarray([42.0, 55.0, np.inf]),
+    )
+    assert result["n"] == 1.0
+    assert result["mae"] == pytest.approx(2.0)
 
 
 def test_bootstrap_case_metrics_resamples_groups():

@@ -49,6 +49,16 @@ class TrainingConfig:
     num_workers: int = 0
     balance_groups: bool = False
     balance_sources: bool = False
+    # Validation-driven controls keep short smoke runs fast while protecting
+    # the selected holdout from a late-epoch overfit.
+    early_stopping_patience: int | None = 5
+    early_stopping_min_delta: float = 1e-4
+    scheduler_factor: float = 0.5
+    scheduler_patience: int = 2
+    scheduler_min_lr: float = 1e-6
+    gradient_clip_norm: float | None = 1.0
+    mixed_precision: bool = True
+    deterministic: bool = True
 
 
 def resolve_device(requested: str) -> str:

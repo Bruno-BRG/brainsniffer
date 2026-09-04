@@ -46,6 +46,13 @@ estímulo cirúrgico e contexto do paciente podem alterar sua interpretação.
   usa `label_offset_seconds=0`.
 - Modelo: quatro blocos Conv1D com BatchNorm, GELU, pooling e regressão limitada
   por sigmoide ao intervalo 0–100.
+- Arquitetura experimental disponível em `RobustConv1DDepthEstimator`: blocos
+  residuais depthwise-separable, GroupNorm independente do tamanho do batch,
+  dilatação temporal, pooling médio/máximo e MC Dropout para incerteza
+  exploratória. Ela é opt-in e não substitui o checkpoint acima.
+- O loop de treino registra split/tamanho, métricas por época, taxa de
+  aprendizado e ambiente; inclui early stopping, `ReduceLROnPlateau`, clipping
+  de gradiente, seed determinística e mixed precision somente quando há CUDA.
 - Suavização: EWMA somente na apresentação em fluxo; o valor bruto permanece
   disponível.
 - Abstenção: qualidade heurística abaixo de 0,20 produz `stage="abstain"` e não
