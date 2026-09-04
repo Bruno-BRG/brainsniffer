@@ -88,6 +88,8 @@ button:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(16,42,67
 .model-architecture { margin-bottom: 16px; }
 .six-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .trajectory-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.case-coverage-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.case-count-chart { margin-top: 16px; }
 .trajectory-error-chart { margin-top: 16px; }
 .dash-loading { color: var(--teal); }
 .Select-control, .Select-menu-outer, .Select-menu { border-color: var(--line) !important; }

@@ -154,7 +154,7 @@ DEFAULT_CASE = next(
 )
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=16)
 def _replay_payload(path_string: str) -> ReplayPayload:
     """Run the causal replay once and keep a compact browser representation."""
 
@@ -584,6 +584,21 @@ def _case_metrics(payload: ReplayPayload) -> dict[str, float]:
     }
 
 
+def _causal_ema(values: np.ndarray, alpha: float = 0.18) -> np.ndarray:
+    """Apply a causal EMA for display without changing stored predictions."""
+
+    source = np.asarray(values, dtype=float).reshape(-1)
+    smoothed = np.full(source.shape, np.nan, dtype=float)
+    previous = float("nan")
+    for index, value in enumerate(source):
+        if not np.isfinite(value):
+            previous = float("nan")
+            continue
+        previous = float(value) if not np.isfinite(previous) else alpha * float(value) + (1 - alpha) * previous
+        smoothed[index] = previous
+    return smoothed
+
+
 def _trajectory_figure(payload: ReplayPayload) -> tuple[go.Figure, go.Figure]:
     case = payload.case
     bis_times = np.arange(case.bis.size, dtype=float) * case.label_interval_seconds
@@ -593,23 +608,32 @@ def _trajectory_figure(payload: ReplayPayload) -> tuple[go.Figure, go.Figure]:
         index = int(np.searchsorted(bis_times, time, side="right") - 1)
         reference_at_prediction.append(bis_values[index] if index >= 0 else np.nan)
     references = np.asarray(reference_at_prediction, dtype=float)
+    visual_predictions = _causal_ema(payload.smoothed_predictions)
     error = payload.smoothed_predictions - references
+    visual_error = visual_predictions - references
     valid_error = np.isfinite(error)
+    valid_visual_error = np.isfinite(visual_error)
 
     figure = go.Figure(
         [
-            go.Scatter(x=bis_times, y=bis_values, mode="lines+markers", name="BIS referência", line={"color": COLORS["navy"], "width": 2.5, "shape": "hv"}, marker={"size": 4}, connectgaps=False, hovertemplate="t=%{x:.0f}s<br>BIS=%{y:.1f}<extra></extra>"),
-            go.Scatter(x=payload.prediction_times, y=payload.raw_predictions, mode="lines", name="CNN bruta", line={"color": COLORS["purple"], "width": 1.2, "dash": "dot"}, connectgaps=False, hovertemplate="t=%{x:.1f}s<br>CNN bruta=%{y:.1f}<extra></extra>"),
-            go.Scatter(x=payload.prediction_times, y=payload.smoothed_predictions, mode="lines+markers", name="CNN suavizada", line={"color": COLORS["teal"], "width": 2.6}, marker={"size": 4}, connectgaps=False, hovertemplate="t=%{x:.1f}s<br>CNN suavizada=%{y:.1f}<extra></extra>"),
+            go.Scattergl(x=bis_times, y=bis_values, mode="lines", name="BIS referência", line={"color": COLORS["navy"], "width": 2.5, "shape": "hv"}, connectgaps=False, hovertemplate="t=%{x:.0f}s<br>BIS=%{y:.1f}<extra></extra>"),
+            go.Scattergl(x=payload.prediction_times, y=payload.raw_predictions, mode="lines", name="CNN bruta", visible="legendonly", line={"color": COLORS["purple"], "width": 1.1, "dash": "dot"}, connectgaps=False, hovertemplate="t=%{x:.1f}s<br>CNN bruta=%{y:.1f}<extra></extra>"),
+            go.Scattergl(x=payload.prediction_times, y=payload.smoothed_predictions, mode="lines", name="CNN causal original", visible="legendonly", line={"color": COLORS["teal"], "width": 1.5, "dash": "dash"}, connectgaps=False, hovertemplate="t=%{x:.1f}s<br>CNN causal=%{y:.1f}<extra></extra>"),
+            go.Scattergl(x=payload.prediction_times, y=visual_predictions, mode="lines", name="CNN · EMA visual (5 s)", line={"color": COLORS["teal"], "width": 3.1}, connectgaps=False, customdata=payload.smoothed_predictions, hovertemplate="t=%{x:.1f}s<br>CNN visual=%{y:.1f}<br>CNN causal=%{customdata:.1f}<extra></extra>"),
         ]
     )
-    figure.update_layout(**_figure_layout("Trajetória completa · BIS contra CNN", height=470), uirevision=f"trajectory-{case.case_id}")
+    figure.update_layout(**_figure_layout(f"Trajetória completa · {case.case_id} · BIS contra CNN", height=470), uirevision=f"trajectory-{case.case_id}")
     figure.update_xaxes(title="Tempo do caso (s)", range=[0, max(10, case.duration_seconds)], gridcolor=COLORS["line"])
     figure.update_yaxes(title="Índice BIS (0–100)", range=[0, 100], gridcolor=COLORS["line"])
 
-    error_figure = go.Figure(go.Scatter(x=payload.prediction_times[valid_error], y=error[valid_error], mode="lines+markers", name="CNN − BIS", line={"color": COLORS["orange"], "width": 2.2}, marker={"size": 4}, hovertemplate="t=%{x:.1f}s<br>erro=%{y:.1f} pontos BIS<extra></extra>"))
+    error_figure = go.Figure(
+        [
+            go.Scattergl(x=payload.prediction_times[valid_error], y=error[valid_error], mode="lines", name="Erro causal original", visible="legendonly", line={"color": COLORS["orange"], "width": 1.2, "dash": "dot"}, hovertemplate="t=%{x:.1f}s<br>erro causal=%{y:.1f} pontos BIS<extra></extra>"),
+            go.Scattergl(x=payload.prediction_times[valid_visual_error], y=visual_error[valid_visual_error], mode="lines", name="Erro · EMA visual (5 s)", line={"color": COLORS["orange"], "width": 2.4}, hovertemplate="t=%{x:.1f}s<br>erro visual=%{y:.1f} pontos BIS<extra></extra>"),
+        ]
+    )
     error_figure.add_hline(y=0, line={"color": COLORS["navy"], "width": 1.5, "dash": "dash"})
-    error_figure.update_layout(**_figure_layout("Erro ao longo do caso · CNN − BIS", height=300), uirevision=f"trajectory-error-{case.case_id}")
+    error_figure.update_layout(**_figure_layout(f"Erro ao longo do caso · {case.case_id} · CNN − BIS", height=300), uirevision=f"trajectory-error-{case.case_id}")
     error_figure.update_xaxes(title="Tempo do caso (s)", gridcolor=COLORS["line"])
     error_figure.update_yaxes(title="Erro (pontos BIS)", gridcolor=COLORS["line"])
     return figure, error_figure
@@ -621,7 +645,7 @@ def _table(headers: list[str], rows: list[list[object]], class_name: str = "data
 
 def _initial_trajectory_cards() -> list[html.Div]:
     return [
-        _card("MAE do caso", "—", "CNN suavizada contra BIS", "blue"),
+        _card("MAE do caso", "—", "saída causal original contra BIS", "blue"),
         _card("RMSE do caso", "—", "Erro quadrático médio", "orange"),
         _card("Bias do caso", "—", "CNN − BIS", "purple"),
         _card("Pearson do caso", "—", "Associação temporal", "teal"),
@@ -633,7 +657,7 @@ def _trajectory_cards(payload: ReplayPayload) -> list[html.Div]:
     metrics = _case_metrics(payload)
     valid = int(np.isfinite(payload.smoothed_predictions).sum())
     return [
-        _card("MAE do caso", _format_number(metrics["mae"], 1), "CNN suavizada contra BIS", "blue"),
+        _card("MAE do caso", _format_number(metrics["mae"], 1), "saída causal original contra BIS", "blue"),
         _card("RMSE do caso", _format_number(metrics["rmse"], 1), "Erro quadrático médio", "orange"),
         _card("Bias do caso", _format_number(metrics["bias"], 1), "CNN − BIS", "purple"),
         _card("Pearson do caso", _format_number(metrics["pearson_r"], 3), "Associação temporal", "teal"),
@@ -685,6 +709,43 @@ def _model_architecture_table() -> html.Table:
         ["Saída", "sigmoid × 100", "BIS estimado entre 0 e 100"],
     ]
     return _table(["Bloco", "Dimensão", "Decisão / função"], rows)
+
+
+def _case_id_sort_key(value: object) -> tuple[int, str]:
+    text = str(value)
+    digits = "".join(character for character in text if character.isdigit())
+    return (int(digits) if digits else 10**9, text)
+
+
+def _case_count_mae_figure() -> go.Figure:
+    values = EXTERNAL_REPORT.get("per_case", [])
+    if not isinstance(values, list) or not values:
+        return _empty_figure("MAE acumulado conforme entram os casos", "Métricas externas por caso indisponíveis", height=430)
+    rows = [item for item in values if isinstance(item, dict)]
+    rows.sort(key=lambda item: _case_id_sort_key(item.get("case_id", "")))
+    if not rows:
+        return _empty_figure("MAE acumulado conforme entram os casos", "Métricas externas por caso indisponíveis", height=430)
+    counts = np.arange(1, len(rows) + 1, dtype=int)
+    maes = np.asarray([_finite_number(item.get("mae")) for item in rows], dtype=float)
+    windows = np.asarray([max(0, int(_finite_number(item.get("n_windows"), 0))) for item in rows], dtype=float)
+    valid = np.isfinite(maes) & (windows > 0)
+    if not valid.any():
+        return _empty_figure("MAE acumulado conforme entram os casos", "Métricas externas por caso indisponíveis", height=430)
+    cumulative_mae = np.cumsum(np.where(valid, maes * windows, 0.0)) / np.maximum(np.cumsum(np.where(valid, windows, 0.0)), 1.0)
+    labels = [str(item.get("case_id", "caso")).replace("vitaldb_", "") for item in rows]
+    customdata = np.asarray([[label, int(window)] for label, window in zip(labels, windows, strict=False)], dtype=object)
+    overall_mae = _metric_value(EXTERNAL_METRICS, "mae")
+    figure = go.Figure(
+        [
+            go.Bar(x=counts, y=maes, name="MAE de cada caso", marker_color=COLORS["orange"], opacity=0.58, customdata=customdata, hovertemplate="%{customdata[0]}<br>casos acumulados=%{x}<br>MAE do caso=%{y:.2f} pontos BIS<br>janelas=%{customdata[1]:,}<extra></extra>"),
+            go.Scatter(x=counts, y=cumulative_mae, mode="lines+markers", name="MAE acumulado", line={"color": COLORS["navy"], "width": 2.8}, marker={"color": COLORS["navy"], "size": 7}, hovertemplate="%{x} casos acumulados<br>MAE agregado=%{y:.2f} pontos BIS<extra></extra>"),
+        ]
+    )
+    figure.add_hline(y=overall_mae, line={"color": COLORS["teal"], "width": 1.5, "dash": "dash"}, annotation_text=f"agregado dos 15 casos = {overall_mae:.2f}", annotation_position="top left", annotation_font_color=COLORS["teal"])
+    figure.update_layout(**_figure_layout("MAE acumulado conforme entram os casos VitalDB", height=430), barmode="overlay")
+    figure.update_xaxes(title="Número de casos acumulados (ordem numérica do relatório)", dtick=1, gridcolor=COLORS["line"])
+    figure.update_yaxes(title="MAE (pontos BIS)", rangemode="tozero", gridcolor=COLORS["line"])
+    return figure
 
 
 def _statistics_cards() -> list[html.Div]:
@@ -771,8 +832,29 @@ def _build_overview_tab() -> html.Div:
 
 
 def _build_trajectory_tab(options: list[dict[str, object]], default_value: str | None) -> html.Div:
+    trajectory_results = html.Div(
+        [
+            html.Div(id="trajectory-cards", children=_initial_trajectory_cards(), className="metric-grid trajectory-metrics"),
+            html.Div(dcc.Graph(id="trajectory-figure", figure=_empty_figure("Trajetória completa · BIS contra CNN", "Carregando o caso selecionado", height=470), config={"displayModeBar": False}), className="chart-card"),
+            html.Div(dcc.Graph(id="trajectory-error-figure", figure=_empty_figure("Erro ao longo do caso · CNN − BIS", "Carregando o caso selecionado", height=300), config={"displayModeBar": False}), className="chart-card trajectory-error-chart"),
+        ],
+        className="trajectory-results",
+    )
     return html.Div(
-        [_tab_intro("VISÃO RETROSPECTIVA", "O caso inteiro de uma vez", "Aqui a curva completa já aparece como uma análise retrospectiva: a pessoa não precisa esperar o relógio do replay para ver como BIS e CNN se comportaram durante todo o caso selecionado."), html.Div([html.Div([html.Label("Caso para analisar", htmlFor="trajectory-case-selector"), dcc.Dropdown(id="trajectory-case-selector", options=options, value=default_value, clearable=False, searchable=True), html.Div(id="trajectory-meta", children=_case_meta(default_value))], className="control-block case-control"), html.Div([html.Div("LEITURA CORRETA", className="mini-kicker"), html.P("Esta é uma visão retrospectiva: todas as previsões do caso já estão visíveis. Ela não substitui o modo causal do Replay.")], className="explanation-card compact-explanation")], className="control-grid trajectory-controls"), html.Div(id="trajectory-cards", children=_initial_trajectory_cards(), className="metric-grid trajectory-metrics"), html.Div(dcc.Graph(id="trajectory-figure", figure=_empty_figure("Trajetória completa · BIS contra CNN", "Carregando o caso selecionado", height=470), config={"displayModeBar": False}), className="chart-card"), html.Div(dcc.Graph(id="trajectory-error-figure", figure=_empty_figure("Erro ao longo do caso · CNN − BIS", "Carregando o caso selecionado", height=300), config={"displayModeBar": False}), className="chart-card trajectory-error-chart"), html.Div("A linha marinho é o BIS observado; a turquesa é a CNN suavizada; a pontilhada roxa é a saída bruta. O erro usa o último BIS observado antes de cada predição.", className="legend-note")], className="tab-panel")
+        [
+            _tab_intro("VISÃO RETROSPECTIVA", "O caso inteiro de uma vez", "Aqui a curva completa já aparece como uma análise retrospectiva: a pessoa não precisa esperar o relógio do replay para ver como BIS e CNN se comportaram durante todo o caso selecionado."),
+            html.Div(
+                [
+                    html.Div([html.Label("Caso para analisar", htmlFor="trajectory-case-selector"), dcc.Dropdown(id="trajectory-case-selector", options=options, value=default_value, clearable=False, searchable=True), html.Div(id="trajectory-meta", children=_case_meta(default_value))], className="control-block case-control"),
+                    html.Div([html.Div("LEITURA CORRETA", className="mini-kicker"), html.P("Ao trocar o caso, a tela mostra um carregamento enquanto calcula as janelas causais. O título do gráfico e os cards identificam o caso novo assim que a trajetória termina de atualizar." )], className="explanation-card compact-explanation"),
+                ],
+                className="control-grid trajectory-controls",
+            ),
+            dcc.Loading(id="trajectory-loading", type="circle", color=COLORS["teal"], children=trajectory_results),
+            html.Div("A linha marinho é o BIS observado; a linha turquesa espessa é uma EMA causal de 5 s aplicada somente para leitura. A saída causal original e o erro original ficam disponíveis pela legenda; cards e métricas não são recalculados com essa suavização visual.", className="legend-note"),
+        ],
+        className="tab-panel",
+    )
 
 
 def _build_replay_tab(options: list[dict[str, object]], default_value: str | None, duration: float) -> html.Div:
@@ -793,9 +875,32 @@ def _build_model_tab() -> html.Div:
     environment = MODEL_METADATA.get("environment", {})
     window_shape = dataset.get("window_shape", [1, 640]) if isinstance(dataset, dict) else [1, 640]
     param_count = parameter_count(MODEL) if MODEL is not None else 0
+    train_cases = tuple(str(case) for case in split.get("train_cases", []))
+    validation_cases = tuple(str(case) for case in split.get("validation_cases", []))
+    test_cases = tuple(str(case) for case in split.get("test_cases", []))
+    external_cases = tuple(str(case) for case in EXTERNAL_REPORT.get("case_ids", []))
+    figshare_files = sum(path.suffix.lower() == ".mat" for path in CASE_PATHS)
+    vitaldb_files = sum(path.suffix.lower() == ".npz" for path in CASE_PATHS)
+    checkpoint_cases = int(dataset.get("n_cases", len(train_cases) + len(validation_cases) + len(test_cases))) if isinstance(dataset, dict) else len(train_cases) + len(validation_cases) + len(test_cases)
     config_rows = [["Checkpoint", model_name, str(MODEL_PATH.name)], ["Parâmetros treináveis", f"{param_count:,}", "modelo carregado em CPU" if MODEL is not None else "indisponível"], ["Entrada", " × ".join(str(value) for value in window_shape), "canal × amostras"], ["Amostragem", f"{preprocess.get('sampling_rate', '—')} Hz", "taxa esperada pelo modelo"], ["Janela", f"{preprocess.get('window_seconds', '—')} s", "contexto temporal causal"], ["Filtro", f"{preprocess.get('lowcut_hz', '—')}–{preprocess.get('highcut_hz', '—')} Hz", "band-pass"], ["Escala", f"±{preprocess.get('clip_uv', '—')} µV / {preprocess.get('amplitude_scale_uv', '—')}", "clip e normalização"], ["Gate de qualidade", str(MODEL_METADATA.get("min_quality", DEFAULT_MIN_SIGNAL_QUALITY)), "abaixo disso emite abstain"]]
-    train_rows = [["Épocas", training.get("epochs", "—"), "treinamento"], ["Batch", training.get("batch_size", "—"), "janelas por atualização"], ["Learning rate", training.get("learning_rate", "—"), "AdamW"], ["Weight decay", training.get("weight_decay", "—"), "regularização"], ["Seed", training.get("seed", "—"), "reprodutibilidade"], ["Divisão", f"{len(split.get('train_cases', []))}/{len(split.get('validation_cases', []))}/{len(split.get('test_cases', []))}", "train / validação / teste"], ["Ambiente", environment.get("torch", "—"), f"Python {environment.get('python', '—')}"]]
-    return html.Div([_tab_intro("DADOS DA REDE", "O que está dentro do checkpoint", "Esta aba torna o modelo auditável: arquitetura, quantidade de parâmetros, pré-processamento, divisão de casos, ambiente e histórico de treinamento ficam visíveis sem precisar abrir o arquivo binário."), html.Div([_card("Modelo", model_name, "regressão contínua de BIS", "navy"), _card("Parâmetros treináveis", f"{param_count:,}", "estado atual do checkpoint", "teal"), _card("Casos de treino", f"{len(split.get('train_cases', []))}", "separação por cirurgia", "blue"), _card("Janelas usadas", f"{int(dataset.get('n_windows', 0)):,}" if isinstance(dataset, dict) else "—", "após filtro de qualidade", "orange")], className="metric-grid"), html.Div([html.Div([html.H3("Configuração do checkpoint"), _table(["Campo", "Valor", "Interpretação"], config_rows)], className="table-card"), html.Div([html.H3("Treinamento e ambiente"), _table(["Campo", "Valor", "Interpretação"], train_rows)], className="table-card")], className="table-grid two-col"), html.Div([html.H3("Arquitetura declarada"), _model_architecture_table()], className="table-card model-architecture"), html.Div(dcc.Graph(figure=_history_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div([html.H3("Tensores no state_dict"), _model_parameter_table()], className="table-card")], className="tab-panel")
+    train_rows = [["Épocas", training.get("epochs", "—"), "treinamento"], ["Batch", training.get("batch_size", "—"), "janelas por atualização"], ["Learning rate", training.get("learning_rate", "—"), "AdamW"], ["Weight decay", training.get("weight_decay", "—"), "regularização"], ["Seed", training.get("seed", "—"), "reprodutibilidade"], ["Divisão", f"{len(train_cases)}/{len(validation_cases)}/{len(test_cases)}", "train / validação / teste"], ["Ambiente", environment.get("torch", "—"), f"Python {environment.get('python', '—')}"]]
+    split_rows = [["Treino", len(train_cases), ", ".join(train_cases)], ["Validação", len(validation_cases), ", ".join(validation_cases)], ["Teste interno", len(test_cases), ", ".join(test_cases)], ["VitalDB externo", len(external_cases), ", ".join(external_cases)]]
+    coverage_cards = [_card("Casos no checkpoint", f"{checkpoint_cases}", f"{len(train_cases)} treino + {len(validation_cases)} validação + {len(test_cases)} teste", "navy"), _card("Treino", f"{len(train_cases)}", "casos que ajustaram os pesos", "teal"), _card("Validação", f"{len(validation_cases)}", "casos para acompanhar seleção", "blue"), _card("Teste interno", f"{len(test_cases)}", "holdout Figshare", "purple"), _card("VitalDB externo", f"{len(external_cases)}", "sem retreino", "orange"), _card("Arquivos no app", f"{len(CASE_PATHS)}", f"{figshare_files} Figshare + {vitaldb_files} VitalDB", "green")]
+    return html.Div(
+        [
+            _tab_intro("DADOS DA REDE", "O que está dentro do checkpoint", "Esta aba torna o modelo auditável: arquitetura, quantidade de parâmetros, pré-processamento, divisão de casos, ambiente e histórico de treinamento ficam visíveis sem precisar abrir o arquivo binário."),
+            html.Div([_card("Modelo", "Conv1D", f"{model_name} · regressão contínua de BIS", "navy"), _card("Parâmetros treináveis", f"{param_count:,}", "estado atual do checkpoint", "teal"), _card("Casos de treino", f"{len(train_cases)}", "separação por cirurgia", "blue"), _card("Janelas usadas", f"{int(dataset.get('n_windows', 0)):,}" if isinstance(dataset, dict) else "—", "após filtro de qualidade", "orange")], className="metric-grid"),
+            html.Div(coverage_cards, className="metric-grid case-coverage-grid"),
+            html.Div(dcc.Graph(figure=_case_count_mae_figure(), config={"displayModeBar": False}), className="chart-card case-count-chart"),
+            html.Div("As barras mostram a MAE de cada caso externo; a linha marinho recalcula a MAE agregada quando cada caso entra. Isso descreve a estabilidade da estimativa com mais casos — não é uma curva de retreinamento e não prova que aumentar a amostra, sozinho, melhora o modelo.", className="legend-note"),
+            html.Div([html.H3("Casos utilizados por divisão"), _table(["Divisão", "Quantidade", "Identificadores"], split_rows)], className="table-card"),
+            html.Div([html.Div([html.H3("Configuração do checkpoint"), _table(["Campo", "Valor", "Interpretação"], config_rows)], className="table-card"), html.Div([html.H3("Treinamento e ambiente"), _table(["Campo", "Valor", "Interpretação"], train_rows)], className="table-card")], className="table-grid two-col"),
+            html.Div([html.H3("Arquitetura declarada"), _model_architecture_table()], className="table-card model-architecture"),
+            html.Div(dcc.Graph(figure=_history_figure(), config={"displayModeBar": False}), className="chart-card"),
+            html.Div([html.H3("Tensores no state_dict"), _model_parameter_table()], className="table-card"),
+        ],
+        className="tab-panel",
+    )
 
 
 def _build_statistics_tab() -> html.Div:
