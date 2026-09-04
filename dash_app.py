@@ -20,13 +20,15 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
+import torch
 from dash import Dash, Input, Output, State, dcc, html, no_update
 from plotly.subplots import make_subplots
 
 from brainsniffer.config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig
 from brainsniffer.data.mat_reader import EEGCase, load_case
+from brainsniffer.data.preprocess import StreamingPreprocessor, bis_stage, signal_quality
 from brainsniffer.models.cnn import parameter_count
-from brainsniffer.pipeline.realtime import replay_case
+from brainsniffer.pipeline.realtime import RealtimePrediction
 from brainsniffer.pipeline.training import load_checkpoint
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -154,6 +156,67 @@ DEFAULT_CASE = next(
 )
 
 
+def _fast_replay_case(
+    model: torch.nn.Module,
+    case: EEGCase,
+    config: PreprocessConfig,
+    *,
+    stride_seconds: float = 1.0,
+    smoothing_alpha: float = 0.25,
+    min_quality: float = DEFAULT_MIN_SIGNAL_QUALITY,
+    device: str = "cpu",
+) -> list[RealtimePrediction]:
+    """Vectorize independent model calls while preserving streaming semantics."""
+
+    eeg = np.asarray(case.eeg, dtype=np.float32).reshape(-1)
+    if eeg.size and not np.isfinite(eeg).all():
+        raise ValueError("samples devem ser finitas no modo streaming")
+    window_samples = config.window_samples
+    stride_samples = max(1, int(round(stride_seconds * config.sampling_rate)))
+    starts = np.arange(0, max(eeg.size - window_samples + 1, 0), stride_samples, dtype=int)
+    if starts.size == 0:
+        return []
+
+    processed = StreamingPreprocessor(config).process(eeg)
+    raw_windows = np.lib.stride_tricks.sliding_window_view(eeg, window_samples)[starts]
+    processed_windows = np.lib.stride_tricks.sliding_window_view(processed, window_samples)[starts]
+    qualities = np.asarray([signal_quality(window, config) for window in raw_windows], dtype=float)
+    valid = qualities >= min_quality
+    raw_predictions = np.full(starts.size, np.nan, dtype=float)
+    if valid.any():
+        model.eval()
+        with torch.inference_mode():
+            for batch_start in range(0, int(valid.sum()), 512):
+                valid_indices = np.flatnonzero(valid)[batch_start : batch_start + 512]
+                batch = torch.from_numpy(np.asarray(processed_windows[valid_indices], dtype=np.float32)[:, None, :]).to(device)
+                raw_predictions[valid_indices] = torch.clamp(model(batch), 0.0, 100.0).detach().cpu().numpy()
+
+    smoothed_predictions = np.full(starts.size, np.nan, dtype=float)
+    stages: list[str] = []
+    previous = float("nan")
+    for index, raw_bis in enumerate(raw_predictions):
+        if not np.isfinite(raw_bis):
+            previous = float("nan")
+            stages.append("abstain")
+            continue
+        previous = float(raw_bis) if not np.isfinite(previous) else smoothing_alpha * float(raw_bis) + (1 - smoothing_alpha) * previous
+        smoothed_predictions[index] = previous
+        stages.append(bis_stage(previous))
+    return [
+        RealtimePrediction(
+            sample_index=int(start + window_samples),
+            elapsed_seconds=float(start + window_samples) / case.sampling_rate,
+            raw_bis=None if not np.isfinite(raw_bis) else float(raw_bis),
+            smoothed_bis=None if not np.isfinite(smoothed) else float(smoothed),
+            stage=stage,
+            quality=float(quality),
+        )
+        for start, raw_bis, smoothed, stage, quality in zip(
+            starts, raw_predictions, smoothed_predictions, stages, qualities, strict=False
+        )
+    ]
+
+
 @lru_cache(maxsize=16)
 def _replay_payload(path_string: str) -> ReplayPayload:
     """Run the causal replay once and keep a compact browser representation."""
@@ -161,7 +224,7 @@ def _replay_payload(path_string: str) -> ReplayPayload:
     if MODEL is None or PREPROCESS is None:
         raise RuntimeError(MODEL_ERROR or "Checkpoint indisponível")
     case = load_case(path_string)
-    predictions = replay_case(
+    predictions = _fast_replay_case(
         MODEL,
         case,
         PREPROCESS,
