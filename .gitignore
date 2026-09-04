@@ -8,7 +8,9 @@ tmp/
 output/
 data/raw/*.mat
 data/vitaldb/*.npz
+data/vitaldb_train/*.npz
 data/processed/
 models/*.pt
 models/*.pth
 *.egg-info/
+docs/*.log

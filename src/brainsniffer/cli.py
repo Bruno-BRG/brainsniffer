@@ -20,6 +20,13 @@ from .config import (
     default_data_dir,
     default_model_path,
 )
+from .data.corpus import (
+    CorpusQualityConfig,
+    build_corpus_manifest,
+    corpus_paths,
+    load_corpus_manifest,
+    write_corpus_manifest,
+)
 from .data.figshare import available_case_ids, download_dataset, fetch_manifest
 from .data.mat_reader import load_case
 from .data.preprocess import (
@@ -29,7 +36,7 @@ from .data.preprocess import (
     signal_quality,
     subset_windows,
 )
-from .data.vitaldb import download_vitaldb_case
+from .data.vitaldb import download_vitaldb_case, fetch_vitaldb_subject_map
 from .pipeline.baseline import cross_validate_spectral_baseline, train_spectral_baseline
 from .pipeline.benchmark import benchmark_latency
 from .pipeline.intake import validate_intake_metadata
@@ -258,6 +265,71 @@ def build_parser() -> argparse.ArgumentParser:
     inspect = subparsers.add_parser("inspect-data", help="mostrar metadados e casos locais")
     inspect.add_argument("--data-dir", type=Path, default=default_data_dir())
 
+    corpus = subparsers.add_parser(
+        "build-corpus",
+        help="auditar e montar o manifesto do corpus Figshare + VitalDB",
+    )
+    corpus.add_argument("--figshare-dir", type=Path, default=Path("data/raw"))
+    corpus.add_argument("--vitaldb-train-dir", type=Path, default=Path("data/vitaldb_train"))
+    corpus.add_argument(
+        "--vitaldb-external-dir",
+        type=Path,
+        default=Path("data/vitaldb"),
+        help="casos VitalDB congelados e excluídos do treino",
+    )
+    corpus.add_argument(
+        "--out",
+        type=Path,
+        default=Path("reports/corpus_manifest.json"),
+        help="destino do manifesto auditável",
+    )
+    corpus.add_argument(
+        "--min-quality",
+        type=float,
+        default=DEFAULT_MIN_SIGNAL_QUALITY,
+        help="qualidade mínima de cada janela aceita",
+    )
+    corpus.add_argument("--min-finite-fraction", type=float, default=0.90)
+    corpus.add_argument("--max-gap-seconds", type=float, default=2.0)
+    corpus.add_argument("--min-global-quality", type=float, default=0.35)
+    corpus.add_argument("--min-bis-valid-fraction", type=float, default=0.80)
+
+    train_corpus = subparsers.add_parser(
+        "train-corpus",
+        help="treinar uma CNN candidata a partir do manifesto do corpus",
+    )
+    train_corpus.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("reports/corpus_manifest.json"),
+    )
+    train_corpus.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=Path("models/brainsniffer_corpus.pt"),
+    )
+    train_corpus.add_argument("--epochs", type=int, default=TrainingConfig.epochs)
+    train_corpus.add_argument("--batch-size", type=int, default=TrainingConfig.batch_size)
+    train_corpus.add_argument("--min-quality", type=float, default=None)
+    train_corpus.add_argument("--max-windows", type=int, default=None)
+    train_corpus.add_argument(
+        "--label-offset-seconds",
+        type=float,
+        default=0.0,
+        help="deslocamento do rótulo BIS em relação ao início da janela",
+    )
+    train_corpus.add_argument(
+        "--include-quarantined",
+        action="store_true",
+        help="incluir casos reprovados explicitamente para experimento de estresse",
+    )
+    train_corpus.add_argument(
+        "--exclude-case",
+        action="append",
+        default=[],
+        help="caso a manter fora do ajuste; repita para fixar um holdout",
+    )
+
     train = subparsers.add_parser("train", help="treinar a CNN com divisão por caso")
     train.add_argument("--data-dir", type=Path, default=default_data_dir())
     train.add_argument("--checkpoint", type=Path, default=default_model_path())
@@ -276,6 +348,12 @@ def build_parser() -> argparse.ArgumentParser:
         "evaluate", help="recalcular as métricas do checkpoint em casos de teste salvos"
     )
     evaluate.add_argument("--data-dir", type=Path, default=default_data_dir())
+    evaluate.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="manifesto de corpus; quando informado, avalia todos os arquivos elegíveis",
+    )
     evaluate.add_argument("--checkpoint", type=Path, default=default_model_path())
     evaluate.add_argument(
         "--min-quality",
@@ -500,8 +578,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "download-vitaldb":
+        try:
+            subject_map = fetch_vitaldb_subject_map()
+        except (OSError, ValueError) as error:
+            subject_map = {}
+            print(
+                f"Aviso: não foi possível carregar subjectid do VitalDB ({error}); "
+                "o manifesto usará o caseid como grupo.",
+                file=sys.stderr,
+            )
         paths = [
-            download_vitaldb_case(case_id, args.out, overwrite=args.overwrite)
+            download_vitaldb_case(
+                case_id,
+                args.out,
+                overwrite=args.overwrite,
+                subject_id=subject_map.get(str(case_id)),
+            )
             for case_id in args.case
         ]
         print(json.dumps({"dataset": "VitalDB", "files": [str(path) for path in paths]}, indent=2))
@@ -523,6 +615,92 @@ def main(argv: list[str] | None = None) -> int:
                 f"EEG={case.eeg.size}, BIS={case.bis.size}, "
                 f"quality_global={quality:.3f}"
             )
+        return 0
+
+    if args.command == "build-corpus":
+        preprocess = PreprocessConfig()
+        quality = CorpusQualityConfig(
+            min_finite_fraction=args.min_finite_fraction,
+            max_gap_seconds=args.max_gap_seconds,
+            min_global_quality=args.min_global_quality,
+            min_bis_valid_fraction=args.min_bis_valid_fraction,
+            min_window_quality=args.min_quality,
+        )
+        manifest = build_corpus_manifest(
+            figshare_dir=args.figshare_dir,
+            vitaldb_train_dir=args.vitaldb_train_dir,
+            vitaldb_external_dir=args.vitaldb_external_dir,
+            preprocess_config=preprocess,
+            quality_config=quality,
+        )
+        write_corpus_manifest(manifest, args.out)
+        print(
+            json.dumps(
+                {
+                    "manifest": str(args.out),
+                    "corpus_name": manifest["corpus_name"],
+                    "summary": manifest["summary"],
+                    "third_source": manifest["third_source"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.command == "train-corpus":
+        manifest = load_corpus_manifest(args.manifest)
+        paths = corpus_paths(manifest, include_quarantined=args.include_quarantined)
+        excluded_cases = {str(case_id) for case_id in args.exclude_case}
+        if excluded_cases:
+            paths = [path for path in paths if path.stem not in excluded_cases]
+            if not paths:
+                raise SystemExit("--exclude-case removeu todos os arquivos elegíveis")
+        min_quality = (
+            float(args.min_quality)
+            if args.min_quality is not None
+            else float(
+                manifest.get("quality_config", {}).get(
+                    "min_window_quality", DEFAULT_MIN_SIGNAL_QUALITY
+                )
+            )
+        )
+        preprocess = PreprocessConfig(label_offset_seconds=args.label_offset_seconds)
+        windows = load_windows(paths, preprocess, min_quality=min_quality)
+        windows = subset_windows(windows, args.max_windows)
+        training = TrainingConfig(
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            balance_groups=True,
+            balance_sources=True,
+        )
+        result = train_model(
+            windows,
+            preprocess_config=preprocess,
+            training_config=training,
+            checkpoint_path=args.checkpoint,
+            min_quality=min_quality,
+            input_files=paths,
+            corpus_manifest_path=args.manifest,
+        )
+        print(
+            json.dumps(
+                {
+                    "checkpoint": str(args.checkpoint),
+                    "checkpoint_sha256": _checkpoint_sha256(args.checkpoint),
+                    "manifest": str(args.manifest),
+                    "excluded_cases": sorted(excluded_cases),
+                    "validation": result.validation_metrics,
+                    "test": result.test_metrics,
+                    "device": result.device,
+                    "dataset": result.dataset_summary,
+                    "split": asdict(result.split),
+                    "input_files": result.input_files,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
 
     if args.command == "train":
@@ -561,9 +739,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "evaluate":
         model, preprocess, payload = load_checkpoint(args.checkpoint)
-        paths = sorted(args.data_dir.glob("case*.mat"))
+        if args.manifest is not None:
+            paths = corpus_paths(load_corpus_manifest(args.manifest))
+        else:
+            paths = sorted(args.data_dir.glob("case*.mat"))
         if not paths:
-            raise SystemExit(f"Nenhum case*.mat encontrado em {args.data_dir}.")
+            location = args.manifest if args.manifest is not None else args.data_dir
+            raise SystemExit(f"Nenhum caso encontrado em {location}.")
         verify_file_manifest(payload.get("input_files"))
         min_quality = (
             float(args.min_quality)
@@ -584,7 +766,13 @@ def main(argv: list[str] | None = None) -> int:
         test_cases = tuple(str(case) for case in saved_split.get("test_cases", ()))
         if not test_cases:
             raise SystemExit("O checkpoint não contém casos de teste agrupados")
-        test_mask = np.isin(windows.case_ids.astype(str), np.asarray(test_cases, dtype=str))
+        split_unit = str(payload.get("split_unit", "case"))
+        split_ids = (
+            windows.group_ids.astype(str)
+            if split_unit == "group" and windows.group_ids is not None
+            else windows.case_ids.astype(str)
+        )
+        test_mask = np.isin(split_ids, np.asarray(test_cases, dtype=str))
         if not test_mask.any():
             raise SystemExit("Nenhuma janela dos casos de teste está disponível localmente")
         prediction = predict_model(model, windows.signals[test_mask], device="cpu")
@@ -601,16 +789,19 @@ def main(argv: list[str] | None = None) -> int:
             if np.unique(test_case_ids).size > 1
             else {}
         )
-        test_paths = [path for path in paths if path.stem in test_cases]
+        test_case_ids = set(windows.case_ids[test_mask].astype(str).tolist())
+        test_paths = [path for path in paths if path.stem in test_case_ids]
         report_payload = {
             "scope": "research_only",
             "checkpoint": str(args.checkpoint),
             "checkpoint_sha256": _checkpoint_sha256(args.checkpoint),
             "data_dir": str(args.data_dir),
+            "corpus_manifest": str(args.manifest) if args.manifest is not None else None,
             "files": [str(path) for path in test_paths],
             "input_files": build_file_manifest(test_paths),
             "preprocess_config": asdict(preprocess),
             "test_cases": list(test_cases),
+            "split_unit": split_unit,
             "min_quality": min_quality,
             "n_test_windows": int(test_mask.sum()),
             "stored_test_metrics": payload.get("test_metrics", {}),
@@ -642,9 +833,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         if not test_cases:
             raise SystemExit("O checkpoint não contém os casos de teste necessários")
-        available_paths = {
-            path.stem: path for path in sorted(args.data_dir.glob("case*.mat"))
-        }
+        split_unit = str(payload.get("split_unit", "case"))
+        available_paths: dict[str, Path] = {}
+        for path in sorted(args.data_dir.glob("case*.mat")):
+            if split_unit == "group":
+                case = load_case(path, sampling_rate=preprocess.sampling_rate)
+                key = case.group_id or case.case_id
+            else:
+                key = path.stem
+            available_paths[str(key)] = path
         missing_cases = [case_id for case_id in test_cases if case_id not in available_paths]
         if missing_cases:
             raise SystemExit(
@@ -682,6 +879,7 @@ def main(argv: list[str] | None = None) -> int:
             "preprocess_config": asdict(preprocess),
             "min_quality": min_quality,
             "label_offset_semantics": "positive associates each EEG window with a later BIS value",
+            "split_unit": split_unit,
             "retained_model_and_weights": True,
             "retained_split_by_case": True,
             "retrained": False,

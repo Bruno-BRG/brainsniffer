@@ -28,11 +28,11 @@
 \maketitle
 
 \begin{abstract}
-This paper presents BrainSniffer, an open research prototype for estimating an operational anesthesia-depth reference from frontal electroencephalography (EEG). The system downloads a public EEG and bispectral-index (BIS) corpus, applies documented causal preprocessing, trains a compact one-dimensional convolutional neural network (CNN), and exposes replay and laboratory streaming interfaces. Evaluation is performed by case-level split, avoiding leakage when adjacent windows from the same surgery are distributed across partitions. In the engineering run, the CNN obtained MAE 7.03, RMSE 11.08, Pearson correlation 0.784, stage accuracy 0.585, and macro-F1 0.548 in a five-case holdout. An exploratory evaluation on 15 VitalDB cases without retraining obtained MAE 12.43 and Pearson correlation 0.024, highlighting domain-shift limitations. The prototype is not a clinical decision system and does not prescribe anesthetic dose; it provides an auditable basis for future validation with real hardware, anesthesiology supervision, ethics approval, and a prospective protocol \cite{ma2017,li2022,tripodai}.
+This paper presents BrainSniffer, an open research prototype for estimating an operational anesthesia-depth reference from frontal electroencephalography (EEG). The system audits a mixed development corpus from Figshare and VitalDB, applies documented causal preprocessing, trains a compact one-dimensional convolutional neural network (CNN), and exposes replay and laboratory streaming interfaces. Evaluation is performed by case- or subject-level split, avoiding leakage when adjacent windows or reoperations are distributed across partitions. In a fixed exploratory comparison, the mixed candidate obtained MAE 6.69 and Pearson correlation 0.818 in a five-case Figshare holdout and MAE 8.60 and Pearson correlation 0.688 in 15 frozen VitalDB cases, compared with 7.03/0.784 and 12.43/0.024 for the active checkpoint. The prototype is not a clinical decision system and does not prescribe anesthetic dose; it provides an auditable basis for future validation with real hardware, anesthesiology supervision, ethics approval, and a prospective protocol \cite{ma2017,lee2022,tripodai}.
 \end{abstract}
 
 \begin{resumo}
-Este trabalho apresenta o BrainSniffer, um protótipo aberto de pesquisa para estimar, a partir de eletroencefalografia (EEG) frontal, uma referência operacional relacionada à profundidade anestésica. O sistema baixa um corpus público de EEG e índice bispectral (BIS), aplica pré-processamento causal documentado, treina uma rede neural convolucional unidimensional (CNN) compacta e oferece interfaces de replay e streaming em laboratório. A avaliação usa separação por caso para evitar vazamento entre janelas da mesma cirurgia. Na execução de engenharia, a CNN obteve MAE 7,03, RMSE 11,08, correlação de Pearson 0,784, acurácia de estágio 0,585 e macro-F1 0,548 no holdout. Em uma avaliação exploratória de 15 casos VitalDB sem retreino, obteve MAE 12,43 e correlação 0,024, evidenciando limitações de mudança de domínio. O protótipo não é um sistema de decisão clínica, não recomenda dose e requer validação futura com hardware real, supervisão de anestesiologia, ética e protocolo prospectivo \cite{ma2017,li2022,tripodai}.
+Este trabalho apresenta o BrainSniffer, um protótipo aberto de pesquisa para estimar, a partir de eletroencefalografia (EEG) frontal, uma referência operacional relacionada à profundidade anestésica. O sistema audita um corpus de desenvolvimento misto de Figshare e VitalDB, aplica pré-processamento causal documentado, treina uma rede neural convolucional unidimensional (CNN) compacta e oferece interfaces de replay e streaming em laboratório. A avaliação usa separação por caso ou sujeito para evitar vazamento entre janelas da mesma cirurgia e reoperações. Na comparação exploratória com holdouts fixos, o candidato misto obteve MAE 6,69 e Pearson 0,818 no holdout Figshare e MAE 8,60 e Pearson 0,688 nos 15 casos VitalDB congelados, contra 7,03/0,784 e 12,43/0,024 do checkpoint ativo. O protótipo não é um sistema de decisão clínica, não recomenda dose e requer validação futura com hardware real, supervisão de anestesiologia, ética e protocolo prospectivo \cite{ma2017,lee2022,tripodai}.
 
 \textbf{Palavras-chave:} EEG; anestesia; BIS; CNN; aprendizado profundo; tempo real; validação por paciente.
 \end{resumo}
@@ -49,7 +49,7 @@ Este trabalho descreve o BrainSniffer, uma implementação em Python 3.12 que or
   \item um fluxo reproduzível de download, integridade, pré-processamento causal e treinamento;
   \item uma avaliação agrupada por caso, com baseline espectral e métricas contínuas e discretas;
   \item um caminho de replay e uma interface de streaming por Lab Streaming Layer (LSL), com auditoria e abstenção sob baixa qualidade;
-  \item uma avaliação externa exploratória em VitalDB que explicita mudança de domínio e limites de extrapolação.
+  \item um corpus misto auditável, com VitalDB tratado no desenvolvimento, holdout externo congelado e decisão explícita sobre uma terceira fonte incompatível.
 \end{itemize}
 
 \begin{figure}[ht]
@@ -103,6 +103,14 @@ A entrada da rede tem forma $(\text{batch},1,640)$. A CNN possui quatro blocos c
 
 O baseline espectral extrai potência absoluta e relativa nas bandas delta, teta, alfa, beta e gama, frequência de borda de 90\%, entropia espectral, RMS e comprimento de linha. Um Random Forest recebe essas características. CNN e baseline usam as mesmas janelas, a mesma separação por caso e o mesmo pré-processamento causal \cite{li2022,hajat2017}.
 
+\subsection{Corpus misto e gates de qualidade}
+
+O manifesto do corpus reúne 24 casos Figshare no pool de desenvolvimento, 20 casos VitalDB candidatos ao treino e 15 casos VitalDB mantidos como avaliação externa congelada. Depois da auditoria, 23 casos Figshare e 10 VitalDB ficaram elegíveis, 11 casos de desenvolvimento foram colocados em quarentena e 55.471 janelas permaneceram disponíveis para treinamento. O identificador de grupo usa \texttt{subjectid} quando disponível e um identificador prefixado por fonte como fallback, reduzindo o risco de vazamento por reoperação \cite{ma2017,lee2022,vitaldb,clinicaldata}.
+
+O gate padrão exige pelo menos 90\% de amostras EEG finitas, nenhuma lacuna não finita maior que 2 s, qualidade global mínima de 0,35, pelo menos 80\% de BIS válido e qualidade mínima de 0,20 por janela. Lacunas longas são quarentenadas, não preenchidas silenciosamente para fabricar uma trajetória de treino; a política separa imputação offline de rejeição no caminho online e deixa a decisão revisável no manifesto \cite{vitaldb,lee2022,gmlp}.
+
+Uma terceira fonte foi catalogada, mas não foi misturada à regressão EEG--BIS. O DOSE-I oferece EEG frontotemporal de dois canais e rótulos como MOAA/S e estado de consciência em sedação com propofol; convertê-los para BIS criaria um alvo incompatível. O uso futuro deve ser uma tarefa ordinal ou multitarefa separada, com adaptador, divisão por pessoa e protocolo próprios \cite{dosei,tripodai}.
+
 \subsection{Protocolo de avaliação}
 
 Os casos são embaralhados com semente 42 e divididos em treinamento, validação e teste, mantendo todas as janelas de um caso em uma única partição. As métricas contínuas são erro absoluto médio (MAE), raiz do erro quadrático médio (RMSE), viés e correlação de Pearson. Essa unidade de separação é uma decisão conservadora para reduzir dependência entre janelas da mesma cirurgia \cite{tripodai,decideai}:
@@ -122,9 +130,9 @@ Antes e durante o consumo, o sistema audita metadados, taxa de amostragem, times
 
 \section{Interface e reprodutibilidade}
 
-O aplicativo Streamlit organiza o fluxo em abas de visão geral, dados, exploração, treinamento, replay e EEG ao vivo. A visão geral confronta os resultados dos dois corpora; a aba de dados baixa o Figshare e permite selecionar casos VitalDB para avaliação externa. A aba de treinamento registra configuração, semente, partições, versão do ambiente e hashes. A aba LSL exige uma ficha de entrada com fabricante, modelo, montagem, unidade, taxa declarada, canal escolhido, bridge e responsável pela sessão \cite{gmlp,decideai}.
+O aplicativo Dash + Plotly organiza o fluxo em abas de visão geral, trajetória completa, replay causal, dados da rede, corpus, estatística, método e cobertura. A visão geral confronta o checkpoint ativo com o holdout externo; a aba Corpus mostra fontes, gates, quarentena e comparação do candidato misto; o replay revela EEG, BIS, predição bruta, suavização e qualidade sem recalcular a rede a cada avanço do navegador. A aba LSL exige uma ficha de entrada com fabricante, modelo, montagem, unidade, taxa declarada, canal escolhido, bridge e responsável pela sessão \cite{gmlp,decideai}.
 
-O VitalDB foi usado somente como fonte externa exploratória. Trata-se de um banco perioperatório independente, com milhares de casos e numerosos tracks de sinais, incluindo dados relacionados à cirurgia e à anestesia \cite{lee2022,vitaldb}. O BrainSniffer baixa seletivamente \texttt{BIS/EEG1\_WAV} e \texttt{BIS/BIS}, preserva a unidade declarada e não mistura esses arquivos no treinamento do Figshare. Essa separação impede que uma diferença de aparelho, ganho, montagem ou população seja escondida por retreino automático \cite{lee2022,vitaldb}.
+O VitalDB é um banco perioperatório independente, com milhares de casos e numerosos tracks de sinais, incluindo dados relacionados à cirurgia e à anestesia \cite{lee2022,vitaldb}. O BrainSniffer baixa seletivamente \texttt{BIS/EEG1\_WAV} e \texttt{BIS/BIS}, preserva a unidade declarada e inclui no desenvolvimento somente os casos aprovados pelo manifesto; os 15 casos externos permanecem congelados. Assim, a mistura testa robustez de domínio sem apagar a diferença entre aparelho, ganho, montagem ou população \cite{lee2022,vitaldb,clinicaldata}.
 
 \section{Resultados}
 
@@ -149,10 +157,31 @@ Acurácia / macro-F1 & 0,585 / 0,548\\
 
 Na mesma partição, o baseline espectral obteve MAE 8,86, RMSE 13,23, correlação 0,667, acurácia 0,540 e macro-F1 0,480. A CNN apresentou vantagem nas métricas contínuas desse split, enquanto o resultado por estágio não deve ser tratado como evidência de superioridade geral. Não houve ajuste de hiperparâmetros, calibração ou seleção de protocolo depois de observar um conjunto externo \cite{tripodai}.
 
+\begin{table}[ht]
+\centering
+\caption{Composição e comparação do corpus misto em execução exploratória \cite{ma2017,lee2022,tripodai}.}
+\label{tab:mixed}
+\begin{tabular}{lcc}
+\hline
+Item & Desenvolvimento & Holdout\\
+\hline
+Casos Figshare & 23 elegíveis & 5\\
+Casos VitalDB & 10 elegíveis & 15 congelados\\
+Janelas do candidato fixo & 49.948 & ---\\
+MAE ativo / misto & --- & 7,03 / 6,69\\
+Pearson ativo / misto & --- & 0,784 / 0,818\\
+\hline
+\end{tabular}
+\end{table}
+
+Para a comparação justa, o candidato misto foi treinado com 28 casos: os cinco casos do holdout Figshare histórico ficaram fora do ajuste, junto com os 15 casos VitalDB externos. A amostragem foi balanceada por grupo e fonte, e o checkpoint recebeu o manifesto e os hashes dos arquivos de entrada \cite{gmlp,tripodai}.
+
+No holdout Figshare fixo, o candidato teve MAE 6,69, RMSE 10,67, Pearson 0,818 e macro-F1 0,574, contra 7,03, 11,08, 0,784 e 0,548 do checkpoint ativo. Nos 15 casos VitalDB externos, sem retreino, obteve MAE 8,60, RMSE 11,74, Pearson 0,688 e macro-F1 0,486, contra 12,43, 18,80, 0,024 e 0,398 do ativo. A melhora relativa de MAE foi de aproximadamente 4,8\% no Figshare e 30,8\% no VitalDB; esses números são exploratórios e não constituem validação clínica \cite{lee2022,vitaldb,tripodai}.
+
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\columnwidth]{figures/comparison.png}
-\caption{Comparação entre o holdout Figshare e a avaliação VitalDB sem retreino. Fonte: relatórios JSON do projeto; a leitura deve respeitar a mudança de domínio descrita em \cite{lee2022,vitaldb}.}
+\caption{Comparação do checkpoint ativo com o candidato misto nos holdouts Figshare e VitalDB. Fonte: relatórios JSON do projeto; a leitura deve respeitar a mudança de domínio descrita em \cite{lee2022,vitaldb}.}
 \label{fig:comparison}
 \end{figure}
 
@@ -173,7 +202,7 @@ O comando \texttt{evaluate-offset} reaplicou o checkpoint congelado aos mesmos c
 
 \subsection{Avaliação externa exploratória}
 
-Quinze casos VitalDB compatíveis foram normalizados e avaliados sem retreino, totalizando 38.730 janelas. A CNN obteve MAE 12,43, RMSE 18,80, viés 1,40, correlação 0,024, acurácia de estágio 0,420 e macro-F1 0,398. O bootstrap de 1.000 reamostragens por caso estimou Pearson 0,023, com intervalo de 95\% entre -0,126 e 0,193. O resultado é uma avaliação out-of-dataset e deve ser reportado junto com a população e a partição, não como validação clínica \cite{lee2022,vitaldb,tripodai}.
+Quinze casos VitalDB compatíveis foram normalizados e avaliados sem retreino, totalizando 38.730 janelas. No checkpoint ativo, a CNN obteve MAE 12,43, RMSE 18,80, viés 1,40, correlação 0,024, acurácia de estágio 0,420 e macro-F1 0,398; no candidato misto, obteve 8,60, 11,74, -1,01, 0,688, 0,573 e 0,486, respectivamente. O resultado é uma avaliação out-of-dataset e deve ser reportado junto com a população e a partição, não como validação clínica \cite{lee2022,vitaldb,tripodai}.
 
 \begin{figure}[ht]
 \centering
@@ -188,7 +217,7 @@ O caso 11 foi rejeitado porque não continha simultaneamente os tracks \texttt{B
 
 O resultado interno demonstra que o software consegue executar download, integridade, treinamento, avaliação, replay e streaming sintético sob um protocolo registrado. Isso não prova que a CNN mede profundidade anestésica em paciente novo. O corpus inicial é pequeno, usa um canal, depende de um índice processado como referência e pode carregar vieses de aparelho, centro, montagem e população. O BIS também pode ser afetado por artefatos, atividade muscular, fármacos, paralisia e atrasos de processamento \cite{hajat2017}.
 
-A baixa correlação no VitalDB sem retreino é coerente com a hipótese de mudança de domínio. Ela impede apresentar a métrica interna como generalização. Também não é lícito melhorar o número externo por adaptação sem antes definir protocolo independente, partição travada e justificativa de transferência. O projeto registra essa limitação e mantém os datasets separados \cite{lee2022,gmlp}.
+A baixa correlação do checkpoint ativo no VitalDB sem retreino é coerente com a hipótese de mudança de domínio. O ganho do candidato misto é uma evidência exploratória de que dados VitalDB aprovados podem ajudar, mas não autoriza apresentar a métrica interna como generalização. Também não é lícito promover o candidato por uma única execução sem ablação, seeds independentes, partição travada e justificativa de transferência; o projeto mantém o holdout externo separado \cite{lee2022,gmlp,decideai}.
 
 Do ponto de vista de segurança, o aplicativo não controla bombas, não gera recomendação de dose e não aciona alarme clínico. A abstenção sob baixa qualidade reduz uma classe de falhas de software, mas não cria segurança clínica. A próxima etapa deve incluir estudo com hardware específico, verificação de taxa e unidade, sincronização com o monitor, teste de perdas e reconexão, anotação de qualidade e revisão por anestesiologistas \cite{gmlp,decideai}.
 
@@ -196,7 +225,7 @@ O planejamento de validação segue uma progressão de pesquisa: replay, bancada
 
 \section{Conclusão}
 
-O BrainSniffer fornece uma base em Python 3.12 para investigar estimativa de uma referência BIS a partir de EEG frontal com CNN 1-D, pré-processamento causal, separação por paciente, baseline espectral, interface Streamlit e entrada de pesquisa via LSL. O holdout Figshare mostrou uma execução interna reproduzível, enquanto a avaliação VitalDB revelou que o desempenho não se transfere automaticamente para outro corpus \cite{ma2017,lee2022}.
+O BrainSniffer fornece uma base em Python 3.12 para investigar estimativa de uma referência BIS a partir de EEG frontal com CNN 1-D, pré-processamento causal, separação por paciente, baseline espectral, interface Dash + Plotly e entrada de pesquisa via LSL. O corpus misto melhorou a execução exploratória nos dois holdouts, mas a avaliação ainda não demonstra transferência automática para novas populações ou hardware \cite{ma2017,lee2022}.
 
 Assim, a contribuição atual é metodológica e de engenharia: tornar explícitos dados, rótulos, qualidade, latência, partições, artefatos e limites de interpretação. Os próximos experimentos devem pré-especificar alinhamento, incluir baseline de entropia e modelos temporais, ampliar a validação externa, calibrar a política de abstenção, medir o hardware alvo e conduzir avaliação prospectiva com equipe de anestesiologia. Até que essas etapas sejam concluídas, o sistema deve permanecer restrito à pesquisa e não pode ser usado para decidir a profundidade anestésica ou a dose de um paciente \cite{gmlp,tripodai}.
 
@@ -220,6 +249,10 @@ O autor agradece às equipes que disponibilizaram os datasets públicos utilizad
 \bibitem[Lee et al. 2022]{lee2022} Lee, H.-C. et al. (2022). VitalDB, a high-fidelity multi-parameter vital signs database in surgical patients. \textit{Scientific Data}, 9.
 
 \bibitem[VitalDB 2026]{vitaldb} VitalDB (2026). Open Dataset: overview, track units and data-use terms. Documentação online.
+
+\bibitem[VitalDB PhysioNet 2026]{clinicaldata} VitalDB (2026). VitalDB public clinical data and case-to-subject mapping. PhysioNet.
+
+\bibitem[DOSE-I 2026]{dosei} DOSE-I (2026). EEG and clinical annotations for propofol sedation. Zenodo. DOI: 10.5281/zenodo.18483292.
 
 \bibitem[Lab Streaming Layer 2026]{lsl} Lab Streaming Layer (2026). Introduction to Lab Streaming Layer. Documentação online.
 

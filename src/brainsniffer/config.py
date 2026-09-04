@@ -47,6 +47,8 @@ class TrainingConfig:
     seed: int = 42
     device: str = "auto"
     num_workers: int = 0
+    balance_groups: bool = False
+    balance_sources: bool = False
 
 
 def resolve_device(requested: str) -> str:

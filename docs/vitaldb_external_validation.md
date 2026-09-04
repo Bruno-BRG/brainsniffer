@@ -39,7 +39,8 @@ baixa apenas `BIS/EEG1_WAV` e `BIS/BIS`, interpola o BIS numérico para uma grad
 data/vitaldb/vitaldb_case1.npz
 ```
 
-O mesmo download está disponível na aba **Dados** da interface Streamlit. Informe
+O mesmo download está disponível na aba **Dados** da interface Dash; a interface
+Streamlit legada também mantém o fluxo. Informe
 os números separados por vírgula, por exemplo `1,2,3`; depois use **Avaliar
 VitalDB sem retreino** para ver as métricas por caso. Essa tela é apenas uma
 conveniência para pesquisa e repete o mesmo caminho do comando CLI.

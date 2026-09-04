@@ -82,7 +82,7 @@ def test_download_vitaldb_case_records_source_metadata(monkeypatch, tmp_path):
         )
 
     monkeypatch.setattr("brainsniffer.data.vitaldb.read_track", fake_read_track)
-    path = download_vitaldb_case(1, tmp_path)
+    path = download_vitaldb_case(1, tmp_path, subject_id="subject-42")
 
     with np.load(path, allow_pickle=False) as data:
         assert data["source_dataset"].item() == "VitalDB Open Dataset"
@@ -91,3 +91,5 @@ def test_download_vitaldb_case_records_source_metadata(monkeypatch, tmp_path):
         assert data["bis_track_name"].item() == "BIS/BIS"
         assert data["eeg_track_id"].item() == "eeg-track"
         assert data["bis_track_id"].item() == "bis-track"
+        assert data["subject_id"].item() == "subject-42"
+        assert data["group_id"].item() == "vitaldb:subject:subject-42"

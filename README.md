@@ -7,7 +7,8 @@ Protótipo de pesquisa em Python 3.12 para estimar, a partir de EEG frontal, um 
 ## O que já existe
 
 - Download sem credenciais do dataset [EEG and BIS raw data](https://doi.org/10.6084/m9.figshare.5589841.v1), publicado no Figshare sob CC BY 4.0, com conferência de tamanho e MD5 do manifesto oficial.
-- Download seletivo opcional de casos do [VitalDB Open Dataset](https://vitaldb.net/docs/?documentId=OpenDataset/Overview.md) para avaliação externa exploratória; o corpus inteiro não é baixado automaticamente.
+- Download seletivo de casos do [VitalDB Open Dataset](https://vitaldb.net/docs/?documentId=OpenDataset/Overview.md), com `subjectid` do mapa público para agrupar reoperações quando disponível.
+- Manifesto de corpus misto Figshare + VitalDB com gates de finitude, lacunas, BIS válido, qualidade por janela, hashes e separação entre treino e holdout externo.
 - A normalização VitalDB preserva unidade declarada, nomes/IDs dos tracks e origem do dataset; amplitude e montagem não são convertidas silenciosamente.
 - Leitura de arquivos MATLAB v7.3 (`EEG` e `bis`) e fallback para MAT clássico.
 - Janelas não sobrepostas de 5 s a 128 Hz, alinhadas ao ponto BIS correspondente.
@@ -20,11 +21,13 @@ Protótipo de pesquisa em Python 3.12 para estimar, a partir de EEG frontal, um 
 - Baseline espectral com potência por banda, entropia, frequência de borda, RMS e line length para comparar a CNN com uma referência interpretável.
 - Benchmark de latência do caminho de streaming, com p50/p95 por chunk e fração do orçamento de tempo real.
 - Dashboard Dash + Plotly para comparar CNN contra BIS e reproduzir um caso gravado com cursor temporal, play/pause, velocidade, EEG causal, saída bruta/suavizada, estágio e qualidade.
+- Aba **Corpus** com composição por fonte, mapa finitude × janelas aproveitáveis e comparação do checkpoint ativo contra o candidato misto.
 - Interface Streamlit legada em [`app.py`](app.py), mantida para compatibilidade com os fluxos de download, treino e LSL; a publicação principal usa [`dash_app.py`](dash_app.py).
-- Artigo escrito do TCC em LaTeX no formato SBC em [`docs/tcc_brainsniffer.tex`](docs/tcc_brainsniffer.tex), com referências em [`docs/referencias.bib`](docs/referencias.bib), arquivos do template em [`docs/latex/`](docs/latex/) e PDF compilado em [`output/pdf/brainsniffer_tcc_sbc.pdf`](output/pdf/brainsniffer_tcc_sbc.pdf).
+- Artigo escrito do TCC em LaTeX no formato SBC em [`docs/tcc_brainsniffer.tex`](docs/tcc_brainsniffer.tex), com referências em [`docs/referencias.bib`](docs/referencias.bib), arquivos do template em [`docs/latex/`](docs/latex/) e PDF compilado em [`docs/tcc_brainsniffer.pdf`](docs/tcc_brainsniffer.pdf).
 - Rascunho técnico de apoio em [`docs/article.md`](docs/article.md).
 - Ledger que liga fontes, hipóteses, decisões e limites em [`docs/source_ledger.md`](docs/source_ledger.md).
 - Catálogo de datasets e compatibilidade de cada fonte em [`docs/data_catalog.md`](docs/data_catalog.md).
+- Protocolo e resultado do corpus misto em [`docs/mixed_corpus.md`](docs/mixed_corpus.md).
 - Model card com uso pretendido, métricas, riscos e limites em [`docs/model_card.md`](docs/model_card.md).
 - Guia da avaliação externa exploratória seletiva com VitalDB em [`docs/vitaldb_external_validation.md`](docs/vitaldb_external_validation.md).
 - Ficha de entrada e aceite para equipamento EEG real em [`docs/real_eeg_intake.md`](docs/real_eeg_intake.md).
@@ -81,6 +84,16 @@ uv run brainsniffer download-data
 # avaliação externa exploratória seletiva; repita --case para outros casos
 uv run brainsniffer download-vitaldb --case 1 --out data/vitaldb
 
+# baixar casos VitalDB destinados ao pool de treino (não use o diretório externo)
+uv run brainsniffer download-vitaldb --case 18 --case 20 --out data/vitaldb_train
+
+# auditar Figshare + VitalDB de treino e manter data/vitaldb como holdout congelado
+uv run brainsniffer build-corpus --out reports/corpus_manifest.json
+
+# treinar candidato com amostragem balanceada por grupo e por fonte
+uv run brainsniffer train-corpus --manifest reports/corpus_manifest.json \
+  --checkpoint models/brainsniffer_corpus_fixed.pt
+
 # inspecionar os casos presentes
 uv run brainsniffer inspect-data
 
@@ -94,6 +107,10 @@ uv run brainsniffer train --epochs 10 --min-quality 0.2 --checkpoint models/brai
 uv run brainsniffer evaluate --checkpoint models/brainsniffer_cnn.pt \
   --report reports/figshare_holdout_evaluation.json \
   --bootstrap-samples 1000 --bootstrap-seed 42
+
+# recalcular o holdout salvo de um candidato treinado pelo manifesto
+uv run brainsniffer evaluate --manifest reports/corpus_manifest.json \
+  --checkpoint models/brainsniffer_corpus_fixed.pt
 
 # sensibilidade exploratória ao alinhamento do BIS, sem retreinar
 uv run brainsniffer evaluate-offset --data-dir data/raw \

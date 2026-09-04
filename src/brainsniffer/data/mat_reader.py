@@ -23,6 +23,8 @@ class EEGCase:
     eeg_unit: str | None = None
     eeg_track_name: str | None = None
     bis_track_name: str | None = None
+    group_id: str | None = None
+    subject_id: str | None = None
 
     @property
     def duration_seconds(self) -> float:
@@ -95,6 +97,8 @@ def _read_normalized_npz_case(path: Path) -> EEGCase:
         eeg_unit = _scalar_string(data.get("eeg_unit"))
         eeg_track_name = _scalar_string(data.get("eeg_track_name"))
         bis_track_name = _scalar_string(data.get("bis_track_name"))
+        subject_id = _scalar_string(data.get("subject_id"))
+        group_id = _scalar_string(data.get("group_id"))
     if not np.isfinite(stored_rate) or stored_rate <= 0:
         raise ValueError(f"{path} contém uma taxa inválida")
     if not np.isclose(stored_rate, DEFAULT_SAMPLING_RATE):
@@ -113,6 +117,8 @@ def _read_normalized_npz_case(path: Path) -> EEGCase:
         eeg_unit=eeg_unit,
         eeg_track_name=eeg_track_name,
         bis_track_name=bis_track_name,
+        group_id=group_id,
+        subject_id=subject_id,
     )
 
 
@@ -140,4 +146,11 @@ def load_case(
         bis=np.asarray(bis, dtype=np.float32),
         sampling_rate=sampling_rate,
         label_interval_seconds=label_interval_seconds,
+        source_dataset=(
+            "Figshare · EEG and BIS raw data"
+            if path.name.lower().startswith("case")
+            else None
+        ),
+        eeg_unit="uV" if path.name.lower().startswith("case") else None,
+        group_id=f"figshare:case:{path.stem}",
     )

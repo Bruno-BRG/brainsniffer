@@ -23,6 +23,8 @@ class WindowedEEG:
     case_ids: np.ndarray
     start_seconds: np.ndarray
     quality: np.ndarray
+    group_ids: np.ndarray | None = None
+    source_datasets: np.ndarray | None = None
 
 
 def bis_stage(value: float) -> str:
@@ -223,6 +225,8 @@ def make_windows(
     signals: list[np.ndarray] = []
     labels: list[float] = []
     case_ids: list[str] = []
+    group_ids: list[str] = []
+    source_datasets: list[str] = []
     start_seconds: list[float] = []
     qualities: list[float] = []
     for start in starts:
@@ -247,6 +251,8 @@ def make_windows(
         signals.append(processed_window)
         labels.append(label)
         case_ids.append(case.case_id)
+        group_ids.append(case.group_id or case.case_id)
+        source_datasets.append(case.source_dataset or "unknown")
         start_seconds.append(start / case.sampling_rate)
         qualities.append(quality)
 
@@ -262,6 +268,8 @@ def make_windows(
         case_ids=np.asarray(case_ids),
         start_seconds=np.asarray(start_seconds, dtype=np.float32),
         quality=np.asarray(qualities, dtype=np.float32),
+        group_ids=np.asarray(group_ids),
+        source_datasets=np.asarray(source_datasets),
     )
 
 
@@ -273,13 +281,28 @@ def _concat_windows(items: list[WindowedEEG], window_samples: int) -> WindowedEE
             case_ids=np.empty(0, dtype=str),
             start_seconds=np.empty(0, dtype=np.float32),
             quality=np.empty(0, dtype=np.float32),
+            group_ids=np.empty(0, dtype=str),
+            source_datasets=np.empty(0, dtype=str),
         )
+    group_ids = [
+        item.group_ids if item.group_ids is not None else item.case_ids for item in items
+    ]
+    source_datasets = [
+        (
+            item.source_datasets
+            if item.source_datasets is not None
+            else np.full(item.case_ids.shape, "unknown", dtype=str)
+        )
+        for item in items
+    ]
     return WindowedEEG(
         signals=np.concatenate([item.signals for item in items], axis=0),
         bis=np.concatenate([item.bis for item in items]),
         case_ids=np.concatenate([item.case_ids for item in items]),
         start_seconds=np.concatenate([item.start_seconds for item in items]),
         quality=np.concatenate([item.quality for item in items]),
+        group_ids=np.concatenate(group_ids),
+        source_datasets=np.concatenate(source_datasets),
     )
 
 
@@ -336,4 +359,14 @@ def subset_windows(
         case_ids=windows.case_ids[indices],
         start_seconds=windows.start_seconds[indices],
         quality=windows.quality[indices],
+        group_ids=(
+            windows.group_ids[indices]
+            if windows.group_ids is not None
+            else None
+        ),
+        source_datasets=(
+            windows.source_datasets[indices]
+            if windows.source_datasets is not None
+            else None
+        ),
     )

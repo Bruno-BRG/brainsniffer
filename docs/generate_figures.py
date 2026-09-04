@@ -20,6 +20,7 @@ BLUE = "#247BA0"
 TEAL = "#20A39E"
 ORANGE = "#F18F01"
 RED = "#D1495B"
+PURPLE = "#6C63A8"
 INK = "#243B53"
 MUTED = "#627D98"
 GRID = "#D9E2EC"
@@ -129,33 +130,57 @@ def bar_chart(draw, area, title, labels, values, colors, y_max, value_format="{:
         text(draw, (x + width / 2 - 52, bottom + 18), label, 20, INK)
 
 
+def grouped_bar_chart(draw, area, title, labels, series, y_max, value_format="{:.2f}"):
+    left, top, right, bottom = area
+    text(draw, (left, top - 58), title, 27, NAVY, True)
+    axis(draw, left + 70, top, right, bottom, [0, y_max / 2, y_max], y_max)
+    chart_left = left + 115
+    slot = (right - chart_left) / len(labels)
+    group_width = slot * 0.74
+    bar_width = group_width / len(series) * 0.78
+    for label_index, label in enumerate(labels):
+        group_left = chart_left + label_index * slot + (slot - group_width) / 2
+        for series_index, (_, values, color) in enumerate(series):
+            value = float(values[label_index])
+            x = group_left + series_index * group_width / len(series) + (group_width / len(series) - bar_width) / 2
+            y = bottom - (value / y_max) * (bottom - top)
+            draw.rounded_rectangle((x, y, x + bar_width, bottom), radius=8, fill=color)
+            text(draw, (x + bar_width / 2 - 22, y - 34), value_format.format(value), 17, color, True)
+        text(draw, (chart_left + label_index * slot + slot / 2 - 64, bottom + 18), label, 19, INK)
+    legend_x = chart_left
+    for name, _, color in series:
+        draw.rectangle((legend_x, top - 35, legend_x + 20, top - 15), fill=color)
+        text(draw, (legend_x + 28, top - 39), name, 18, INK)
+        legend_x += 190
+
+
 def figure_comparison() -> None:
     internal = load("figshare_holdout_evaluation.json")["recomputed_test_metrics"]
     external = load("vitaldb_external_validation.json")["metrics"]
+    mixed_internal = load("mixed_fixed_figshare_holdout.json")["metrics"]
+    mixed_external = load("mixed_vitaldb_external.json")["metrics"]
     image, draw = canvas()
-    text(draw, (90, 60), "Desempenho: holdout interno versus mudanca de dominio", 39, NAVY, True)
-    text(draw, (90, 115), "O checkpoint e mantido fixo na avaliacao externa; valores menores sao melhores em erro.", 23, MUTED)
-    bar_chart(
+    text(draw, (90, 60), "Checkpoint ativo versus candidato misto", 39, NAVY, True)
+    text(draw, (90, 115), "Holdouts fixos: Figshare (5 casos) e VitalDB (15 casos); menor erro e melhor.", 23, MUTED)
+    grouped_bar_chart(
         draw,
         (80, 245, 850, 760),
         "Erro absoluto médio (MAE)",
         ["Figshare", "VitalDB"],
-        [internal["mae"], external["mae"]],
-        [BLUE, RED],
+        [("Ativo", [internal["mae"], external["mae"]], NAVY), ("Misto", [mixed_internal["mae"], mixed_external["mae"]], TEAL)],
         16,
     )
-    bar_chart(
+    grouped_bar_chart(
         draw,
         (940, 245, 1710, 760),
-        "Correlação de Pearson", 
+        "Correlação de Pearson",
         ["Figshare", "VitalDB"],
-        [internal["pearson_r"], external["pearson_r"]],
-        [TEAL, ORANGE],
+        [("Ativo", [internal["pearson_r"], external["pearson_r"]], NAVY), ("Misto", [mixed_internal["pearson_r"], mixed_external["pearson_r"]], PURPLE)],
         1,
         value_format="{:.3f}",
     )
     rounded(draw, (270, 820, 1530, 905), "#F8FAFC", GRID, radius=18, width=2)
-    text(draw, (310, 847), "Leitura: o resultado interno nao deve ser apresentado como generalizacao automatica.", 23, INK)
+    text(draw, (310, 847), "Leitura: melhora exploratoria; o candidato ainda nao foi promovido ao uso ativo.", 23, INK)
     image.save(OUTPUT / "comparison.png", optimize=True)
 
 

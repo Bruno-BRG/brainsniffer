@@ -12,6 +12,7 @@ import gzip
 import io
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -19,6 +20,9 @@ import numpy as np
 
 VITALDB_API_BASE_URL = "https://api.vitaldb.net"
 VITALDB_TRACK_INDEX_URL = f"{VITALDB_API_BASE_URL}/trks"
+VITALDB_CLINICAL_DATA_URL = (
+    "https://physionet.org/files/vitaldb/1.0.0/clinical_data.csv"
+)
 DEFAULT_EEG_TRACK = "BIS/EEG1_WAV"
 DEFAULT_BIS_TRACK = "BIS/BIS"
 VITALDB_LABEL_INTERVAL_SECONDS = 1.0
@@ -31,6 +35,7 @@ class VitalTrack:
     case_id: int
     name: str
     track_id: str
+    subject_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,25 @@ class VitalTrackData:
     times: np.ndarray
     values: np.ndarray
     sampling_rate: float | None
+
+
+@lru_cache(maxsize=1)
+def fetch_vitaldb_subject_map() -> dict[str, str]:
+    """Fetch the public case-to-subject map used to prevent reoperation leakage."""
+
+    request = Request(VITALDB_CLINICAL_DATA_URL, headers={"User-Agent": "brainsniffer/0.1"})
+    with urlopen(request, timeout=120) as response:
+        text = io.TextIOWrapper(response, encoding="utf-8-sig")
+        reader = csv.DictReader(text)
+        mapping: dict[str, str] = {}
+        for row in reader:
+            case_id = (row.get("caseid") or "").strip()
+            subject_id = (row.get("subjectid") or "").strip()
+            if case_id and subject_id:
+                mapping[case_id] = subject_id
+    if not mapping:
+        raise ValueError("clinical_data.csv do VitalDB não contém o mapa caseid/subjectid")
+    return mapping
 
 
 @contextmanager
@@ -69,6 +93,7 @@ def list_case_tracks(
                 case_id=int(row["caseid"]),
                 name=row["tname"],
                 track_id=row["tid"],
+                subject_id=(row.get("subjectid") or row.get("subject_id") or None),
             )
     missing = wanted - found.keys()
     if missing:
@@ -186,6 +211,7 @@ def download_vitaldb_case(
     eeg_track_name: str = DEFAULT_EEG_TRACK,
     bis_track_name: str = DEFAULT_BIS_TRACK,
     overwrite: bool = False,
+    subject_id: str | None = None,
 ) -> Path:
     """Download and normalize one VitalDB case without fetching the full corpus."""
 
@@ -199,11 +225,23 @@ def download_vitaldb_case(
     eeg = read_track(tracks[eeg_track_name], waveform=True)
     bis = read_track(tracks[bis_track_name], waveform=False)
     aligned_bis = _align_numeric_to_eeg(eeg, bis)
+    resolved_subject_id = (
+        subject_id
+        or tracks[eeg_track_name].subject_id
+        or tracks[bis_track_name].subject_id
+    )
+    group_id = (
+        f"vitaldb:subject:{resolved_subject_id}"
+        if resolved_subject_id
+        else f"vitaldb:case:vitaldb_case{int(case_id)}"
+    )
     partial = destination / f".{target.name}.part"
     with partial.open("wb") as handle:
         np.savez_compressed(
             handle,
             case_id=np.asarray(f"vitaldb_case{int(case_id)}"),
+            group_id=np.asarray(group_id),
+            subject_id=np.asarray(resolved_subject_id or ""),
             source_dataset=np.asarray("VitalDB Open Dataset"),
             eeg=eeg.values,
             bis=aligned_bis,

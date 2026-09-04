@@ -19,13 +19,14 @@ executado; não significa autorização ou validação clínica.
 | Expiração de saída stale | `RealtimeEstimator.mark_stale`, `stream-lsl --stale-timeout`, interface LSL | silêncio invalida a última saída; modo fail-closed preserva relatório parcial; buffer causal é reiniciado | Implementado como gate de engenharia |
 | Escopo seguro do relatório | `cli.py`, `app.py` | sessão marcada como `research_only`, sem decisão clínica ou controle de anestésico | Implementado |
 | Dataset para desenvolvimento | `data/figshare.py`, `app.py` | 24 casos Figshare, download com MD5 | Implementado |
-| Dataset externo | `data/vitaldb.py` | quinze casos VitalDB compatíveis normalizados e avaliados sem retreino | Piloto exploratório |
-| Catálogo de datasets | `docs/data_catalog.md` | Figshare/VitalDB separados de DOSE-I, PhysioNet GABA e Dryad por alvo, acesso e compatibilidade | Planejamento científico |
+| Dataset externo | `data/vitaldb.py` | quinze casos VitalDB compatíveis normalizados e avaliados sem retreino | Holdout externo congelado |
+| Corpus misto | `data/corpus.py`, `build-corpus`, `train-corpus`, `reports/corpus_manifest.json` | 23 Figshare + 10 VitalDB elegíveis; gates de finitude/lacuna/BIS/qualidade; split por subjectid quando disponível | Candidato experimental |
+| Catálogo de datasets | `docs/data_catalog.md`, `docs/mixed_corpus.md` | Figshare/VitalDB integrados em pool auditável; DOSE-I, PhysioNet GABA e Dryad continuam separados por alvo, acesso e compatibilidade | Implementado como pesquisa |
 | Proveniência de dados | `data/vitaldb.py`, `data/mat_reader.py`, `signal_diagnostics` | novos NPZ registram origem, unidade, nomes/IDs dos tracks; avaliações registram finitude e imputação offline | Implementado |
 | Relatório holdout | `evaluate --report`, `reports/figshare_holdout_evaluation.json` | métricas recalculadas, bootstrap agrupado por caso, cinco casos, configuração, manifesto SHA-256 e ausência de EEG bruto | Reproduzível |
 | Relatório externo | `evaluate-external --report`, `reports/vitaldb_external_validation.json` | métricas, bootstrap, diagnósticos, política offline/online, configuração e SHA-256 salvos pela CLI | Exploratório reproduzível |
-| Interface | `app.py` | abas Dados, Explorar, Treinar, Replay, LSL e VitalDB; validação e download do manifesto de equipamento | Implementado |
-| Artigo técnico | `docs/tcc_brainsniffer.tex` e `output/pdf/brainsniffer_tcc_sbc.pdf` | método, resultados, limitações, figuras e referências | Revisado; PDF final com 10 páginas e citações nos parágrafos |
+| Interface | `dash_app.py`, `app.py` | Dash + Plotly publicado com abas Dados, Trajetória, Replay, Corpus, Estatística e Método; Streamlit legado mantém os fluxos de pesquisa | Implementado |
+| Artigo técnico | `docs/tcc_brainsniffer.tex` e `docs/tcc_brainsniffer.pdf` | método, resultados, limitações, figuras e referências | Revisado; PDF final com 11 páginas, dentro do limite de 15, e citações nos parágrafos |
 | Artigo falado | `docs/talk_script.md` | roteiro de 5–7 minutos sincronizado com os resultados | Implementado |
 | Decisões fundamentadas | `docs/decisions.md`, `docs/source_ledger.md` | matriz BIS/PSI/Openibis/AnesNET/LSL, fontes, hipóteses e limites de extrapolação | Implementado |
 | Plano de avanço clínico | `docs/prospective_protocol.md` | gates de bancada, validação externa travada e modo sombra | Preparatório |
@@ -39,6 +40,16 @@ Pearson 0,784 e macro-F1 0,548 em 5.523 janelas de teste. No VitalDB, sem
 retreino, quinze casos compatíveis produziram MAE 12,43, Pearson 0,024 e
 macro-F1 0,398 em 38.730 janelas; o bootstrap por caso teve Pearson 95% entre
 −0,126 e 0,193.
+
+O candidato do corpus misto foi ajustado com 28 casos de desenvolvimento,
+excluindo exatamente os cinco casos do holdout Figshare histórico e usando 10
+casos VitalDB aprovados pelo gate. No holdout Figshare fixo, o candidato teve
+MAE 6,69 e Pearson 0,818; nos 15 casos VitalDB congelados, teve MAE 8,60 e
+Pearson 0,688, contra MAE 12,43 e Pearson 0,024 do checkpoint atual. Esses
+números são uma evidência exploratória de melhora de domínio, registrada em
+`reports/mixed_fixed_figshare_holdout.json` e
+`reports/mixed_vitaldb_external.json`; o checkpoint ativo continua sendo o
+original até uma revisão de seeds, partições e outliers.
 No holdout Figshare, o bootstrap exploratório por cirurgia (1.000 reamostragens)
 teve Pearson médio 0,789 (95%: 0,703–0,881) e MAE médio 7,11 (95%: 6,38–8,24);
 esses intervalos refletem apenas cinco casos.
@@ -49,7 +60,7 @@ clínico.
 
 Executada em 2026-09-02 no ambiente Python 3.12.14:
 
-- `uv run pytest -q`: 86 testes passaram; `uv run ruff check .`, compilação e
+- `uv run pytest -q`: 91 testes passaram; `uv run ruff check .`, compilação e
   `uv lock --check` também passaram.
 - Um treino CLI de smoke com `--label-offset-seconds 0` concluiu e persistiu o
   parâmetro no manifesto do checkpoint, confirmando a rota de configuração sem
@@ -153,7 +164,8 @@ Executada em 2026-09-02 no ambiente Python 3.12.14:
 - `stream-json --report` gerou um relatório de sessão sem campo de amostras EEG,
   registrando 1.408 amostras auditadas, uma predição, qualidade 1,0 e o mesmo
   SHA-256 do checkpoint.
-- O servidor Streamlit local respondeu `ok` em `/_stcore/health`.
+- O servidor Dash/Gunicorn local respondeu `status=ok` em `/healthz`, e o layout
+  carregou a aba Corpus; o Streamlit legado continua respondendo em `/_stcore/health`.
 - A interface foi aberta no navegador integrado e as abas Dados, Explorar, Treinar,
   Replay em fluxo e EEG ao vivo (LSL) exibiram seus controles e painéis sem
   erro de renderização.

@@ -97,6 +97,14 @@ estimou MAE 12,52 [11,05–14,45] e Pearson 0,023 [−0,126–0,193] como interv
 exploratórios de 95%. Quinze casos continuam insuficientes para uma conclusão
 clínica ou uma validação externa definitiva.
 
+O primeiro candidato do corpus misto foi treinado com 23 casos Figshare e 10
+casos VitalDB elegíveis, excluindo do ajuste os cinco casos do holdout Figshare
+histórico e mantendo os 15 VitalDB externos congelados. No holdout Figshare fixo,
+obteve MAE 6,69 e Pearson 0,818; no VitalDB externo, MAE 8,60 e Pearson 0,688.
+Esses resultados sugerem ganho de generalização de domínio, mas o artefato é
+experimental e não foi promovido automaticamente ao checkpoint ativo. O protocolo
+completo, gates e hashes estão em [`docs/mixed_corpus.md`](mixed_corpus.md).
+
 ## Riscos e validação necessária
 
 Antes de qualquer contato com pacientes, o laboratório precisa confirmar taxa,
@@ -120,6 +128,11 @@ segue as referências GMLP, DECIDE-AI e TRIPOD+AI.
 - Metadados, métricas e SHA-256 do checkpoint: `models/brainsniffer_cnn.json`.
 - Relatório reproduzível do holdout Figshare: `reports/figshare_holdout_evaluation.json`.
 - Relatório externo exploratório reproduzível: `reports/vitaldb_external_validation.json`.
+- Manifesto e auditoria do corpus misto: `reports/corpus_manifest.json`.
+- Avaliações do candidato misto: `reports/mixed_fixed_figshare_holdout.json` e
+  `reports/mixed_vitaldb_external.json`.
+- Checkpoint candidato (não ativo): `models/brainsniffer_corpus_fixed.pt` e
+  `models/brainsniffer_corpus_fixed.json`.
 - Novos checkpoints também registram o manifesto SHA-256/tamanho dos arquivos
   de entrada; `evaluate` verifica esses arquivos antes de recalcular métricas.
 - O carregador verifica automaticamente o SHA-256 quando o `.json` acompanha o

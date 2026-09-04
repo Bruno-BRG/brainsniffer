@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
 from ..config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig, TrainingConfig, resolve_device
 from ..data.preprocess import WindowedEEG, bis_stage
@@ -45,11 +45,26 @@ def summarize_windows(windows: WindowedEEG) -> dict[str, object]:
         stage = bis_stage(float(value))
         stage_counts[stage] = stage_counts.get(stage, 0) + 1
     quality = windows.quality.astype(np.float64)
+    group_ids = (
+        windows.group_ids.astype(str)
+        if windows.group_ids is not None
+        else windows.case_ids.astype(str)
+    )
+    source_datasets = (
+        windows.source_datasets.astype(str)
+        if windows.source_datasets is not None
+        else np.full(windows.case_ids.shape, "unknown", dtype=str)
+    )
     return {
         "n_windows": int(windows.signals.shape[0]),
         "n_cases": int(np.unique(windows.case_ids.astype(str)).size),
+        "n_groups": int(np.unique(group_ids).size),
         "window_shape": list(windows.signals.shape[1:]),
         "stage_counts": stage_counts,
+        "source_counts": {
+            source: int((source_datasets == source).sum())
+            for source in sorted(np.unique(source_datasets).tolist())
+        },
         "quality": {
             "min": float(quality.min()) if quality.size else None,
             "mean": float(quality.mean()) if quality.size else None,
@@ -159,16 +174,65 @@ def predict_model(
 
 
 def _loader(
-    signals: np.ndarray, labels: np.ndarray, mask: np.ndarray, config: TrainingConfig, shuffle: bool
+    signals: np.ndarray,
+    labels: np.ndarray,
+    mask: np.ndarray,
+    config: TrainingConfig,
+    shuffle: bool,
+    *,
+    group_ids: np.ndarray | None = None,
+    source_ids: np.ndarray | None = None,
 ) -> DataLoader:
     dataset = TensorDataset(
         torch.from_numpy(signals[mask]).float(),
         torch.from_numpy(labels[mask]).float(),
     )
+    sampler = None
+    if config.balance_groups:
+        if group_ids is None:
+            raise ValueError("balance_groups requer group_ids")
+        selected_groups = group_ids[mask].astype(str)
+        unique, counts = np.unique(selected_groups, return_counts=True)
+        weights_by_group = {
+            group: 1.0 / float(count) for group, count in zip(unique, counts, strict=False)
+        }
+        if config.balance_sources:
+            if source_ids is None:
+                raise ValueError("balance_sources requer source_ids")
+            selected_sources = source_ids[mask].astype(str)
+            group_source = {
+                group: source
+                for group, source in zip(selected_groups, selected_sources, strict=False)
+            }
+            source_group_counts = {
+                source: sum(group_source.get(group) == source for group in unique)
+                for source in np.unique(selected_sources)
+            }
+            weights = torch.as_tensor(
+                [
+                    weights_by_group[group]
+                    / max(source_group_counts[group_source[group]], 1)
+                    for group in selected_groups
+                ],
+                dtype=torch.double,
+            )
+        else:
+            weights = torch.as_tensor(
+                [weights_by_group[group] for group in selected_groups],
+                dtype=torch.double,
+            )
+        sampler = WeightedRandomSampler(
+            weights,
+            num_samples=len(selected_groups),
+            replacement=True,
+            generator=torch.Generator().manual_seed(config.seed),
+        )
+        shuffle = False
     return DataLoader(
         dataset,
         batch_size=config.batch_size,
         shuffle=shuffle,
+        sampler=sampler,
         num_workers=config.num_workers,
         pin_memory=False,
     )
@@ -182,6 +246,7 @@ def train_model(
     checkpoint_path: str | Path | None = None,
     min_quality: float = DEFAULT_MIN_SIGNAL_QUALITY,
     input_files: Sequence[str | Path] | None = None,
+    corpus_manifest_path: str | Path | None = None,
 ) -> TrainingResult:
     """Train the baseline CNN and evaluate only on unseen surgical cases."""
 
@@ -200,15 +265,21 @@ def train_model(
     environment = runtime_metadata()
     set_seed(training_config.seed)
     device = resolve_device(training_config.device)
+    split_ids = (
+        windows.group_ids.astype(str)
+        if windows.group_ids is not None
+        else windows.case_ids.astype(str)
+    )
+    split_unit = "group" if windows.group_ids is not None else "case"
     split = split_case_ids(
-        windows.case_ids,
+        split_ids,
         validation_fraction=training_config.validation_fraction,
         test_fraction=training_config.test_fraction,
         seed=training_config.seed,
     )
-    train_mask = _mask_for_cases(windows.case_ids, split.train_cases)
-    validation_mask = _mask_for_cases(windows.case_ids, split.validation_cases)
-    test_mask = _mask_for_cases(windows.case_ids, split.test_cases)
+    train_mask = _mask_for_cases(split_ids, split.train_cases)
+    validation_mask = _mask_for_cases(split_ids, split.validation_cases)
+    test_mask = _mask_for_cases(split_ids, split.test_cases)
 
     model = Conv1DDepthEstimator().to(device)
     optimizer = torch.optim.AdamW(
@@ -217,7 +288,22 @@ def train_model(
         weight_decay=training_config.weight_decay,
     )
     criterion = nn.SmoothL1Loss()
-    train_loader = _loader(windows.signals, windows.bis, train_mask, training_config, shuffle=True)
+    train_loader = _loader(
+        windows.signals,
+        windows.bis,
+        train_mask,
+        training_config,
+        shuffle=True,
+        group_ids=split_ids,
+        source_ids=(
+            windows.source_datasets.astype(str)
+            if windows.source_datasets is not None
+            else None
+        ),
+    )
+    dataset_summary["split_unit"] = split_unit
+    dataset_summary["balanced_groups"] = bool(training_config.balance_groups)
+    dataset_summary["balanced_sources"] = bool(training_config.balance_sources)
     history: list[dict[str, float]] = []
     best_state = copy.deepcopy(model.state_dict())
     best_validation_mae = float("inf")
@@ -270,6 +356,15 @@ def train_model(
             "history": history,
             "environment": environment,
             "input_files": input_file_manifest,
+            "corpus_manifest": (
+                {
+                    "path": str(corpus_manifest_path),
+                    "sha256": sha256_file(corpus_manifest_path),
+                }
+                if corpus_manifest_path is not None
+                else None
+            ),
+            "split_unit": split_unit,
         }
         torch.save(checkpoint_payload, checkpoint)
         checkpoint_sha256 = sha256_file(checkpoint)
@@ -287,6 +382,15 @@ def train_model(
                     "history": history,
                     "environment": environment,
                     "input_files": input_file_manifest,
+                    "corpus_manifest": (
+                        {
+                            "path": str(corpus_manifest_path),
+                            "sha256": sha256_file(corpus_manifest_path),
+                        }
+                        if corpus_manifest_path is not None
+                        else None
+                    ),
+                    "split_unit": split_unit,
                     "checkpoint_sha256": checkpoint_sha256,
                 },
                 indent=2,

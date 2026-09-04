@@ -93,6 +93,9 @@ def _read_report(filename: str) -> dict[str, object]:
 HOLDOUT_REPORT = _read_report("figshare_holdout_evaluation.json")
 EXTERNAL_REPORT = _read_report("vitaldb_external_validation.json")
 OFFSET_REPORT = _read_report("offset_sensitivity.json")
+CORPUS_MANIFEST = _read_report("corpus_manifest.json")
+MIXED_FIGSHARE_REPORT = _read_report("mixed_fixed_figshare_holdout.json")
+MIXED_EXTERNAL_REPORT = _read_report("mixed_vitaldb_external.json")
 HOLDOUT_METRICS = HOLDOUT_REPORT.get("recomputed_test_metrics", {})
 EXTERNAL_METRICS = EXTERNAL_REPORT.get("metrics", {})
 
@@ -948,6 +951,219 @@ def _training_curve_rows() -> list[list[str]]:
     return rows
 
 
+def _corpus_records() -> list[dict[str, object]]:
+    records = CORPUS_MANIFEST.get("cases", [])
+    return [record for record in records if isinstance(record, dict)]
+
+
+def _corpus_summary_cards() -> list[html.Div]:
+    summary = CORPUS_MANIFEST.get("summary", {})
+    if not isinstance(summary, dict):
+        return [_card("Manifesto do corpus", "—", "ainda não gerado", "navy")]
+    source_summary = summary.get("source_summary", {})
+    source_count = len(source_summary) if isinstance(source_summary, dict) else 0
+    return [
+        _card("Casos elegíveis", f"{int(summary.get('eligible_training_cases', 0))}", "pool de treino supervisionado", "teal"),
+        _card("Janelas elegíveis", f"{int(summary.get('eligible_training_windows', 0)):,}", "após o gate por qualidade", "blue"),
+        _card("Quarentena", f"{int(summary.get('quarantined_development_cases', 0))}", "não entram sem revisão", "red"),
+        _card("Externo congelado", f"{int(summary.get('frozen_external_cases', 0))}", "VitalDB · não usado no treino", "orange"),
+        _card("Fontes supervisionadas", f"{source_count}", "Figshare + VitalDB quando elegível", "purple"),
+    ]
+
+
+def _corpus_source_figure() -> go.Figure:
+    summary = CORPUS_MANIFEST.get("summary", {})
+    source_summary = summary.get("source_summary", {}) if isinstance(summary, dict) else {}
+    if not isinstance(source_summary, dict) or not source_summary:
+        return _empty_figure("Composição do corpus", "Gere reports/corpus_manifest.json para visualizar", height=360)
+    sources = sorted(source_summary)
+    labels = {"figshare": "Figshare", "vitaldb": "VitalDB"}
+    figure = go.Figure()
+    figure.add_trace(go.Bar(
+        name="Elegíveis para treino",
+        x=[labels.get(source, source) for source in sources],
+        y=[int(source_summary[source].get("eligible_cases", 0)) for source in sources],
+        marker_color=COLORS["teal"],
+        hovertemplate="%{x}<br>elegíveis: %{y}<extra></extra>",
+    ))
+    figure.add_trace(go.Bar(
+        name="Quarentena",
+        x=[labels.get(source, source) for source in sources],
+        y=[int(source_summary[source].get("quarantined_cases", 0)) for source in sources],
+        marker_color=COLORS["red"],
+        hovertemplate="%{x}<br>quarentena: %{y}<extra></extra>",
+    ))
+    figure.add_trace(go.Bar(
+        name="Externo congelado",
+        x=[labels.get(source, source) for source in sources],
+        y=[int(source_summary[source].get("frozen_external_cases", 0)) for source in sources],
+        marker_color=COLORS["orange"],
+        hovertemplate="%{x}<br>externos congelados: %{y}<extra></extra>",
+    ))
+    figure.update_layout(**_figure_layout("Composição do corpus por fonte", height=360), barmode="stack")
+    figure.update_xaxes(title="Fonte", gridcolor=COLORS["line"])
+    figure.update_yaxes(title="Quantidade de casos", rangemode="tozero", gridcolor=COLORS["line"])
+    return figure
+
+
+def _corpus_quality_figure() -> go.Figure:
+    records = [record for record in _corpus_records() if isinstance(record.get("signal"), dict)]
+    if not records:
+        return _empty_figure("Mapa de qualidade dos casos", "Manifesto de qualidade indisponível", height=480)
+    gate = CORPUS_MANIFEST.get("quality_config", {})
+    min_finite = _finite_number(gate.get("min_finite_fraction"), 0.9) if isinstance(gate, dict) else 0.9
+    colors = {"include": COLORS["teal"], "quarantine": COLORS["red"], "exclude": COLORS["muted"]}
+    figure = go.Figure()
+    for status in ("include", "quarantine", "exclude"):
+        selected = [record for record in records if record.get("quality_status") == status]
+        if not selected:
+            continue
+        x = [_finite_number(record.get("signal", {}).get("finite_fraction")) * 100 for record in selected]
+        y = [_finite_number(record.get("windows", {}).get("accepted_fraction")) * 100 for record in selected]
+        customdata = [
+            [
+                record.get("case_id", "—"),
+                record.get("source_key", "—"),
+                _finite_number(record.get("signal", {}).get("max_nonfinite_gap_seconds")),
+                _finite_number(record.get("signal", {}).get("quality_global")),
+                ", ".join(str(item) for item in record.get("exclusion_reasons", [])) or "sem motivo",
+            ]
+            for record in selected
+        ]
+        figure.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode="markers+text",
+            name={"include": "Elegível", "quarantine": "Quarentena", "exclude": "Excluído"}[status],
+            text=[str(record.get("case_id", "—")).replace("vitaldb_", "") for record in selected],
+            textposition="top center",
+            marker={"color": colors[status], "size": 10, "line": {"color": "white", "width": 1}},
+            customdata=customdata,
+            hovertemplate=(
+                "caso %{customdata[0]} · %{customdata[1]}<br>"
+                "finitude %{x:.2f}%<br>janelas aceitas %{y:.2f}%<br>"
+                "maior lacuna %{customdata[2]:.2f}s<br>qualidade global %{customdata[3]:.3f}<br>"
+                "decisão: %{customdata[4]}<extra></extra>"
+            ),
+        ))
+    figure.add_vline(x=min_finite * 100, line={"color": COLORS["orange"], "dash": "dash"}, annotation_text="gate de finitude", annotation_position="bottom right")
+    figure.update_layout(**_figure_layout("Mapa de qualidade: finitude × janelas aproveitáveis", height=480))
+    figure.update_xaxes(title="Amostras EEG finitas (%)", range=[0, 100.5], gridcolor=COLORS["line"])
+    figure.update_yaxes(title="Janelas com BIS válido e qualidade suficiente (%)", range=[0, 100.5], gridcolor=COLORS["line"])
+    return figure
+
+
+def _corpus_case_rows() -> list[list[str]]:
+    rows = []
+    for record in _corpus_records():
+        signal = record.get("signal", {})
+        windows = record.get("windows", {})
+        if not isinstance(signal, dict) or not isinstance(windows, dict):
+            rows.append([str(record.get("file_name", "—")), "—", "—", "—", "erro de leitura"])
+            continue
+        source = "VitalDB" if record.get("source_key") == "vitaldb" else "Figshare"
+        role = {"development_pool": "pool de treino", "frozen_external": "externo congelado"}.get(str(record.get("role")), str(record.get("role", "—")))
+        status = {"include": "elegível", "quarantine": "quarentena", "exclude": "excluído"}.get(str(record.get("quality_status")), "—")
+        rows.append([
+            f"{source} · {record.get('case_id', '—')}",
+            role,
+            status,
+            f"{_finite_number(signal.get('finite_fraction')) * 100:.1f}%",
+            f"{int(windows.get('accepted_windows', 0)):,}",
+        ])
+    return rows
+
+
+def _mixed_metrics(report: dict[str, object]) -> dict[str, object]:
+    metrics = report.get("metrics", {})
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def _relative_improvement(baseline: float, candidate: float) -> float:
+    if not np.isfinite(baseline) or baseline == 0 or not np.isfinite(candidate):
+        return float("nan")
+    return (baseline - candidate) / abs(baseline) * 100.0
+
+
+def _corpus_experiment_cards() -> list[html.Div]:
+    mixed_internal = _mixed_metrics(MIXED_FIGSHARE_REPORT)
+    mixed_external = _mixed_metrics(MIXED_EXTERNAL_REPORT)
+    base_internal = _metric_value(HOLDOUT_METRICS, "mae")
+    base_external = _metric_value(EXTERNAL_METRICS, "mae")
+    mixed_internal_mae = _metric_value(mixed_internal, "mae")
+    mixed_external_mae = _metric_value(mixed_external, "mae")
+    internal_gain = _relative_improvement(base_internal, mixed_internal_mae)
+    external_gain = _relative_improvement(base_external, mixed_external_mae)
+    if not np.isfinite(internal_gain) or not np.isfinite(external_gain):
+        return [_card("Treino misto", "—", "resultado comparável ainda não gerado", "navy")]
+    return [
+        _card("Figshare · MAE", f"{mixed_internal_mae:.2f}", f"candidato misto · {internal_gain:+.1f}% vs ativo", "teal"),
+        _card("VitalDB · MAE", f"{mixed_external_mae:.2f}", f"candidato misto · {external_gain:+.1f}% vs ativo", "orange"),
+        _card("VitalDB · Pearson", f"{_metric_value(mixed_external, 'pearson_r'):.3f}", "candidato misto · teste congelado", "purple"),
+        _card("Status", "candidato", "checkpoint ativo não foi trocado automaticamente", "navy"),
+    ]
+
+
+def _corpus_experiment_figure() -> go.Figure:
+    mixed_internal = _mixed_metrics(MIXED_FIGSHARE_REPORT)
+    mixed_external = _mixed_metrics(MIXED_EXTERNAL_REPORT)
+    baseline_mae = [_metric_value(HOLDOUT_METRICS, "mae"), _metric_value(EXTERNAL_METRICS, "mae")]
+    candidate_mae = [_metric_value(mixed_internal, "mae"), _metric_value(mixed_external, "mae")]
+    baseline_pearson = [_metric_value(HOLDOUT_METRICS, "pearson_r"), _metric_value(EXTERNAL_METRICS, "pearson_r")]
+    candidate_pearson = [_metric_value(mixed_internal, "pearson_r"), _metric_value(mixed_external, "pearson_r")]
+    if not np.isfinite(np.asarray(candidate_mae)).any():
+        return _empty_figure("Efeito observado do corpus misto", "Relatórios do candidato ainda não disponíveis", height=390)
+    labels = ["Figshare · holdout", "VitalDB · externo"]
+    figure = make_subplots(rows=1, cols=2, subplot_titles=("MAE · menor é melhor", "Pearson r · maior é melhor"), horizontal_spacing=0.14)
+    for column, baseline, candidate, title, color in ((1, baseline_mae, candidate_mae, "MAE", COLORS["teal"]), (2, baseline_pearson, candidate_pearson, "Pearson r", COLORS["purple"])):
+        figure.add_trace(go.Bar(name="Checkpoint ativo", x=labels, y=baseline, marker_color=COLORS["navy"], legendgroup="baseline", showlegend=column == 1, hovertemplate="%{x}<br>ativo: %{y:.3f}<extra></extra>"), row=1, col=column)
+        figure.add_trace(go.Bar(name="Candidato misto", x=labels, y=candidate, marker_color=color, legendgroup="candidate", showlegend=column == 1, hovertemplate="%{x}<br>candidato: %{y:.3f}<extra></extra>"), row=1, col=column)
+        figure.update_yaxes(title=title, gridcolor=COLORS["line"], row=1, col=column)
+    figure.update_layout(**_figure_layout("Comparação justa: checkpoint ativo × corpus misto", height=390), barmode="group")
+    figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=1)
+    figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=2)
+    return figure
+
+
+def _corpus_experiment_rows() -> list[list[str]]:
+    mixed_internal = _mixed_metrics(MIXED_FIGSHARE_REPORT)
+    mixed_external = _mixed_metrics(MIXED_EXTERNAL_REPORT)
+    rows = []
+    for label, baseline, candidate in (
+        ("Figshare · holdout fixo", HOLDOUT_METRICS, mixed_internal),
+        ("VitalDB · externo congelado", EXTERNAL_METRICS, mixed_external),
+    ):
+        base_mae = _metric_value(baseline, "mae")
+        candidate_mae = _metric_value(candidate, "mae")
+        gain = _relative_improvement(base_mae, candidate_mae)
+        rows.append([
+            label,
+            _format_number(base_mae, 2),
+            _format_number(candidate_mae, 2),
+            f"{gain:+.1f}%" if np.isfinite(gain) else "—",
+            f"{_metric_value(candidate, 'pearson_r'):.3f}",
+        ])
+    return rows
+
+
+def _build_corpus_tab() -> html.Div:
+    third_source = CORPUS_MANIFEST.get("third_source", {})
+    third_reason = third_source.get("reason", "alvo incompatível") if isinstance(third_source, dict) else "alvo incompatível"
+    return html.Div(
+        [
+            _tab_intro("CORPUS AUDITÁVEL", "Mais dados, com controle de qualidade", "Esta aba mostra o que pode realmente virar treinamento misto. O manifesto separa o pool Figshare + VitalDB, a quarentena por sinal e o VitalDB congelado como teste externo; assim, aumentar volume não apaga a mudança de domínio."),
+            html.Div(_corpus_summary_cards(), className="metric-grid five-metrics"),
+            html.Div([html.Div(dcc.Graph(figure=_corpus_source_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div(dcc.Graph(figure=_corpus_quality_figure(), config={"displayModeBar": False}), className="chart-card")], className="chart-grid two-col"),
+            html.Div([html.H3("Decisão de incorporação"), html.P("O treino candidato usa amostragem balanceada por grupo e por fonte: uma cirurgia longa não domina milhares de janelas, e o VitalDB não domina o Figshare apenas por ter gravações maiores."), html.P("Os casos VitalDB atuais permanecem no conjunto externo congelado. Para criar o corpus misto, novos casos devem ser baixados em data/vitaldb_train, auditados e só então incluídos no manifesto."), html.P(f"Terceira fonte: DOSE-I não foi misturada. {third_reason}."), html.Div("O gráfico não promete ganho: ele documenta a elegibilidade dos dados. O ganho real só aparece depois de treinar os braços Figshare-only, VitalDB-only e misto contra os mesmos holdouts congelados.", className="callout")], className="explanation-card"),
+            html.Div(_corpus_experiment_cards(), className="metric-grid four-metrics"),
+            html.Div(dcc.Graph(figure=_corpus_experiment_figure(), config={"displayModeBar": False}), className="chart-card"),
+            html.Div([html.H3("Resultado do experimento misto"), _table(["Conjunto", "Ativo · MAE", "Misto · MAE", "Variação", "Misto · Pearson"], _corpus_experiment_rows())], className="table-card"),
+            html.Div([html.H3("Manifesto caso a caso"), _table(["Caso", "Papel", "Decisão", "EEG finito", "Janelas aceitas"], _corpus_case_rows())], className="table-card"),
+        ],
+        className="tab-panel",
+    )
+
+
 def _statistics_cards() -> list[html.Div]:
     return [
         _card("Janelas holdout", _format_number(_metric_value(HOLDOUT_METRICS, "n"), 0), "5 casos Figshare", "blue"),
@@ -1130,7 +1346,7 @@ def _build_layout() -> html.Div:
     default_value = str(DEFAULT_CASE) if DEFAULT_CASE else None
     duration = load_case(DEFAULT_CASE).duration_seconds if DEFAULT_CASE else 600.0
     model_status = "checkpoint causal carregado em CPU" if MODEL is not None else "checkpoint indisponível · replay bloqueado"
-    return html.Div([html.Header([html.Div([html.Div("BRAIN SNIFFER · RESEARCH CONSOLE", className="eyebrow"), html.H1("EEG → CNN → BIS", className="hero-title"), html.P("Uma leitura auditável do sinal, do modelo e do resultado: primeiro o panorama, depois a trajetória, o replay causal, os dados da rede e as estatísticas.", className="hero-subtitle")], className="hero-copy"), html.Div([html.Span("RESEARCH ONLY", className="research-badge"), html.Div(model_status, className="hero-status")], className="hero-side")], className="hero"), html.Div("Uso exclusivamente experimental/educacional. O BIS é referência do monitor e a CNN é uma estimativa de pesquisa; nada nesta tela comanda anestésicos ou substitui avaliação clínica.", className="safety-banner"), html.Main(dcc.Tabs(id="main-tabs", value="overview", parent_className="app-tabs", className="tabs-container", children=[dcc.Tab(label="Visão geral", value="overview", className="app-tab", selected_className="app-tab-selected", children=_build_overview_tab()), dcc.Tab(label="Trajetória completa", value="trajectory", className="app-tab", selected_className="app-tab-selected", children=_build_trajectory_tab(options, default_value)), dcc.Tab(label="Replay causal", value="replay", className="app-tab", selected_className="app-tab-selected", children=_build_replay_tab(options, default_value, duration)), dcc.Tab(label="Dados da rede", value="model", className="app-tab", selected_className="app-tab-selected", children=_build_model_tab()), dcc.Tab(label="Estatística", value="statistics", className="app-tab", selected_className="app-tab-selected", children=_build_statistics_tab()), dcc.Tab(label="Método e cobertura", value="method", className="app-tab", selected_className="app-tab-selected", children=_build_method_tab())]), className="page-content"), html.Footer("BrainSniffer · pipeline auditável · checkpoint congelado · sem uso clínico", className="footer")], className="app-shell")
+    return html.Div([html.Header([html.Div([html.Div("BRAIN SNIFFER · RESEARCH CONSOLE", className="eyebrow"), html.H1("EEG → CNN → BIS", className="hero-title"), html.P("Uma leitura auditável do sinal, do modelo e do resultado: primeiro o panorama, depois a trajetória, o replay causal, os dados da rede, o corpus e as estatísticas.", className="hero-subtitle")], className="hero-copy"), html.Div([html.Span("RESEARCH ONLY", className="research-badge"), html.Div(model_status, className="hero-status")], className="hero-side")], className="hero"), html.Div("Uso exclusivamente experimental/educacional. O BIS é referência do monitor e a CNN é uma estimativa de pesquisa; nada nesta tela comanda anestésicos ou substitui avaliação clínica.", className="safety-banner"), html.Main(dcc.Tabs(id="main-tabs", value="overview", parent_className="app-tabs", className="tabs-container", children=[dcc.Tab(label="Visão geral", value="overview", className="app-tab", selected_className="app-tab-selected", children=_build_overview_tab()), dcc.Tab(label="Trajetória completa", value="trajectory", className="app-tab", selected_className="app-tab-selected", children=_build_trajectory_tab(options, default_value)), dcc.Tab(label="Replay causal", value="replay", className="app-tab", selected_className="app-tab-selected", children=_build_replay_tab(options, default_value, duration)), dcc.Tab(label="Dados da rede", value="model", className="app-tab", selected_className="app-tab-selected", children=_build_model_tab()), dcc.Tab(label="Corpus", value="corpus", className="app-tab", selected_className="app-tab-selected", children=_build_corpus_tab()), dcc.Tab(label="Estatística", value="statistics", className="app-tab", selected_className="app-tab-selected", children=_build_statistics_tab()), dcc.Tab(label="Método e cobertura", value="method", className="app-tab", selected_className="app-tab-selected", children=_build_method_tab())]), className="page-content"), html.Footer("BrainSniffer · pipeline auditável · checkpoint congelado · sem uso clínico", className="footer")], className="app-shell")
 
 
 app = Dash(__name__, title="BrainSniffer · EEG → CNN → BIS", update_title=None)

@@ -1,0 +1,330 @@
+{
+  "model_name": "Conv1DDepthEstimator",
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "training_config": {
+    "epochs": 10,
+    "batch_size": 128,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "validation_fraction": 0.2,
+    "test_fraction": 0.2,
+    "seed": 42,
+    "device": "auto",
+    "num_workers": 0,
+    "balance_groups": true,
+    "balance_sources": true
+  },
+  "validation_metrics": {
+    "n": 7235.0,
+    "mae": 6.83196959776473,
+    "rmse": 12.271695654679833,
+    "bias": 1.7103986908257542,
+    "pearson_r": 0.8453275149841303,
+    "stage_accuracy": 0.6812715964063579,
+    "stage_macro_f1": 0.608634628813425
+  },
+  "test_metrics": {
+    "n": 7921.0,
+    "mae": 7.5525041500165475,
+    "rmse": 10.72624594848349,
+    "bias": 1.4106935624025216,
+    "pearson_r": 0.807552403206699,
+    "stage_accuracy": 0.6481504860497412,
+    "stage_macro_f1": 0.594082321661344
+  },
+  "split": {
+    "train_cases": [
+      "figshare:case:case1",
+      "figshare:case:case10",
+      "figshare:case:case11",
+      "figshare:case:case12",
+      "figshare:case:case13",
+      "figshare:case:case15",
+      "figshare:case:case17",
+      "figshare:case:case20",
+      "figshare:case:case21",
+      "figshare:case:case22",
+      "figshare:case:case23",
+      "figshare:case:case6",
+      "vitaldb:subject:2419",
+      "vitaldb:subject:3196",
+      "vitaldb:subject:5468",
+      "vitaldb:subject:5571"
+    ],
+    "validation_cases": [
+      "figshare:case:case18",
+      "figshare:case:case2",
+      "vitaldb:subject:1006",
+      "vitaldb:subject:1216",
+      "vitaldb:subject:4700",
+      "vitaldb:subject:714"
+    ],
+    "test_cases": [
+      "figshare:case:case14",
+      "figshare:case:case16",
+      "figshare:case:case7",
+      "figshare:case:case8",
+      "vitaldb:subject:3970",
+      "vitaldb:subject:4194"
+    ]
+  },
+  "dataset_summary": {
+    "n_windows": 49948,
+    "n_cases": 28,
+    "n_groups": 28,
+    "window_shape": [
+      1,
+      640
+    ],
+    "stage_counts": {
+      "awake": 1831,
+      "light": 3197,
+      "general": 20980,
+      "deep": 23940
+    },
+    "source_counts": {
+      "Figshare · EEG and BIS raw data": 25532,
+      "VitalDB Open Dataset": 24416
+    },
+    "quality": {
+      "min": 0.20149648189544678,
+      "mean": 0.8234764538037679,
+      "median": 0.8450704216957092,
+      "max": 1.0
+    },
+    "split_unit": "group",
+    "balanced_groups": true,
+    "balanced_sources": true
+  },
+  "min_quality": 0.2,
+  "history": [
+    {
+      "epoch": 1.0,
+      "train_loss": 6.244056003935197,
+      "validation_mae": 9.94770925092796,
+      "validation_rmse": 13.777613973792887
+    },
+    {
+      "epoch": 2.0,
+      "train_loss": 5.440033361315727,
+      "validation_mae": 7.7614674357603395,
+      "validation_rmse": 12.184984396262827
+    },
+    {
+      "epoch": 3.0,
+      "train_loss": 5.226641393759671,
+      "validation_mae": 7.602547764596893,
+      "validation_rmse": 12.28351259418521
+    },
+    {
+      "epoch": 4.0,
+      "train_loss": 5.055652154719128,
+      "validation_mae": 7.896673289511891,
+      "validation_rmse": 12.496534661978933
+    },
+    {
+      "epoch": 5.0,
+      "train_loss": 5.031976704211796,
+      "validation_mae": 7.0352460995409185,
+      "validation_rmse": 12.134286935499656
+    },
+    {
+      "epoch": 6.0,
+      "train_loss": 4.943122877794154,
+      "validation_mae": 6.83196959776473,
+      "validation_rmse": 12.271695654679833
+    },
+    {
+      "epoch": 7.0,
+      "train_loss": 4.810587212443352,
+      "validation_mae": 7.152674372202788,
+      "validation_rmse": 12.026341815779206
+    },
+    {
+      "epoch": 8.0,
+      "train_loss": 4.8031196094611115,
+      "validation_mae": 7.078455706275407,
+      "validation_rmse": 12.02498030505275
+    },
+    {
+      "epoch": 9.0,
+      "train_loss": 4.72105573117733,
+      "validation_mae": 7.492767651433688,
+      "validation_rmse": 12.158127683711417
+    },
+    {
+      "epoch": 10.0,
+      "train_loss": 4.660966086037019,
+      "validation_mae": 7.703325808056487,
+      "validation_rmse": 12.363964168470385
+    }
+  ],
+  "environment": {
+    "project": "0.1.0",
+    "python": "3.12.14",
+    "torch": "2.14.0+cu130",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "scikit_learn": "1.9.0"
+  },
+  "input_files": [
+    {
+      "path": "data/raw/case1.mat",
+      "size_bytes": 637612,
+      "sha256": "3f96f696d213c96b46fa859dc956fe83d97c9a3a202ba915f996ae88bc7d947e"
+    },
+    {
+      "path": "data/raw/case10.mat",
+      "size_bytes": 1263925,
+      "sha256": "a078f8b155f76ff1acd6cea4def151c7064c0fdc0289b086ef5d35dac8928971"
+    },
+    {
+      "path": "data/raw/case11.mat",
+      "size_bytes": 2495259,
+      "sha256": "5062172f5fe18c3f8a7fc619fbff0454c77a6fe027c73f74b5ebf3dc72a87c46"
+    },
+    {
+      "path": "data/raw/case12.mat",
+      "size_bytes": 3830629,
+      "sha256": "960f993e66dcf7ef6b8c4ef1f1fe7669d0bddff4ead31e6b51c7a752c002bf5f"
+    },
+    {
+      "path": "data/raw/case13.mat",
+      "size_bytes": 762725,
+      "sha256": "a51056ac4c2fd745795779f2e79c90bed3be133d9cbf4fcd93467d97823002a8"
+    },
+    {
+      "path": "data/raw/case14.mat",
+      "size_bytes": 605803,
+      "sha256": "deb75307a8f3b034afe36840885f30552f15379732081de35682143699a93fc8"
+    },
+    {
+      "path": "data/raw/case15.mat",
+      "size_bytes": 2377618,
+      "sha256": "5d3934b75e643ffbad081f6edad0590f0a6a63a06085cc5b516dc0c32cad48bd"
+    },
+    {
+      "path": "data/raw/case16.mat",
+      "size_bytes": 1204478,
+      "sha256": "26c8af1d5fbc20903cde61360ca3270758d2db15293565f9ff3f51cbac8e74a5"
+    },
+    {
+      "path": "data/raw/case17.mat",
+      "size_bytes": 1292068,
+      "sha256": "75ff2745e1bf86fa0ae6fbb37c677277d3144e68c283bc4c15df34925d60f679"
+    },
+    {
+      "path": "data/raw/case18.mat",
+      "size_bytes": 667899,
+      "sha256": "956594dff43f71f02341da3adc50e462bf01fa293a6851c6000192f27e3215ce"
+    },
+    {
+      "path": "data/raw/case2.mat",
+      "size_bytes": 906024,
+      "sha256": "c360d742903ffcfe37208df1b561afc7438a95a0162fa83233999cd5ece4481e"
+    },
+    {
+      "path": "data/raw/case20.mat",
+      "size_bytes": 1612058,
+      "sha256": "8fdda9fb089c9bc93213797353bd6ea8772cfaa6644181f4c52f635c2c628c54"
+    },
+    {
+      "path": "data/raw/case21.mat",
+      "size_bytes": 1577358,
+      "sha256": "31eb4ce744f711017bb5f68f2286e20ce90398d890e2ac36f7182b9b6a5a2f1c"
+    },
+    {
+      "path": "data/raw/case22.mat",
+      "size_bytes": 400422,
+      "sha256": "a85dd87cc4e4beab55239a1edf223afda21b77e1d0ff86fdeaff07180f62d97a"
+    },
+    {
+      "path": "data/raw/case23.mat",
+      "size_bytes": 972095,
+      "sha256": "ac6ae02e368d0d71c5e24b5bc922a134fb633fa33dccb75b5dc8041b9d299f3a"
+    },
+    {
+      "path": "data/raw/case6.mat",
+      "size_bytes": 859237,
+      "sha256": "25b3ad78b9cb5be5fc64c774479ba52b6e975ed96c86555838b76140c0239f85"
+    },
+    {
+      "path": "data/raw/case7.mat",
+      "size_bytes": 1140316,
+      "sha256": "23a7a61444838ee90915de986ba4e82074d8a223e4b0d5c44206e356844f5f95"
+    },
+    {
+      "path": "data/raw/case8.mat",
+      "size_bytes": 1581977,
+      "sha256": "1ed4c6b8f639790c4bd46235754bc8e3c1c0a729d1186cd45a5f714e0c16fd9f"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case20.npz",
+      "size_bytes": 6311322,
+      "sha256": "0f39c2387cc195a50ddcafc057b16109e57b03dae23f1c7d9bf5ea90d7766c0f"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case24.npz",
+      "size_bytes": 1525067,
+      "sha256": "4470fe7487810b60800edacb8ffbdffaa6da4623301929e6d10755ba12bd48ed"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case27.npz",
+      "size_bytes": 4551870,
+      "sha256": "fc545b3d151e57f99c23c8c24ad9c5a1f2e50ce33a50d4f827f417a1f9fd3c52"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case30.npz",
+      "size_bytes": 2758190,
+      "sha256": "a38c26de2899bc0a81387c159d68099ae50bd4947b14989b75d6ecb07774486d"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case31.npz",
+      "size_bytes": 2555008,
+      "sha256": "d76f2c800be1657fe6091b45e5846de9ace90bef5cde11e124702e995f91303a"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case33.npz",
+      "size_bytes": 1496591,
+      "sha256": "a7ef8c80079429655ce9c606c817a6b5318afce83e2cfb9684b36627dbd0e3b4"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case34.npz",
+      "size_bytes": 5873031,
+      "sha256": "98f91d9391dc7ef957a6beb74ccde94772d6c116260e0ec5569c8053a91f1412"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case35.npz",
+      "size_bytes": 1410170,
+      "sha256": "b10f10ce9585a56fcdf19dac050b580f6f22f19849c2f54415a15b6bb5d92fcc"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case37.npz",
+      "size_bytes": 2984216,
+      "sha256": "972a4b73ad1e73fe2c02aa18146760936ed347db33ecb61687675838613c6382"
+    },
+    {
+      "path": "data/vitaldb_train/vitaldb_case39.npz",
+      "size_bytes": 391800,
+      "sha256": "fbe43693cdf28fc1e6cf4764b1c90541f47d4fe3459ec196a43e7c9c6b5f7cab"
+    }
+  ],
+  "corpus_manifest": {
+    "path": "reports/corpus_manifest.json",
+    "sha256": "4c8e601891e7b355de59e3551e74f39803d56565675b742b33ac8bc3bde20d97"
+  },
+  "split_unit": "group",
+  "checkpoint_sha256": "9fbfc4e88a629d93f615593ca361bcf441fe21a32bfb1abdd626d8bc93c6023b"
+}
