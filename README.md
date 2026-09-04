@@ -137,10 +137,12 @@ uv run python dash_app.py
 uv run gunicorn --bind 0.0.0.0:8501 --workers 1 --threads 4 --timeout 120 dash_app:server
 ```
 
-O replay simula o caminho online e, por isso, rejeita amostras `NaN`/`Inf` antes
-do filtro causal. Para inspeção offline de arquivos VitalDB com pontos ausentes,
-use `evaluate-external`, cuja imputação pertence somente à preparação do dataset;
-não use essa análise para validar aquisição ao vivo.
+O replay da CLI simula o caminho online e, por isso, rejeita amostras `NaN`/`Inf`
+antes do filtro causal. A trajetória e o replay visual do Dash são inspeções
+retrospectivas de arquivos gravados: quando um VitalDB tem pontos ausentes, a
+interface interpola esses pontos somente para a simulação e mantém o score de
+qualidade calculado no sinal original. Essa conveniência não altera o estimador
+online nem valida uma aquisição ao vivo.
 
 ### Ficha do equipamento
 

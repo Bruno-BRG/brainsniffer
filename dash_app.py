@@ -166,11 +166,23 @@ def _fast_replay_case(
     min_quality: float = DEFAULT_MIN_SIGNAL_QUALITY,
     device: str = "cpu",
 ) -> list[RealtimePrediction]:
-    """Vectorize independent model calls while preserving streaming semantics."""
+    """Vectorize a recorded replay while preserving causal window semantics.
 
-    eeg = np.asarray(case.eeg, dtype=np.float32).reshape(-1)
-    if eeg.size and not np.isfinite(eeg).all():
-        raise ValueError("samples devem ser finitas no modo streaming")
+    Recorded external files may contain missing samples. The dashboard is an
+    offline inspection surface, so it interpolates those samples only for the
+    causal filter/model input while calculating signal quality on the original
+    window. The live estimator remains fail-closed for NaN/Inf input.
+    """
+
+    raw_eeg = np.asarray(case.eeg, dtype=np.float32).reshape(-1)
+    finite = np.isfinite(raw_eeg)
+    if raw_eeg.size and not finite.all():
+        if not finite.any():
+            raise ValueError("não há amostras EEG finitas para a inspeção offline")
+        indices = np.arange(raw_eeg.size)
+        eeg = np.interp(indices, indices[finite], raw_eeg[finite]).astype(np.float32)
+    else:
+        eeg = raw_eeg
     window_samples = config.window_samples
     stride_samples = max(1, int(round(stride_seconds * config.sampling_rate)))
     starts = np.arange(0, max(eeg.size - window_samples + 1, 0), stride_samples, dtype=int)
@@ -178,7 +190,7 @@ def _fast_replay_case(
         return []
 
     processed = StreamingPreprocessor(config).process(eeg)
-    raw_windows = np.lib.stride_tricks.sliding_window_view(eeg, window_samples)[starts]
+    raw_windows = np.lib.stride_tricks.sliding_window_view(raw_eeg, window_samples)[starts]
     processed_windows = np.lib.stride_tricks.sliding_window_view(processed, window_samples)[starts]
     qualities = np.asarray([signal_quality(window, config) for window in raw_windows], dtype=float)
     valid = qualities >= min_quality
@@ -613,10 +625,14 @@ def _case_meta(path_value: str | None) -> html.Div:
         case = load_case(path_value)
     except Exception as error:
         return html.Div(f"Não foi possível abrir o caso: {error}", className="case-meta case-error")
+    nonfinite_count = int((~np.isfinite(case.eeg)).sum())
+    detail = f" · {_format_clock(case.duration_seconds)} · {case.sampling_rate} Hz · {case.bis.size:,} pontos BIS"
+    if nonfinite_count:
+        detail += f" · {nonfinite_count:,} EEG não finitas · interpolação somente offline"
     return html.Div(
         [
             html.Strong(_case_label(Path(path_value))),
-            html.Span(f" · {_format_clock(case.duration_seconds)} · {case.sampling_rate} Hz · {case.bis.size:,} pontos BIS"),
+            html.Span(detail),
         ],
         className="case-meta",
     )
@@ -888,7 +904,7 @@ def _build_overview_tab() -> html.Div:
             _tab_intro("PAINEL DE EVIDÊNCIA", "A comparação começa pelo resultado, não pelo replay", "Esta aba resume a diferença entre o desempenho no holdout Figshare e a validação externa VitalDB. O objetivo é separar erro, associação e sensibilidade temporal para não transformar uma única métrica em uma conclusão exagerada."),
             html.Div([_card("Holdout · MAE", _format_number(_metric_value(HOLDOUT_METRICS, "mae"), 1), "Figshare · 5 casos", "blue"), _card("Holdout · Pearson", _format_number(_metric_value(HOLDOUT_METRICS, "pearson_r"), 3), "CNN versus BIS", "teal"), _card("VitalDB · MAE", _format_number(_metric_value(EXTERNAL_METRICS, "mae"), 1), "15 casos · sem retreino", "orange"), _card("VitalDB · Pearson", _format_number(_metric_value(EXTERNAL_METRICS, "pearson_r"), 3), "mudança de domínio", "red")], className="metric-grid"),
             html.Div([html.Div(dcc.Graph(figure=_evidence_mae_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div(dcc.Graph(figure=_evidence_pearson_figure(), config={"displayModeBar": False}), className="chart-card")], className="chart-grid two-col"),
-            html.Div([html.Div(dcc.Graph(figure=_evidence_offset_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div([html.Div("LEITURA PARA A DECISÃO", className="mini-kicker"), html.H3("Por que os gráficos estão separados?"), html.P("1. O holdout mostra a execução reproduzível no domínio do treino."), html.P("2. O VitalDB mostra que bom desempenho interno não prova generalização."), html.P("3. O offset é exploratório e não deve ser escolhido pós-hoc para pacientes."), html.Div("O relatório agora lê a série `results` do experimento de offset e mostra todos os nove pontos calculados.", className="callout")], className="explanation-card")], className="chart-grid two-col lower-evidence"),
+            html.Div([html.Div(dcc.Graph(figure=_evidence_offset_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div([html.Div("LEITURA PARA A DECISÃO", className="mini-kicker"), html.H3("Por que manter Figshare e VitalDB?"), html.P("1. O Figshare é o corpus do checkpoint: treino, validação e holdout interno usam a mesma família de arquivos e o mesmo alvo EEG→BIS."), html.P("2. O VitalDB fica separado para testar mudança de domínio — outra coorte perioperatória e outro caminho de aquisição — sem retreinar o modelo."), html.P("3. Misturar as fontes esconderia justamente a diferença que queremos medir; o offset e a avaliação externa continuam exploratórios e não devem ser escolhidos pós-hoc para pacientes."), html.Div("O relatório agora lê a série `results` do experimento de offset e mostra todos os nove pontos calculados.", className="callout")], className="explanation-card")], className="chart-grid two-col lower-evidence"),
         ],
         className="tab-panel",
     )
@@ -909,7 +925,7 @@ def _build_trajectory_tab(options: list[dict[str, object]], default_value: str |
             html.Div(
                 [
                     html.Div([html.Label("Caso para analisar", htmlFor="trajectory-case-selector"), dcc.Dropdown(id="trajectory-case-selector", options=options, value=default_value, clearable=False, searchable=True), html.Div(id="trajectory-meta", children=_case_meta(default_value))], className="control-block case-control"),
-                    html.Div([html.Div("LEITURA CORRETA", className="mini-kicker"), html.P("Ao trocar o caso, a tela mostra um carregamento enquanto calcula as janelas causais. O título do gráfico e os cards identificam o caso novo assim que a trajetória termina de atualizar." )], className="explanation-card compact-explanation"),
+                    html.Div([html.Div("LEITURA CORRETA", className="mini-kicker"), html.P("Ao trocar o caso, a tela mostra um carregamento enquanto calcula as janelas causais. O título do gráfico e os cards identificam o caso novo assim que a trajetória termina de atualizar."), html.P("Arquivos VitalDB podem ter amostras ausentes: aqui elas são interpoladas apenas para a inspeção offline, enquanto o score de qualidade continua sendo calculado no sinal original. O caminho de EEG ao vivo continua rejeitando NaN/Inf.")], className="explanation-card compact-explanation"),
                 ],
                 className="control-grid trajectory-controls",
             ),

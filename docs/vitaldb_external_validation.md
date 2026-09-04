@@ -7,6 +7,22 @@ sincronizados e a tabela de parâmetros declara a unidade do EEG como µV. O
 conjunto tem termos próprios, diferentes do Figshare, portanto esta integração é
 deliberadamente seletiva.
 
+## Por que o projeto usa Figshare e VitalDB?
+
+O Figshare é o corpus de desenvolvimento do checkpoint atual: os casos são
+separados por cirurgia em treino, validação e holdout interno, mantendo o mesmo
+formato de entrada e alvo EEG→BIS durante a construção do modelo. O VitalDB não é
+um segundo treino nem um substituto do holdout; ele é mantido fora do ajuste para
+perguntar se um checkpoint treinado no primeiro domínio se comporta de forma
+semelhante em outra coorte perioperatória, outro caminho de aquisição e outra
+distribuição de pacientes.
+
+Por isso os resultados não devem ser somados em uma única média. Misturar as
+fontes pode esconder mudança de domínio, diferenças de montagem/ganho e a
+heterogeneidade por caso. A interface mostra o holdout Figshare e o VitalDB lado
+a lado, mas preserva seus papéis: desempenho interno reproduzível de um lado e
+generalização externa exploratória do outro.
+
 ## Download de um caso
 
 ```bash
@@ -80,6 +96,14 @@ faixa bruta observada e se a preparação offline precisou imputar pontos.
 O campo `data_handling` declara a política completa: a avaliação é offline, a
 construção de janelas pode fazer interpolação linear e o caminho online rejeita
 dados não finitos antes do filtro/resampler; o relatório não contém EEG bruto.
+
+A aba **Trajetória completa** é igualmente uma inspeção retrospectiva, não uma
+entrada ao vivo. Quando um arquivo VitalDB contém `NaN`/`Inf`, a tela interpola
+linearmente esses pontos somente para alimentar o filtro causal e o modelo da
+gravação; o score de qualidade continua sendo calculado sobre a janela bruta,
+logo a perda de sinal permanece visível nas métricas. O estimador online não foi
+afrouxado: ele continua rejeitando amostras não finitas antes de alterar seu
+estado, para não transformar uma lacuna de aquisição em uma predição plausível.
 
 Além das métricas agregadas, a saída inclui uma linha por caso e intervalos
 exploratórios obtidos por bootstrap de casos inteiros. Esses intervalos não
