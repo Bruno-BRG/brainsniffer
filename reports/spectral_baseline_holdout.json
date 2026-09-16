@@ -1,0 +1,253 @@
+{
+  "dataset": {
+    "n_cases": 23,
+    "n_input_files": 24,
+    "n_windows": 31055,
+    "partitions": {
+      "test": {
+        "n_cases": 5,
+        "n_windows": 5523
+      },
+      "train": {
+        "n_cases": 13,
+        "n_windows": 15894
+      },
+      "validation": {
+        "n_cases": 5,
+        "n_windows": 9638
+      }
+    }
+  },
+  "effective_configuration": {
+    "data_dir": "data/raw",
+    "estimator": {
+      "class": "sklearn.ensemble.RandomForestRegressor",
+      "parameters": {
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "n_estimators": 100,
+        "n_jobs": -1,
+        "random_state": 42
+      }
+    },
+    "feature_sampling_rate": 128,
+    "folds": 1,
+    "max_windows": null,
+    "min_quality": 0.2,
+    "preprocess_config": {
+      "amplitude_scale_uv": 50.0,
+      "causal": true,
+      "clip_uv": 100.0,
+      "filter_order": 4,
+      "highcut_hz": 45.0,
+      "label_offset_seconds": 0.0,
+      "lowcut_hz": 0.5,
+      "notch_hz": 50.0,
+      "notch_quality": 30.0,
+      "sampling_rate": 128,
+      "window_seconds": 5.0
+    },
+    "split_configuration": {
+      "test_fraction": 0.2,
+      "validation_fraction": 0.2
+    },
+    "subset_seed": 42
+  },
+  "feature_names": [
+    "delta",
+    "theta",
+    "alpha",
+    "beta",
+    "gamma",
+    "relative_delta",
+    "relative_theta",
+    "relative_alpha",
+    "relative_beta",
+    "relative_gamma",
+    "spectral_edge_90hz",
+    "spectral_entropy",
+    "rms",
+    "line_length"
+  ],
+  "input_files": [
+    {
+      "path": "data/raw/case1.mat",
+      "sha256": "3f96f696d213c96b46fa859dc956fe83d97c9a3a202ba915f996ae88bc7d947e",
+      "size_bytes": 637612
+    },
+    {
+      "path": "data/raw/case10.mat",
+      "sha256": "a078f8b155f76ff1acd6cea4def151c7064c0fdc0289b086ef5d35dac8928971",
+      "size_bytes": 1263925
+    },
+    {
+      "path": "data/raw/case11.mat",
+      "sha256": "5062172f5fe18c3f8a7fc619fbff0454c77a6fe027c73f74b5ebf3dc72a87c46",
+      "size_bytes": 2495259
+    },
+    {
+      "path": "data/raw/case12.mat",
+      "sha256": "960f993e66dcf7ef6b8c4ef1f1fe7669d0bddff4ead31e6b51c7a752c002bf5f",
+      "size_bytes": 3830629
+    },
+    {
+      "path": "data/raw/case13.mat",
+      "sha256": "a51056ac4c2fd745795779f2e79c90bed3be133d9cbf4fcd93467d97823002a8",
+      "size_bytes": 762725
+    },
+    {
+      "path": "data/raw/case14.mat",
+      "sha256": "deb75307a8f3b034afe36840885f30552f15379732081de35682143699a93fc8",
+      "size_bytes": 605803
+    },
+    {
+      "path": "data/raw/case15.mat",
+      "sha256": "5d3934b75e643ffbad081f6edad0590f0a6a63a06085cc5b516dc0c32cad48bd",
+      "size_bytes": 2377618
+    },
+    {
+      "path": "data/raw/case16.mat",
+      "sha256": "26c8af1d5fbc20903cde61360ca3270758d2db15293565f9ff3f51cbac8e74a5",
+      "size_bytes": 1204478
+    },
+    {
+      "path": "data/raw/case17.mat",
+      "sha256": "75ff2745e1bf86fa0ae6fbb37c677277d3144e68c283bc4c15df34925d60f679",
+      "size_bytes": 1292068
+    },
+    {
+      "path": "data/raw/case18.mat",
+      "sha256": "956594dff43f71f02341da3adc50e462bf01fa293a6851c6000192f27e3215ce",
+      "size_bytes": 667899
+    },
+    {
+      "path": "data/raw/case19.mat",
+      "sha256": "8d681e6704227659bf008554e9a9fd649adc2380528e7d82820fce168c721ad1",
+      "size_bytes": 786271
+    },
+    {
+      "path": "data/raw/case2.mat",
+      "sha256": "c360d742903ffcfe37208df1b561afc7438a95a0162fa83233999cd5ece4481e",
+      "size_bytes": 906024
+    },
+    {
+      "path": "data/raw/case20.mat",
+      "sha256": "8fdda9fb089c9bc93213797353bd6ea8772cfaa6644181f4c52f635c2c628c54",
+      "size_bytes": 1612058
+    },
+    {
+      "path": "data/raw/case21.mat",
+      "sha256": "31eb4ce744f711017bb5f68f2286e20ce90398d890e2ac36f7182b9b6a5a2f1c",
+      "size_bytes": 1577358
+    },
+    {
+      "path": "data/raw/case22.mat",
+      "sha256": "a85dd87cc4e4beab55239a1edf223afda21b77e1d0ff86fdeaff07180f62d97a",
+      "size_bytes": 400422
+    },
+    {
+      "path": "data/raw/case23.mat",
+      "sha256": "ac6ae02e368d0d71c5e24b5bc922a134fb633fa33dccb75b5dc8041b9d299f3a",
+      "size_bytes": 972095
+    },
+    {
+      "path": "data/raw/case24.mat",
+      "sha256": "b5f2dc548bdf7bfb9f16af1e9a095c58e113efaa8188be015c8964f716de918d",
+      "size_bytes": 526063
+    },
+    {
+      "path": "data/raw/case3.mat",
+      "sha256": "83e086d5aab4f2e91be004aa19c144922b32bef546e0aa7367923c33b59bc990",
+      "size_bytes": 2050259
+    },
+    {
+      "path": "data/raw/case4.mat",
+      "sha256": "71d72ee18301995a83506fa0173a102d3d176789f22cbdee70e5598af5e4c45c",
+      "size_bytes": 671014
+    },
+    {
+      "path": "data/raw/case5.mat",
+      "sha256": "596694eb9d197ee1910cc63eb85fa3dee2b6053caeb6efe68cdde01228d9b4de",
+      "size_bytes": 466317
+    },
+    {
+      "path": "data/raw/case6.mat",
+      "sha256": "25b3ad78b9cb5be5fc64c774479ba52b6e975ed96c86555838b76140c0239f85",
+      "size_bytes": 859237
+    },
+    {
+      "path": "data/raw/case7.mat",
+      "sha256": "23a7a61444838ee90915de986ba4e82074d8a223e4b0d5c44206e356844f5f95",
+      "size_bytes": 1140316
+    },
+    {
+      "path": "data/raw/case8.mat",
+      "sha256": "1ed4c6b8f639790c4bd46235754bc8e3c1c0a729d1186cd45a5f714e0c16fd9f",
+      "size_bytes": 1581977
+    },
+    {
+      "path": "data/raw/case9.mat",
+      "sha256": "d64d03c87ca1232a51f89a676070a6e7c8c97e090cd99d44cf3463b611dfb8fc",
+      "size_bytes": 1119914
+    }
+  ],
+  "metrics": {
+    "test": {
+      "bias": 1.6661585849,
+      "mae": 8.863287989737,
+      "n": 5523.0,
+      "pearson_r": 0.667331933933,
+      "rmse": 13.233407524005,
+      "stage_accuracy": 0.539561832337,
+      "stage_macro_f1": 0.480047125384
+    },
+    "validation": {
+      "bias": 3.327944301437,
+      "mae": 6.999793050437,
+      "n": 9638.0,
+      "pearson_r": 0.759355828821,
+      "rmse": 10.356502893778,
+      "stage_accuracy": 0.737808673999,
+      "stage_macro_f1": 0.557328374881
+    }
+  },
+  "numeric_precision_decimal_places": 12,
+  "protocol": "holdout",
+  "raw_eeg_in_report": false,
+  "report_version": 1,
+  "scope": "research_only",
+  "seed": 42,
+  "split": {
+    "seed": 42,
+    "test_cases": [
+      "case19",
+      "case3",
+      "case4",
+      "case5",
+      "case9"
+    ],
+    "train_cases": [
+      "case1",
+      "case10",
+      "case11",
+      "case13",
+      "case14",
+      "case17",
+      "case2",
+      "case20",
+      "case21",
+      "case22",
+      "case6",
+      "case7",
+      "case8"
+    ],
+    "unit": "case",
+    "validation_cases": [
+      "case12",
+      "case15",
+      "case16",
+      "case18",
+      "case23"
+    ]
+  }
+}

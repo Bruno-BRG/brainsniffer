@@ -1,0 +1,254 @@
+\documentclass[12pt]{article}
+
+% Modelo de artigos da Sociedade Brasileira de Computacao (SBC).
+\makeatletter
+\def\input@path{{latex/}}
+\makeatother
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{flafter}
+\usepackage{float}
+\usepackage{placeins}
+
+\sloppy
+
+\DeclareRobustCommand{\artefato}[1]{\url{#1}}
+\newcommand{\pendente}[1]{\textbf{[PENDENTE: #1]}}
+
+\title{BrainSniffer: protótipo reproduzível para estimar uma referência BIS a partir de EEG frontal}
+
+\author{Bruno Rocha Guimarães\inst{1}}
+
+\address{Ciência da Computação -- Centro Universitário Jorge Amado\\
+  Salvador, Bahia -- Brasil}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper describes BrainSniffer, a reproducible engineering prototype that estimates a Bispectral Index (BIS) reference label from frontal electroencephalography (EEG). The pipeline uses five-second windows at 128 Hz, a compact one-dimensional convolutional neural network, and partitions grouped by case or subject. The active Figshare-only checkpoint reached mean absolute error (MAE) 7.03 and Pearson correlation 0.784 in a five-case Figshare holdout, but 12.43 and 0.024 in a 15-case VitalDB cross-dataset assessment. A mixed candidate trained with Figshare and part of VitalDB reached 6.69/0.818 on the Figshare benchmark and 8.60/0.688 on the historical VitalDB participant holdout. These results are retrospective and exploratory; Pearson is interpreted as association, not agreement. BrainSniffer neither measures consciousness nor supports clinical decisions, alarms, or drug dosing. Implementation and results are documented in internal artifacts \cite{brainsnifferArtefatos}.
+\end{abstract}
+
+\begin{resumo}
+Este artigo descreve o BrainSniffer, protótipo de engenharia reproduzível que estima, a partir de eletroencefalografia (EEG) frontal, um rótulo de referência do Índice Bispectral (BIS). O pipeline usa janelas de cinco segundos a 128 Hz, uma rede neural convolucional unidimensional compacta (\textit{compact 1-D CNN}, \texttt{Conv1DDepthEstimator}) e partições agrupadas por caso ou pessoa. O checkpoint ativo, treinado apenas no Figshare, obteve erro absoluto médio (MAE) 7,03 e correlação de Pearson 0,784 em cinco casos Figshare, mas 12,43 e 0,024 em uma avaliação cruzada com 15 casos VitalDB. Um candidato misto, treinado com Figshare e parte do VitalDB, obteve 6,69/0,818 no benchmark Figshare e 8,60/0,688 no holdout histórico VitalDB por participante. Os resultados são retrospectivos e exploratórios; Pearson é tratado como associação, não acordo. O BrainSniffer não mede consciência nem apoia decisão clínica, alarme ou dose. Implementação e resultados constam de artefatos internos \cite{brainsnifferArtefatos}.
+
+\textbf{Palavras-chave:} EEG frontal; rótulo BIS; CNN 1-D; validação agrupada; mudança de domínio; reprodutibilidade.
+\end{resumo}
+
+\section{Introdução}
+
+O BIS é uma saída proprietária derivada de EEG processado e indicada como auxílio, em contexto e sob supervisão definidos, não como verdade universal sobre consciência, adequação anestésica ou dose. Sua leitura pode variar com eletromiografia, bloqueio neuromuscular, fármacos e atraso de processamento; em particular, estudos controlados documentaram queda do índice após bloqueio em voluntários acordados, resposta paradoxal à cetamina e atrasos distintos entre monitores processados \cite{fda2024,openbis,schuller2015,hans2005,pilge2006}. Ensaios de protocolos guiados por BIS também produziram resultados dependentes do comparador e da população, o que impede extrapolar um único número para benefício clínico universal \cite{baware,bunaware,bagrecall}.
+
+Modelos de sinais podem aproximar índices derivados de EEG, e redes profundas já foram estudadas com alvos, canais, populações e equipamentos distintos \cite{park2020,shi2023}. Entretanto, janelas adjacentes da mesma cirurgia são dependentes: distribuí-las aleatoriamente entre treino e teste cria uma tarefa mais fácil que o uso em um novo caso. Resultados recentes no corpus Figshare e evidência metodológica mais ampla mostram que a unidade de separação altera materialmente a estimativa de desempenho \cite{sukriti2026,saeb2017}.
+
+A pergunta de pesquisa é: quanto uma CNN compacta aproxima o rótulo BIS em casos não usados no ajuste, comparada a um baseline espectral, e como esse desempenho muda entre fontes? Este trabalho apresenta e avalia o BrainSniffer como protótipo reproduzível para arquivos e replay retrospectivo. A contribuição é uma cadeia auditável, com partições por grupo, baseline espectral, comparação entre fontes e análise de incerteza por caso. O escopo deste TCC é avaliar essa cadeia, não desenvolver um dispositivo médico \cite{brainsnifferArtefatos}.
+
+Para reduzir a ambiguidade dos nomes usados no restante do artigo, a Tabela~\ref{tab:modelos} resume as fontes vistas no treinamento e os conjuntos de avaliação de cada checkpoint. ``Ativo'' e ``misto'' são abreviações desses dois modelos.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Definição conceitual dos dois checkpoints. O holdout VitalDB do modelo misto é histórico e da mesma fonte já presente no desenvolvimento; portanto, não é validação externa confirmatória.}
+\label{tab:modelos}
+\begin{tabular}{p{0.25\columnwidth}p{0.29\columnwidth}p{0.37\columnwidth}}
+\hline
+Modelo & Treinado com & Avaliado em\\
+\hline
+Modelo A -- Figshare (ativo) & Figshare & Figshare (holdout por caso) e VitalDB (avaliação cruzada de dataset)\\
+Modelo B -- misto & Figshare + parte do VitalDB & Figshare (benchmark histórico) e VitalDB (holdout histórico por participante)\\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/pipeline.pdf}
+\caption{Fluxo retrospectivo auditável do BrainSniffer, a partir de arquivos existentes. A separação por grupo impede que janelas do mesmo grupo atravessem partições; nos dados Figshare, o grupo é o caso e não há identificador que permita excluir repetição da mesma pessoa. O pool elegível de 33 casos não é o corpus fixo de 28 grupos: este exclui os cinco casos Figshare históricos e se divide em 16/6/6. As setas finais indicam avaliação, nunca treino com os holdouts. Fontes: manifesto do corpus e JSON dos checkpoints ativo e misto fixo. O benchmark VitalDB do misto é da mesma fonte já vista, não confirmatório \cite{brainsnifferArtefatos}.}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Fundamentação e trabalhos relacionados}
+
+O conjunto ``EEG and BIS raw data'' reúne 24 casos anônimos com EEG frontal e valores BIS, publicado no Figshare sob CC BY 4.0 (Ma, 2017, v1) \cite{ma2017}. Nsugbe e Connelly estudaram o mesmo problema com características multiescala (\textit{multiscale features}) e LDA; esse trabalho sustenta a descrição do corpus e das faixas, mas não é evidência de CNN \cite{nsugbe2022}. Park et al. estimaram EEGMAC com uma rede e cadeia de aquisição, enquanto Shi et al. estimaram PSI com quatro canais em 18 participantes idosos sedados. Esses estudos demonstram viabilidade técnica em configurações específicas, não comparabilidade direta com o rótulo, o canal ou a população do BrainSniffer \cite{park2020,shi2023}.
+
+O VitalDB contém sinais perioperatórios de milhares de cirurgias, incluindo os tracks \texttt{BIS/EEG1\_WAV} e \texttt{BIS/BIS} usados aqui \cite{lee2022,vitaldb,clinicaldata}. O Open Dataset (\texttt{vitaldb.net}) exige CC BY-NC-SA 4.0, \textit{Data Use Agreement} e citação a Lee et al.\ 2022, sem redistribuição. Escala, equipamento, montagem e população diferem do Figshare; por isso, o VitalDB informa sensibilidade à mudança de dataset, sem isolar a causa. O DOSE-I (Zenodo, CC BY 4.0) não foi incorporado à regressão porque usa MOAA/S e estado de consciência, não conversíveis em BIS \cite{dosei}.
+
+A reimplementação aberta de Connor ajuda a discutir transparência algorítmica do índice, mas não torna um regressor treinado contra BIS equivalente ou certificado como monitor \cite{openbis}. A independência entre desenvolvimento e avaliação, a descrição de clusters e a análise de calibração/acordo são componentes centrais de relato e avaliação de modelos; para desfecho contínuo, o tamanho da validação deve ser planejado pela precisão desejada, não pelo número de réplicas bootstrap \cite{tripodai,archer2021}.
+
+\section{Materiais e métodos}
+
+\subsection{Fontes, unidades de agrupamento e partições}
+
+O manifesto versionado \artefato{reports/corpus_manifest.json} registra 59 arquivos: 44 casos no pool de desenvolvimento e 15 casos VitalDB congelados. Após os gates de qualidade, 23 casos Figshare e dez VitalDB ficaram elegíveis, totalizando 33 casos e 55.471 janelas. No Figshare, \texttt{subject\_id} não está disponível; assim, \texttt{case\_id} evita compartilhar janelas da mesma cirurgia, mas não permite provar independência entre cirurgias de uma mesma pessoa. No VitalDB, o agrupamento usa \texttt{subjectid} e, portanto, reúne reoperações conhecidas \cite{brainsnifferArtefatos,ma2017,lee2022,clinicaldata}.
+
+O checkpoint ativo foi desenvolvido apenas com os 23 casos Figshare elegíveis, divididos com seed 42 em 13 casos de treino, cinco de validação e cinco de teste. O candidato misto fixo excluiu desse desenvolvimento os cinco casos do holdout Figshare histórico e usou 18 grupos Figshare mais dez grupos VitalDB: 28 grupos e 49.948 janelas, com partição registrada de 16/6/6 grupos para treino, validação e teste. O ajuste usa somente 12 casos Figshare e quatro participantes VitalDB (34.792 janelas); a validação usa dois Figshare e quatro VitalDB (7.235 janelas), e o teste interno, quatro Figshare e dois VitalDB (7.921 janelas). Essas contagens, a origem e os hashes estão em \artefato{models/brainsniffer_corpus_fixed.json}; dizer ``corpus de 28 grupos'' não significa que os 28 foram usados no ajuste \cite{brainsnifferArtefatos}.
+
+Os mesmos cinco casos Figshare foram usados como benchmark histórico dos dois checkpoints. Para o ativo Figshare-only, os 15 casos VitalDB constituem uma avaliação cruzada de dataset. Para o misto, esses 15 participantes não entraram no ajuste, mas vêm da mesma fonte já presente no desenvolvimento; além disso, o benchmark havia sido inspecionado antes da criação do candidato. Consequentemente, ele é descrito como holdout VitalDB histórico, por participante e após exposição ao domínio, não como validação externa confirmatória. Manter o candidato fora do dashboard é uma decisão operacional: não restaura a independência de benchmarks já inspecionados, inclusive o Figshare reutilizado \cite{brainsnifferArtefatos,tripodai,imdrfn88}.
+
+\subsection{Tarefa, pré-processamento e qualidade}
+
+Cada exemplo contém 640 amostras, isto é, uma janela de 5 s a 128 Hz, com passo de 5 s na construção offline. Para início $t$, o alvo corresponde a $t+\mathrm{offset}$, quantizado por arredondamento ao intervalo BIS do caso (5 s no Figshare e 1 s nos arquivos VitalDB normalizados). A emissão só pode ocorrer após completar a janela, aproximadamente em $t+5$ s, além do processamento; com offset zero, não se trata de previsão de um BIS futuro nem de leitura contemporânea ao fim da janela. O pipeline aplica banda de 0,5--45 Hz, notch de 50 Hz, filtro de quarta ordem, escala de amplitude registrada e rótulo BIS associado ao início da janela (offset padrão 0 s). O estado causal é preservado por caso e entre chunks; uma rota de fase zero existe somente para análise offline explícita. Essas escolhas estão em \artefato{reports/corpus_manifest.json}, \artefato{models/brainsniffer_cnn.json} e \artefato{models/brainsniffer_corpus_fixed.json}; as fontes externas descrevem os corpora e o problema, mas não definem esta configuração \cite{brainsnifferArtefatos,ma2017,nsugbe2022}.
+
+O gate do corpus exige, entre outros critérios internos, pelo menos 90\% de EEG finito, lacuna não finita máxima de 2 s, qualidade global mínima 0,35, pelo menos 80\% de BIS válido e qualidade mínima 0,20 por janela. O caso Figshare 24 permanece em quarentena por escala incompatível. Esses limiares são heurísticas de engenharia ainda não calibradas para risco clínico; no replay, não finitos são rejeitados antes do filtro e baixa qualidade leva à abstenção. A proveniência dos limiares é exclusivamente \artefato{reports/corpus_manifest.json} \cite{brainsnifferArtefatos}.
+
+Esses gates do corpus de desenvolvimento não devem ser confundidos com o tratamento dos 15 casos do benchmark VitalDB histórico. Na construção offline, \texttt{make\_windows} passa o EEG completo do caso ao pré-processador: não finitos são interpolados linearmente entre amostras finitas, com extensão do valor extremo nas bordas; um vetor inteiramente não finito vira zeros. Essa rotina não impõe limite de duração à lacuna e pode usar amostras futuras para imputação, mesmo quando o filtro subsequente é causal. A qualidade é calculada sobre a janela bruta. O construtor descarta alvos BIS não finitos ou fora de $[0,100]$; não interpola o BIS nessa etapa. Antes disso, a normalização em \artefato{src/brainsniffer/data/vitaldb.py}, função \texttt{\_align\_numeric\_to\_eeg}, ordena e remove tempos duplicados e interpola linearmente os pontos BIS finitos numa grade de 1 s relativa ao início do EEG. Interpola apenas entre o primeiro e o último ponto válido; fora desse intervalo mantém NaN. Não há limite de duração das lacunas nem máscara de imputação persistida no NPZ. Aqui, válido para interpolação significa finito, não necessariamente dentro de $[0,100]$. Os 15 arquivos históricos registram EEG não finito; sua avaliação offline difere da política de rejeição de não finitos do replay. Essa imputação pode suavizar lacunas longas e limita a interpretação dos resultados; sua política e as métricas históricas não foram alteradas neste trabalho. A descrição se baseia no código local e nos diagnósticos dos relatórios, não em recomendação dos datasets \cite{brainsnifferArtefatos}.
+
+\subsection{Modelos e treinamento}
+
+A CNN histórica é \texttt{Conv1DDepthEstimator}, com \textit{input shape} $(\mathrm{batch},1,640)$, \textit{Smooth L1 loss} e saída sigmoide (\textit{sigmoid}) escalada para $[0,100]$. A Tabela~\ref{tab:config} explicita a arquitetura compatível em \artefato{src/brainsniffer/models/cnn.py} e os parâmetros registrados nos JSON, sem carregar pesos. Recursos posteriores do treinador e arquiteturas opcionais não são atribuídos retroativamente a esses pesos \cite{brainsnifferArtefatos}.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{Configuração histórica: JSON dos checkpoints ativo e misto fixo; arquitetura compatível no código \cite{brainsnifferArtefatos}.}
+\label{tab:config}
+\begin{tabular}{p{0.28\columnwidth}p{0.63\columnwidth}}
+\hline
+Item & Configuração registrada/compatível\\
+\hline
+Convolucionais (\texttt{Conv1d}) & \textit{Channels} 1--32--64--128--128; \textit{kernel} 7, 7, 5, 5; \textit{padding} 3, 3, 2, 2; \textit{stride} 1; \texttt{BatchNorm1d} + GELU\\
+\textit{Pooling} e cabeça & \texttt{MaxPool1d(2)} nos 3 primeiros blocos; \texttt{AdaptiveAvgPool1d(1)}; \texttt{Linear} 128--64--1, GELU, \textit{dropout} 0,20\\
+Treino (ambos) & 10 \textit{epochs}, \textit{batch} 128, \textit{lr} $10^{-3}$, \textit{wd} $10^{-4}$, \textit{seed} 42; val/teste 0,20/0,20\\
+Amostragem & Misto: \textit{balanced sampling} por grupo/fonte; ativo: não registrado\\
+Amplitude e \textit{notch} & \textit{Clip} $\pm100\,\mu V$, escala $50\,\mu V$, saída em $[-5,5]$; \textit{notch} 50 Hz, Q=30\\
+\textit{Random Forest} & \texttt{n\_estimators}=100, \texttt{max\_depth}=12, \texttt{min\_samples\_leaf}=2, \texttt{random\_state}=42\\
+\hline
+\end{tabular}
+\end{table}
+
+A arquitetura compacta permite replay em CPU, mas não implica superioridade sobre redes temporais, atenção ou representações tempo-frequência \cite{brainsnifferArtefatos,park2020,shi2023}.
+
+Como controle, o baseline extrai potência por banda, SEF90, entropia espectral, RMS e \textit{line length}, ajustando uma \textit{Random Forest} nas mesmas janelas e partição do ativo. Detalhes em \artefato{reports/spectral_baseline_holdout.json} \cite{brainsnifferArtefatos}.
+
+\subsection{Métricas, incerteza e análises exploratórias}
+
+Foram calculados MAE, RMSE, viés e correlação de Pearson para o rótulo contínuo, além de acurácia e macro-F1 para quatro faixas heurísticas de BIS. As métricas implementadas em \artefato{src/brainsniffer/pipeline/metrics.py} \cite{brainsnifferArtefatos} incluem MAE e RMSE, definidos por
+\begin{equation}
+\mathrm{MAE}=\frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|,
+\qquad
+\mathrm{RMSE}=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2}.
+\end{equation}
+O estimando primário é o desempenho pooled por janela aceita, não o desempenho médio de uma pessoa: casos longos pesam mais. O viés é a média de predito menos referência. As faixas são $[0,40)$, $[40,60)$, $[60,80)$ e $[80,100]$. Pearson quantifica associação linear e não acordo; não foram estimados, nesta execução, limites de concordância, coeficiente de concordância ou calibração clínica. As quatro faixas discretas são apenas uma apresentação interna e não constituem classes clínicas independentes \cite{brainsnifferArtefatos,tripodai}.
+
+O bootstrap reamostra casos inteiros com reposição, concatena todas as janelas selecionadas e recalcula a métrica. Assim, preserva melhor a dependência intraclasse que uma reamostragem de janelas, mas o estimando continua ponderado pela duração/número de janelas. Foram usadas $B=1.000$ réplicas, seed 42 e percentis 2,5/97,5 para o intervalo de 95\%. Com apenas cinco casos Figshare, o intervalo é exploratório; 1.000 réplicas não equivalem a 1.000 casos \cite{brainsnifferArtefatos,field2007,archer2021}.
+
+A comparação VitalDB também foi calculada por caso, pareando \texttt{case\_id} e número de janelas em \artefato{reports/vitaldb_external_validation.json} e \artefato{reports/mixed_vitaldb_external.json}. A sensibilidade registrada em \artefato{reports/offset_sensitivity.json} reaplicou o checkpoint ativo aos mesmos cinco casos Figshare, sem retreino, em uma grade de $-20$ a $+20$ s. Como a grade foi examinada após o treinamento, ela formula hipótese sobre alinhamento e não escolhe o atraso do rótulo \cite{brainsnifferArtefatos,pilge2006}.
+
+\subsection{Replay retrospectivo e trajetória ilustrativa}
+
+Replay significa percorrer uma gravação existente, não adquirir EEG: preenche-se um buffer de 5 s e depois emite-se atualização a cada 1 s, separando valor bruto, EWMA, qualidade, timestamp e origem. O escopo definitivo deste TCC é exclusivamente retrospectivo, sem conexão a EEG físico. A implementação em \artefato{src/brainsniffer/pipeline/realtime.py} distingue o instante de emissão do alvo histórico no início da janela \cite{brainsnifferArtefatos}.
+
+Para visualizar o comportamento temporal, fixou-se antes da inferência o \texttt{case19} do holdout Figshare, por consistência com o caso de demonstração indicado na revisão, não pelo desempenho. Usou-se toda a gravação EEG (4.355 s), sem busca de melhor trecho. O script \artefato{docs/generate_figures.py}, com opção explícita \texttt{--infer-trajectory}, reutiliza \texttt{make\_windows}, configuração do checkpoint ativo e loader restrito, em CPU, dois threads e batch 64, sem treino. A curva bruta (sem EWMA) é posicionada no timestamp do alvo offline, início mais offset 0 s, em passos de 5 s; não representa disponibilidade sem atraso. Arrays, CSV, hashes e métricas ficam em \artefato{tmp/pdfs/trajectory-audit/}; a execução padrão do gerador não faz inferência nem download \cite{brainsnifferArtefatos}.
+
+\section{Resultados}
+\label{sec:resultados}
+
+\subsection{Checkpoint ativo e baseline no Figshare}
+
+No holdout Figshare do checkpoint ativo, cinco casos e 5.523 janelas produziram MAE 7,03, RMSE 11,08, viés 0,79 e Pearson 0,784. A acurácia por faixa foi 0,585 e o macro-F1 0,548. O baseline espectral, na mesma partição, obteve MAE 8,86, RMSE 13,23, Pearson 0,667, acurácia 0,540 e macro-F1 0,480. A diferença sustenta apenas vantagem da CNN nessa partição e execução, não superioridade geral. Fontes internas: \artefato{reports/figshare_holdout_evaluation.json} e \artefato{reports/spectral_baseline_holdout.json} \cite{brainsnifferArtefatos}.
+
+\begin{table}[H]
+\centering
+\caption{Resultados observados no holdout Figshare comum: cinco casos, 5.523 janelas e seed 42. Fonte: relatórios internos do projeto; métricas agregadas por janela \cite{brainsnifferArtefatos}.}
+\label{tab:figshare-baseline}
+\begin{tabular}{lrrrrr}
+\hline
+Modelo & MAE & RMSE & Pearson & Acurácia & Macro-F1\\
+\hline
+CNN ativa & 7,03 & 11,08 & 0,784 & 0,585 & 0,548\\
+Baseline espectral & 8,86 & 13,23 & 0,667 & 0,540 & 0,480\\
+\hline
+\end{tabular}
+\end{table}
+
+A Figura~\ref{fig:trajectory} mostra queda inicial e elevação final presentes em ambas as curvas, mas a CNN superestima grande parte do patamar intermediário e não reproduz várias oscilações da referência. Nas 850 janelas aceitas desse caso, MAE foi 8,72, RMSE 10,21, viés $+4{,}79$ pontos BIS e Pearson 0,910: associação alta não elimina erro sistemático. É um exemplo ilustrativo, não evidência adicional de generalização. A série BIS contém 906 pontos e estende-se além do EEG; das 871 janelas EEG completas, 21 foram rejeitadas por qualidade, e 35 pontos finais BIS não têm janela EEG correspondente. As 56 posições sem previsão permanecem NaN, sem unir lacunas ou suavizar a referência; não havia EEG não finito neste caso. Fonte: auditoria da inferência em \artefato{tmp/pdfs/trajectory-audit/case19.json} \cite{brainsnifferArtefatos}.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/bis_trajectory.pdf}
+\caption{Trajetória offline completa do Figshare \texttt{case19}, preselecionado por consistência da demonstração, não por desempenho. BIS original e CNN ativa bruta (sem EWMA), com erro predito menos referência no painel inferior. Tempo relativo ao início; alvo no início da janela de 5 s, offset 0 s, não no instante de emissão do replay. Lacunas de previsão preservadas; a cauda BIS excede o suporte EEG. Fontes internas: \artefato{data/raw/case19.mat}, checkpoint ativo e auditoria \artefato{tmp/pdfs/trajectory-audit/case19.json}. Exemplo individual, não generalização \cite{brainsnifferArtefatos}.}
+\label{fig:trajectory}
+\end{figure}
+
+\subsection{Comparação dos checkpoints nos benchmarks históricos}
+
+O candidato misto apresentou MAE 6,69, RMSE 10,67, viés 2,12, Pearson 0,818 e macro-F1 0,574 no holdout Figshare. Nos 15 participantes e 38.730 janelas do holdout VitalDB histórico, obteve 8,60, 11,74, $-1{,}01$, 0,688 e 0,486. O ativo obteve, respectivamente, 7,03/11,08/0,79/0,784/0,548 no Figshare e 12,43/18,80/1,40/0,024/0,398 no VitalDB. Os valores vêm de \artefato{reports/figshare_holdout_evaluation.json}, \artefato{reports/mixed_fixed_figshare_holdout.json}, \artefato{reports/vitaldb_external_validation.json} e \artefato{reports/mixed_vitaldb_external.json} \cite{brainsnifferArtefatos}.
+
+\begin{table}[H]
+\centering
+\caption{Comparação retrospectiva nos mesmos benchmarks históricos. ``Visto'' indica fonte presente no desenvolvimento, não uso dos casos de holdout. Pearson mede associação. Fonte: relatórios internos \cite{brainsnifferArtefatos}.}
+\label{tab:benchmarks}
+\begin{tabular}{llcrrr}
+\hline
+Benchmark & Modelo (fontes vistas) & Casos & MAE & RMSE & Pearson\\
+\hline
+Figshare & ativo (Figshare) & 5 & 7,03 & 11,08 & 0,784\\
+Figshare & misto (Figshare+VitalDB) & 5 & 6,69 & 10,67 & 0,818\\
+VitalDB & ativo (Figshare) & 15 & 12,43 & 18,80 & 0,024\\
+VitalDB & misto (Figshare+VitalDB) & 15 & 8,60 & 11,74 & 0,688\\
+\hline
+\end{tabular}
+\end{table}
+
+No VitalDB, o MAE do candidato caiu em 14 dos 15 casos pareados; no \texttt{vitaldb\_case16}, aumentou aproximadamente 0,67 ponto BIS. A Figura~\ref{fig:comparison} evidencia que o ganho agregado não elimina heterogeneidade e que casos longos têm maior peso no agregado. Essa comparação, derivada de \artefato{reports/vitaldb_external_validation.json} e \artefato{reports/mixed_vitaldb_external.json}, descreve adaptação após exposição ao domínio VitalDB e não transporte para uma nova fonte \cite{brainsnifferArtefatos}.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/comparison.pdf}
+\caption{Agregados por janela no Figshare (5 casos/5.523 janelas) e VitalDB (15/38.730) e MAE pareado por caso, ordenado pela diferença misto menos ativo. Pareamento por \texttt{case\_id} e contagem de janelas. O ativo foi desenvolvido somente no Figshare; o candidato misto já viu outros participantes VitalDB durante o desenvolvimento. Pontos e linhas vêm dos quatro relatórios de holdout citados no texto; 14/15 casos melhoram, mas o caso 16 piora cerca de 0,67. Resultado exploratório, não validação clínica \cite{brainsnifferArtefatos}.}
+\label{fig:comparison}
+\end{figure}
+
+\subsection{Bootstrap agrupado e sensibilidade ao offset}
+
+No Figshare, o ativo apresentou MAE observado 7,03 (IC percentil 95\%: 6,38--8,24) e Pearson 0,784 (0,703--0,881); para o misto, os valores foram 6,69 (5,65--8,53) e 0,818 (0,751--0,890). No VitalDB, o ativo apresentou 12,43 (11,05--14,45) e 0,024 ($-0{,}126$--0,193), enquanto o misto apresentou 8,60 (7,57--9,95) e 0,688 (0,606--0,752). Os marcadores da Figura~\ref{fig:bootstrap} são essas métricas observadas; somente as barras representam os intervalos das réplicas. As médias das réplicas bootstrap não substituem esses pontos observados. Os mesmos quatro relatórios registram $B$, seed, unidade e intervalos \cite{brainsnifferArtefatos}.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/bootstrap_intervals.pdf}
+\caption{Métricas observadas (marcadores) e intervalos percentis de 95\% (barras) do bootstrap agrupado por caso ($B=1.000$, seed 42). Casos sorteados contribuem com todas as suas janelas; portanto, a métrica agregada é ponderada por janelas. O $n=5$ do Figshare limita a leitura. Fonte: quatro relatórios internos de holdout \cite{brainsnifferArtefatos}.}
+\label{fig:bootstrap}
+\end{figure}
+
+Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,03/0,784 em 0 s e 6,76/0,799 em $+20$ s. Um offset positivo associa a janela EEG a um BIS posterior. A tendência foi observada pós-hoc, sem retreino, e não identifica causalmente atraso do monitor nem autoriza mudar o offset padrão. Fonte interna: \artefato{reports/offset_sensitivity.json} \cite{brainsnifferArtefatos}; contexto sobre atraso de índices processados em \cite{pilge2006}.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/offset_sensitivity.pdf}
+\caption{Sensibilidade pós-hoc ao alinhamento do rótulo em cinco casos Figshare. Pontos e segmentos preservam a grade e o suporte histórico original: o número de janelas varia de 5.503 a 5.525; não há restrição a suporte comum nem recálculo. A linha vertical indica o padrão 0 s. Os eixos ampliados tornam diferenças pequenas legíveis; a análise sem retreino gera hipótese e não seleciona atraso. Fonte: \artefato{reports/offset_sensitivity.json} \cite{brainsnifferArtefatos}.}
+\label{fig:offset}
+\end{figure}
+
+\FloatBarrier
+\section{Discussão e limitações}
+
+A degradação do ativo Figshare-only no VitalDB é evidência interna de sensibilidade à mudança de dataset, não prova de qual diferença de equipamento, centro, ganho, montagem, população ou distribuição BIS a causou. A redução de erro do candidato misto é compatível com adaptação após incorporar participantes VitalDB ao desenvolvimento; como o benchmark é da mesma fonte e já havia sido observado, ele deve gerar uma hipótese para uma nova coorte travada, não uma alegação de generalização externa \cite{brainsnifferArtefatos,lee2022,tripodai,imdrfn88}.
+
+A melhora em 14/15 casos coexiste com piora no caso 16, e os agregados por janela privilegiam cirurgias longas. Além disso, Pearson pode aumentar mesmo com viés ou discordância relevantes. Métricas por participante e análises de acordo/calibração são extensões possíveis, não resultados já demonstrados \cite{brainsnifferArtefatos,tripodai,archer2021}.
+
+O bootstrap representa somente a variabilidade de reamostrar os casos disponíveis sob o algoritmo escolhido. Ele não cobre incerteza de treinamento, seleção de checkpoint, hiperparâmetros, mudança de centro ou erro do próprio rótulo BIS. O pequeno $n$ Figshare e o reaproveitamento do benchmark VitalDB impedem leitura confirmatória \cite{brainsnifferArtefatos,field2007,archer2021}.
+
+O alvo é a saída BIS, que pode responder a EMG, bloqueio neuromuscular, cetamina e atrasos; portanto, baixo erro contra o monitor não equivale a medir consciência ou efeito farmacológico verdadeiro \cite{schuller2015,hans2005,pilge2006}. De modo semelhante, as faixas e os thresholds de qualidade do protótipo são heurísticas internas \cite{brainsnifferArtefatos}. DOSE-I deve permanecer uma tarefa separada para MOAA/S/estado de consciência, sem conversão artificial para BIS \cite{dosei}.
+
+Em engenharia, a cadeia registra hashes, partições, pré-processamento, relatórios e replay de arquivos. A trajetória individual torna visíveis erros que os agregados ocultam, mas não substitui a análise entre casos. Investigar o efeito das lacunas e a concordância em dados secundários são extensões metodológicas possíveis, não requisitos adicionais para concluir este TCC retrospectivo \cite{brainsnifferArtefatos,tripodai}.
+
+\section{Conclusão}
+
+O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal em arquivos e replay retrospectivo. Como sintetizado na Seção~\ref{sec:resultados}, o checkpoint ativo mostrou desempenho interno melhor que o baseline espectral, mas perdeu associação no VitalDB; o candidato misto reduziu o erro após exposição a esse domínio, com heterogeneidade por caso e sem independência confirmatória. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelo número de casos, pelo reuso dos benchmarks e pelas políticas de imputação offline \cite{brainsnifferArtefatos}.
+
+A contribuição defensável é uma base auditável para formular e testar hipóteses, não um sistema clínico. O software não mede consciência, não prescreve dose, não controla bomba e não deve acionar alarme ou conduta. O TCC se encerra com a implementação documentada, a comparação existente e a explicitação dos limites; uma futura alegação de generalização exigiria avaliação independente \cite{brainsnifferArtefatos,tripodai}.
+
+\subsection*{Ética, governança e conformidade}
+
+Esta etapa usa os corpora secundários Figshare e VitalDB, cujas publicações e páginas oficiais identificam a origem dos dados, não a aprovação institucional deste projeto \cite{ma2017,lee2022,clinicaldata}. Não se relata coleta prospectiva nem intervenção. Não foi apresentado aqui número de parecer, aprovação ou dispensa institucional, e nenhum é presumido a partir da disponibilidade dos dados. Os termos de uso e o enquadramento ético devem ser confirmados pelo autor e pela instituição, conforme os procedimentos institucionais aplicáveis, antes de qualquer estudo futuro. A nova inferência ilustrativa em um caso não reexecuta o treinamento nem os benchmarks completos; a compilação não valida alterações simultâneas do sistema.
+
+\bibliographystyle{sbc}
+\bibliography{referencias}
+
+\end{document}

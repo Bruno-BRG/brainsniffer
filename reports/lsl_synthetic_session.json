@@ -1,0 +1,130 @@
+{
+  "report_version": 2,
+  "source": "lsl",
+  "status": "completed",
+  "error": null,
+  "checkpoint": "models/brainsniffer_cnn.pt",
+  "checkpoint_sha256": "fde8e45fff2fa5414944686fd086fc3dd42248f247c7fb4ea1e31aa00618ee8c",
+  "scope": {
+    "intended_use": "research_only",
+    "clinical_decision_support": false,
+    "controls_anesthetic_delivery": false
+  },
+  "runtime": {
+    "environment": {
+      "project": "0.1.0",
+      "python": "3.12.14",
+      "torch": "2.14.0+cu130",
+      "numpy": "2.5.2",
+      "scipy": "1.18.1",
+      "scikit_learn": "1.9.0"
+    },
+    "preprocess_config": {
+      "sampling_rate": 128,
+      "window_seconds": 5.0,
+      "lowcut_hz": 0.5,
+      "highcut_hz": 45.0,
+      "notch_hz": 50.0,
+      "notch_quality": 30.0,
+      "filter_order": 4,
+      "amplitude_scale_uv": 50.0,
+      "clip_uv": 100.0,
+      "causal": true,
+      "label_offset_seconds": 0.0
+    },
+    "stride_seconds": 1.0,
+    "min_quality": 0.2,
+    "max_gap_factor": 1.5,
+    "require_metadata": true,
+    "require_timestamps": true,
+    "fail_on_audit": true,
+    "require_intake": false,
+    "stale_timeout_seconds": 2.0
+  },
+  "predictions": {
+    "count": 3,
+    "abstentions": 0,
+    "stale_abstentions": 0,
+    "abstention_fraction": 0.0,
+    "quality_min": 1.0,
+    "quality_mean": 1.0
+  },
+  "audit": {
+    "ok": true,
+    "sample_count": 2054,
+    "chunk_count": 40,
+    "source_rate": 256.0,
+    "duration_seconds": 8.0234375,
+    "finite_fraction": 1.0,
+    "saturation_fraction": 0.0,
+    "flatline_fraction": 0.0,
+    "quality": 1.0,
+    "raw_min": -20.0,
+    "raw_max": 20.0,
+    "raw_mean": 0.05148379271078338,
+    "raw_rms": 14.154224268907871,
+    "timestamps_present": true,
+    "timestamp_first": 98187.626749611,
+    "timestamp_last": 98195.64629127,
+    "timestamp_nonfinite_count": 0,
+    "timestamp_nonmonotonic_count": 0,
+    "timestamp_gap_count": 0,
+    "warnings": [],
+    "metadata": {
+      "source_name": "BrainSnifferSyntheticEEG",
+      "stream_type": "EEG",
+      "channel_index": 0,
+      "channel_count": 1,
+      "sampling_rate": 256.0,
+      "source_id": "brainsniffer-synthetic-BrainSnifferSyntheticEEG",
+      "channel_name": "Fpz",
+      "unit": "uV",
+      "reference": "linked ears",
+      "montage": "frontal referenced"
+    },
+    "metadata_complete": true,
+    "metadata_missing": [],
+    "timestamps_required": true
+  },
+  "intake": {
+    "status": "incomplete",
+    "ready_for_bench": false,
+    "required_fields": [
+      "device_manufacturer",
+      "device_model",
+      "firmware",
+      "bridge",
+      "sampling_rate",
+      "unit",
+      "channel_name",
+      "reference",
+      "montage",
+      "nominal_range",
+      "processing_applied"
+    ],
+    "missing_fields": [
+      "device_manufacturer",
+      "device_model",
+      "firmware",
+      "bridge",
+      "nominal_range",
+      "processing_applied"
+    ],
+    "compatibility_issues": [],
+    "metadata": {
+      "source_name": "BrainSnifferSyntheticEEG",
+      "stream_type": "EEG",
+      "channel_index": 0,
+      "channel_count": 1,
+      "sampling_rate": 256.0,
+      "source_id": "brainsniffer-synthetic-BrainSnifferSyntheticEEG",
+      "channel_name": "Fpz",
+      "unit": "uV",
+      "reference": "linked ears",
+      "montage": "frontal referenced"
+    },
+    "scope": "research_only",
+    "clinical_decision_support": false,
+    "controls_anesthetic_delivery": false
+  }
+}

@@ -1,0 +1,225 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models/brainsniffer_corpus_fixed.pt",
+  "checkpoint_sha256": "9fbfc4e88a629d93f615593ca361bcf441fe21a32bfb1abdd626d8bc93c6023b",
+  "files": [
+    "data/raw/case19.mat",
+    "data/raw/case3.mat",
+    "data/raw/case4.mat",
+    "data/raw/case5.mat",
+    "data/raw/case9.mat"
+  ],
+  "input_files": [
+    {
+      "path": "data/raw/case19.mat",
+      "size_bytes": 786271,
+      "sha256": "8d681e6704227659bf008554e9a9fd649adc2380528e7d82820fce168c721ad1"
+    },
+    {
+      "path": "data/raw/case3.mat",
+      "size_bytes": 2050259,
+      "sha256": "83e086d5aab4f2e91be004aa19c144922b32bef546e0aa7367923c33b59bc990"
+    },
+    {
+      "path": "data/raw/case4.mat",
+      "size_bytes": 671014,
+      "sha256": "71d72ee18301995a83506fa0173a102d3d176789f22cbdee70e5598af5e4c45c"
+    },
+    {
+      "path": "data/raw/case5.mat",
+      "size_bytes": 466317,
+      "sha256": "596694eb9d197ee1910cc63eb85fa3dee2b6053caeb6efe68cdde01228d9b4de"
+    },
+    {
+      "path": "data/raw/case9.mat",
+      "size_bytes": 1119914,
+      "sha256": "d64d03c87ca1232a51f89a676070a6e7c8c97e090cd99d44cf3463b611dfb8fc"
+    }
+  ],
+  "input_diagnostics": [
+    {
+      "path": "data/raw/case19.mat",
+      "case_id": "case19",
+      "sample_count": 557440,
+      "nonfinite_count": 0,
+      "finite_fraction": 1.0,
+      "raw_min": -125.0,
+      "raw_max": 125.0,
+      "quality": 0.675135184960871,
+      "imputation_applied_offline": false
+    },
+    {
+      "path": "data/raw/case3.mat",
+      "case_id": "case3",
+      "sample_count": 1673152,
+      "nonfinite_count": 0,
+      "finite_fraction": 1.0,
+      "raw_min": -62.5,
+      "raw_max": 62.5,
+      "quality": 0.4259507958337293,
+      "imputation_applied_offline": false
+    },
+    {
+      "path": "data/raw/case4.mat",
+      "case_id": "case4",
+      "sample_count": 499040,
+      "nonfinite_count": 0,
+      "finite_fraction": 1.0,
+      "raw_min": -125.0,
+      "raw_max": 125.0,
+      "quality": 0.5982265745477781,
+      "imputation_applied_offline": false
+    },
+    {
+      "path": "data/raw/case5.mat",
+      "case_id": "case5",
+      "sample_count": 309728,
+      "nonfinite_count": 0,
+      "finite_fraction": 1.0,
+      "raw_min": -125.0,
+      "raw_max": 125.0,
+      "quality": 0.7143316162034242,
+      "imputation_applied_offline": false
+    },
+    {
+      "path": "data/raw/case9.mat",
+      "case_id": "case9",
+      "sample_count": 765172,
+      "nonfinite_count": 0,
+      "finite_fraction": 1.0,
+      "raw_min": -125.0,
+      "raw_max": 125.0,
+      "quality": 0.7076367872189406,
+      "imputation_applied_offline": false
+    }
+  ],
+  "data_handling": {
+    "mode": "offline_evaluation",
+    "nonfinite_samples": "linear_interpolation_during_window_construction",
+    "online_nonfinite_policy": "reject_before_filter_or_resampler",
+    "raw_eeg_in_report": false
+  },
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "retrained": false,
+  "case_ids": [
+    "case19",
+    "case3",
+    "case4",
+    "case5",
+    "case9"
+  ],
+  "min_quality": 0.2,
+  "n_windows": 5523,
+  "metrics": {
+    "n": 5523.0,
+    "mae": 6.688461563843177,
+    "rmse": 10.674183142343262,
+    "bias": 2.124421330092287,
+    "pearson_r": 0.8180785577552838,
+    "stage_accuracy": 0.590077856237552,
+    "stage_macro_f1": 0.5744870753057396
+  },
+  "per_case": [
+    {
+      "case_id": "case19",
+      "n_windows": 850,
+      "n": 850.0,
+      "mae": 9.72432034660788,
+      "rmse": 11.288821921855327,
+      "bias": 6.210311647302964,
+      "pearson_r": 0.8911821340697029,
+      "stage_accuracy": 0.4376470588235294,
+      "stage_macro_f1": 0.4765879662877237
+    },
+    {
+      "case_id": "case3",
+      "n_windows": 2324,
+      "n": 2324.0,
+      "mae": 6.059920412743153,
+      "rmse": 11.542655471319108,
+      "bias": 2.1340192755405343,
+      "pearson_r": 0.7440210230540407,
+      "stage_accuracy": 0.5107573149741824,
+      "stage_macro_f1": 0.3906110654315107
+    },
+    {
+      "case_id": "case4",
+      "n_windows": 761,
+      "n": 761.0,
+      "mae": 8.006477787052912,
+      "rmse": 11.327625530909527,
+      "bias": 0.6473514291209398,
+      "pearson_r": 0.7902197314513512,
+      "stage_accuracy": 0.5137976346911958,
+      "stage_macro_f1": 0.4708466533466534
+    },
+    {
+      "case_id": "case5",
+      "n_windows": 458,
+      "n": 458.0,
+      "mae": 5.808423441049834,
+      "rmse": 9.34470090177078,
+      "bias": -2.7871230710541837,
+      "pearson_r": 0.832455655324621,
+      "stage_accuracy": 0.6681222707423581,
+      "stage_macro_f1": 0.6381347523033291
+    },
+    {
+      "case_id": "case9",
+      "n_windows": 1130,
+      "n": 1130.0,
+      "mae": 5.166600310907954,
+      "rmse": 8.075065490722707,
+      "bias": 2.016655963290054,
+      "pearson_r": 0.912438507523799,
+      "stage_accuracy": 0.8876106194690265,
+      "stage_macro_f1": 0.5347025209568823
+    }
+  ],
+  "case_bootstrap": {
+    "mae": {
+      "mean": 6.806407796858219,
+      "lower_95": 5.650961384339766,
+      "upper_95": 8.526484162263248
+    },
+    "rmse": {
+      "mean": 10.579106686019466,
+      "lower_95": 8.866910841918921,
+      "upper_95": 11.465816625681713
+    },
+    "bias": {
+      "mean": 2.1059435453353945,
+      "lower_95": 0.1992952299759527,
+      "upper_95": 4.0692637923145245
+    },
+    "pearson_r": {
+      "mean": 0.8191930185868531,
+      "lower_95": 0.7514574153425542,
+      "upper_95": 0.8899322800441678
+    },
+    "stage_accuracy": {
+      "mean": 0.5941889229198725,
+      "lower_95": 0.484767869725857,
+      "upper_95": 0.7848020434227331
+    },
+    "stage_macro_f1": {
+      "mean": 0.550553014332831,
+      "lower_95": 0.4516523702794997,
+      "upper_95": 0.6614160421992359
+    }
+  },
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42
+}

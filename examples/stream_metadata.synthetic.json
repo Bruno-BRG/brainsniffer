@@ -1,0 +1,9 @@
+{
+  "unit": "uV",
+  "channel_name": "Fpz",
+  "reference": "linked ears",
+  "montage": "frontal referenced",
+  "sampling_rate": 128,
+  "source_name": "BrainSnifferSyntheticEEG",
+  "device_model": "synthetic-bench-source"
+}

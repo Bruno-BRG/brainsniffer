@@ -1,0 +1,15 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+__pycache__
+*.py[cod]
+tmp
+.streamlit/secrets.toml
+.env
+.env.*
+docs/__pycache__
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
