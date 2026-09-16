@@ -6,11 +6,27 @@ __pycache__/
 .streamlit/
 tmp/
 output/
+/_archive/
 data/raw/*.mat
 data/vitaldb/*.npz
 data/vitaldb_train/*.npz
 data/processed/
 models/*.pt
 models/*.pth
+# Obsolete local candidate outputs; keep other JSON models/reports visible.
+/models/brainsniffer_corpus.json
+/reports/mixed_internal_holdout.json
 *.egg-info/
+# LaTeX build artifacts; keep docs/tcc_brainsniffer.pdf versioned.
+docs/*.aux
+docs/*.bbl
+docs/*.blg
+docs/*.fdb_latexmk
+docs/*.fls
+docs/*.lof
 docs/*.log
+docs/*.lot
+docs/*.out
+docs/*.synctex.gz
+docs/*.toc
+docs/*.xdv

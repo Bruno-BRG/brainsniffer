@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: >-
+  If you use BrainSniffer in academic work, please cite the software using
+  these metadata.
+title: BrainSniffer
+type: software
+authors:
+  - family-names: Guimarães
+    given-names: Bruno Rocha
+abstract: >-
+  Research prototype for estimating a continuous BIS-like value and a
+  BIS-related discrete stage from frontal EEG.
+version: 0.1.0
+date-released: 2026-09-03
+license: MIT
+repository-code: https://github.com/Bruno-BRG/brainsniffer
+url: https://github.com/Bruno-BRG/brainsniffer
+keywords:
+  - EEG
+  - BIS
+  - anesthesia depth
+  - deep learning
+  - biomedical signal processing

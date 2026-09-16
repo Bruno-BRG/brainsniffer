@@ -1,272 +1,547 @@
-"""Generate publication-ready BrainSniffer figures from recorded reports."""
+"""Render audited historical report snapshots as conventional Matplotlib article figures.
 
-# Figure labels are intentionally kept close to the visual layout.
-# ruff: noqa: E501
+Historical metrics are not recomputed. Explicit --infer-trajectory runs bounded
+CPU inference on the complete, preselected case19; default runs never infer,
+download or train. --trajectory redraws its saved audit arrays without inference.
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
-import math
 from pathlib import Path
+from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports"
 OUTPUT = Path(__file__).resolve().parent / "figures"
 
-NAVY = "#102A43"
-BLUE = "#247BA0"
-TEAL = "#20A39E"
-ORANGE = "#F18F01"
-RED = "#D1495B"
-PURPLE = "#6C63A8"
-INK = "#243B53"
-MUTED = "#627D98"
-GRID = "#D9E2EC"
-PALE = "#F0F4F8"
-WHITE = "#FFFFFF"
+REPORT_FILES = (
+    "corpus_manifest.json",
+    "figshare_holdout_evaluation.json",
+    "lsl_synthetic_intake_session.json",
+    "lsl_synthetic_session.json",
+    "mixed_fixed_figshare_holdout.json",
+    "mixed_vitaldb_external.json",
+    "offset_sensitivity.json",
+    "vitaldb_external_validation.json",
+)
+
+MODEL_FILES = ("brainsniffer_cnn.json", "brainsniffer_corpus_fixed.json")
 
 
-def font(size: int, bold: bool = False):
-    candidates = (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if bold
-        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+def report_value(report: dict[str, Any], *keys: str) -> Any:
+    value: Any = report
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            raise ValueError(f"missing report field: {'.'.join(keys)}")
+        value = value[key]
+    return value
+
+
+def ensure(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
+
+
+def load_reports() -> dict[str, dict[str, Any]]:
+    loaded: dict[str, dict[str, Any]] = {}
+    for name in REPORT_FILES:
+        path = REPORTS / name
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        ensure(isinstance(payload, dict), f"{name} must contain a JSON object")
+        loaded[name] = payload
+    return loaded
+
+
+def audit_reports(reports: dict[str, dict[str, Any]]) -> None:
+    """Reject inconsistent snapshots before any chart is rendered."""
+
+    evaluation_names = (
+        "corpus_manifest.json",
+        "figshare_holdout_evaluation.json",
+        "mixed_fixed_figshare_holdout.json",
+        "mixed_vitaldb_external.json",
+        "offset_sensitivity.json",
+        "vitaldb_external_validation.json",
     )
-    for candidate in candidates:
-        if Path(candidate).exists():
-            return ImageFont.truetype(candidate, size)
-    return ImageFont.load_default()
+    for name in evaluation_names:
+        ensure(reports[name].get("scope") == "research_only", f"unsafe scope in {name}")
 
+    for name in ("lsl_synthetic_intake_session.json", "lsl_synthetic_session.json"):
+        scope = report_value(reports[name], "scope")
+        ensure(scope.get("intended_use") == "research_only", f"unsafe LSL scope in {name}")
+        ensure(scope.get("clinical_decision_support") is False, f"clinical flag set in {name}")
+        ensure(scope.get("controls_anesthetic_delivery") is False, f"control flag set in {name}")
 
-def load(name: str) -> dict:
-    return json.loads((REPORTS / name).read_text(encoding="utf-8"))
+    figshare = reports["figshare_holdout_evaluation.json"]
+    mixed_figshare = reports["mixed_fixed_figshare_holdout.json"]
+    offset = reports["offset_sensitivity.json"]
+    vitaldb = reports["vitaldb_external_validation.json"]
+    mixed_vitaldb = reports["mixed_vitaldb_external.json"]
+    corpus = reports["corpus_manifest.json"]
 
+    figshare_cases = report_value(figshare, "test_cases")
+    ensure(figshare_cases == report_value(mixed_figshare, "case_ids"), "Figshare holdouts differ")
+    ensure(figshare_cases == report_value(offset, "test_cases"), "offset split differs")
+    ensure(
+        report_value(figshare, "n_test_windows") == report_value(mixed_figshare, "n_windows"),
+        "Figshare window counts differ",
+    )
+    ensure(
+        report_value(vitaldb, "case_ids") == report_value(mixed_vitaldb, "case_ids"),
+        "VitalDB holdouts differ",
+    )
+    ensure(
+        report_value(vitaldb, "n_windows") == report_value(mixed_vitaldb, "n_windows"),
+        "VitalDB window counts differ",
+    )
 
-def canvas(width: int = 1800, height: int = 980) -> tuple[Image.Image, ImageDraw.ImageDraw]:
-    image = Image.new("RGB", (width, height), WHITE)
-    return image, ImageDraw.Draw(image)
+    active_per_case = {row["case_id"]: row for row in report_value(vitaldb, "per_case")}
+    mixed_per_case = {row["case_id"]: row for row in report_value(mixed_vitaldb, "per_case")}
+    ensure(active_per_case.keys() == mixed_per_case.keys(), "VitalDB per-case IDs differ")
+    for case_id in active_per_case:
+        ensure(
+            active_per_case[case_id]["n_windows"] == mixed_per_case[case_id]["n_windows"],
+            f"VitalDB per-case grain differs for {case_id}",
+        )
 
+    frozen_ids = [case["case_id"] for case in report_value(corpus, "frozen_external_cases")]
+    ensure(set(frozen_ids) == set(report_value(vitaldb, "case_ids")), "frozen holdout IDs differ")
 
-def text(draw: ImageDraw.ImageDraw, xy: tuple[int, int], value: str, size: int, color=INK, bold=False):
-    draw.text(xy, value, fill=color, font=font(size, bold=bold))
+    preprocessing = report_value(corpus, "preprocess_config")
+    keys = (
+        "sampling_rate",
+        "window_seconds",
+        "lowcut_hz",
+        "highcut_hz",
+        "notch_hz",
+        "causal",
+        "label_offset_seconds",
+    )
+    for name in evaluation_names[1:]:
+        candidate = report_value(reports[name], "preprocess_config")
+        ensure(
+            all(candidate[key] == preprocessing[key] for key in keys),
+            f"preprocessing mismatch in {name}",
+        )
 
-
-def rounded(draw: ImageDraw.ImageDraw, box, fill, outline=None, radius=24, width=2):
-    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
-
-
-def arrow(draw: ImageDraw.ImageDraw, start, end, color=BLUE, width=8):
-    draw.line((*start, *end), fill=color, width=width)
-    angle = math.atan2(end[1] - start[1], end[0] - start[0])
-    size = 22
-    points = [
-        end,
+    bootstrap_names = (
+        "figshare_holdout_evaluation.json",
+        "mixed_fixed_figshare_holdout.json",
+        "vitaldb_external_validation.json",
+        "mixed_vitaldb_external.json",
+    )
+    settings = {
         (
-            end[0] - size * math.cos(angle - math.pi / 6),
-            end[1] - size * math.sin(angle - math.pi / 6),
-        ),
+            report_value(reports[name], "bootstrap_samples"),
+            report_value(reports[name], "bootstrap_seed"),
+        )
+        for name in bootstrap_names
+    }
+    ensure(len(settings) == 1, "bootstrap settings differ between reports")
+    ensure(offset.get("retained_model_and_weights") is True, "offset model was not retained")
+    ensure(offset.get("retained_split_by_case") is True, "offset split was not retained")
+    ensure(offset.get("retrained") is False, "offset analysis unexpectedly retrained the model")
+
+    for name, count_key, metrics_key in (
+        ("mixed_fixed_figshare_holdout.json", "n_windows", "metrics"),
+        ("vitaldb_external_validation.json", "n_windows", "metrics"),
+        ("mixed_vitaldb_external.json", "n_windows", "metrics"),
+    ):
+        expected = float(report_value(reports[name], count_key))
+        observed = float(report_value(reports[name], metrics_key, "n"))
+        ensure(expected == observed, f"metric n differs from n_windows in {name}")
+
+
+# Physical width matches the SBC text block (16 cm); no downscaling in TeX.
+plt.rcParams.update(
+    {
+        "font.family": "DejaVu Sans",
+        "font.size": 10,
+        "axes.titlesize": 10,
+        "axes.labelsize": 10,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        "legend.fontsize": 9,
+        "axes.linewidth": 0.7,
+        "lines.linewidth": 1.2,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "pdf.fonttype": 42,
+        "savefig.facecolor": "white",
+    }
+)
+WIDTH = 16 / 2.54
+COLORS = ("#0072B2", "#D55E00")
+MARKERS = ("o", "s")
+LABELS = ("Ativo", "Misto fixo")
+HOLDOUTS = (
+    "figshare_holdout_evaluation.json",
+    "mixed_fixed_figshare_holdout.json",
+    "vitaldb_external_validation.json",
+    "mixed_vitaldb_external.json",
+)
+
+
+def save_figure(fig, name, sources):
+    source_text = "; ".join(sources)
+    fig.savefig(
+        OUTPUT / f"{name}.png", dpi=300, metadata={"Sources": source_text, "Scope": "research_only"}
+    )
+    fig.savefig(
+        OUTPUT / f"{name}.pdf",
+        metadata={
+            "Subject": source_text,
+            "CreationDate": None,
+            "ModDate": None,
+            "Creator": "BrainSniffer / Matplotlib",
+        },
+    )
+    plt.close(fig)
+
+
+def metrics(report):
+    return report.get("recomputed_test_metrics", report.get("metrics"))
+
+
+def point(ax, x, y, model, **kwargs):
+    return ax.plot(
+        x,
+        y,
+        marker=MARKERS[model],
+        color=COLORS[model],
+        markerfacecolor=COLORS[model] if model == 0 else "white",
+        markersize=5,
+        linestyle="none",
+        **kwargs,
+    )
+
+
+def figure_comparison(reports):
+    fig = plt.figure(figsize=(WIDTH, 4.4), layout="constrained")
+    grid = fig.add_gridspec(2, 2, width_ratios=(1, 1.35))
+    for i, (metric, title, limits) in enumerate(
         (
-            end[0] - size * math.cos(angle + math.pi / 6),
-            end[1] - size * math.sin(angle + math.pi / 6),
-        ),
-    ]
-    draw.polygon(points, fill=color)
-
-
-def figure_pipeline() -> None:
-    image, draw = canvas()
-    text(draw, (90, 60), "BrainSniffer: pipeline de pesquisa", 42, NAVY, True)
-    text(draw, (90, 115), "Separacao explicita entre sinal, modelo, auditoria e interpretacao", 24, MUTED)
-    boxes = [
-        ("1", "Dados publicos", "Figshare / VitalDB\nmanifesto e checksum", BLUE),
-        ("2", "Pre-processamento", "128 Hz - 5 s\ncausal - SQI", TEAL),
-        ("3", "CNN 1-D", "regressão 0–100\nSmooth L1", ORANGE),
-        ("4", "Auditoria", "timestamps - lacunas\nABSTAIN", RED),
-        ("5", "Saida", "BIS estimado\nestagio de pesquisa", NAVY),
-    ]
-    y = 300
-    w, h = 285, 240
-    gap = 55
-    x0 = 75
-    for i, (number, title, body, color) in enumerate(boxes):
-        x = x0 + i * (w + gap)
-        rounded(draw, (x, y, x + w, y + h), PALE, color, radius=28, width=5)
-        draw.ellipse((x + 22, y + 22, x + 78, y + 78), fill=color)
-        text(draw, (x + 41, y + 29), number, 28, WHITE, True)
-        text(draw, (x + 24, y + 105), title, 28, color, True)
-        for line_i, line in enumerate(body.split("\n")):
-            text(draw, (x + 24, y + 153 + line_i * 34), line, 22, INK)
-        if i < len(boxes) - 1:
-            arrow(draw, (x + w + 8, y + h // 2), (x + w + gap - 12, y + h // 2), color=BLUE, width=7)
-    rounded(draw, (200, 690, 1600, 850), "#FFF7E6", ORANGE, radius=22, width=3)
-    text(draw, (240, 730), "Regra de seguranca do prototipo", 25, ORANGE, True)
-    text(draw, (240, 775), "Sinal invalido ou silencio > 2 s  ->  estado stale/ABSTAIN  ->  filtro causal reiniciado", 25, INK)
-    image.save(OUTPUT / "pipeline.png", optimize=True)
-
-
-def axis(draw, left, top, right, bottom, y_ticks, y_max):
-    draw.line((left, top, left, bottom), fill=INK, width=3)
-    draw.line((left, bottom, right, bottom), fill=INK, width=3)
-    for value in y_ticks:
-        y = bottom - (value / y_max) * (bottom - top)
-        draw.line((left, y, right, y), fill=GRID, width=2)
-        text(draw, (left - 58, y - 14), f"{value:g}", 20, MUTED)
-
-
-def bar_chart(draw, area, title, labels, values, colors, y_max, value_format="{:.2f}"):
-    left, top, right, bottom = area
-    text(draw, (left, top - 58), title, 27, NAVY, True)
-    axis(draw, left + 70, top, right, bottom, [0, y_max / 2, y_max], y_max)
-    chart_left = left + 115
-    slot = (right - chart_left) / len(labels)
-    for i, (label, value, color) in enumerate(zip(labels, values, colors)):
-        x = chart_left + i * slot + slot * 0.18
-        width = slot * 0.64
-        y = bottom - (value / y_max) * (bottom - top)
-        draw.rounded_rectangle((x, y, x + width, bottom), radius=10, fill=color)
-        text(draw, (x + width / 2 - 28, y - 38), value_format.format(value), 20, color, True)
-        text(draw, (x + width / 2 - 52, bottom + 18), label, 20, INK)
-
-
-def grouped_bar_chart(draw, area, title, labels, series, y_max, value_format="{:.2f}"):
-    left, top, right, bottom = area
-    text(draw, (left, top - 58), title, 27, NAVY, True)
-    axis(draw, left + 70, top, right, bottom, [0, y_max / 2, y_max], y_max)
-    chart_left = left + 115
-    slot = (right - chart_left) / len(labels)
-    group_width = slot * 0.74
-    bar_width = group_width / len(series) * 0.78
-    for label_index, label in enumerate(labels):
-        group_left = chart_left + label_index * slot + (slot - group_width) / 2
-        for series_index, (_, values, color) in enumerate(series):
-            value = float(values[label_index])
-            x = group_left + series_index * group_width / len(series) + (group_width / len(series) - bar_width) / 2
-            y = bottom - (value / y_max) * (bottom - top)
-            draw.rounded_rectangle((x, y, x + bar_width, bottom), radius=8, fill=color)
-            text(draw, (x + bar_width / 2 - 22, y - 34), value_format.format(value), 17, color, True)
-        text(draw, (chart_left + label_index * slot + slot / 2 - 64, bottom + 18), label, 19, INK)
-    legend_x = chart_left
-    for name, _, color in series:
-        draw.rectangle((legend_x, top - 35, legend_x + 20, top - 15), fill=color)
-        text(draw, (legend_x + 28, top - 39), name, 18, INK)
-        legend_x += 190
-
-
-def figure_comparison() -> None:
-    internal = load("figshare_holdout_evaluation.json")["recomputed_test_metrics"]
-    external = load("vitaldb_external_validation.json")["metrics"]
-    mixed_internal = load("mixed_fixed_figshare_holdout.json")["metrics"]
-    mixed_external = load("mixed_vitaldb_external.json")["metrics"]
-    image, draw = canvas()
-    text(draw, (90, 60), "Checkpoint ativo versus candidato misto", 39, NAVY, True)
-    text(draw, (90, 115), "Holdouts fixos: Figshare (5 casos) e VitalDB (15 casos); menor erro e melhor.", 23, MUTED)
-    grouped_bar_chart(
-        draw,
-        (80, 245, 850, 760),
-        "Erro absoluto médio (MAE)",
-        ["Figshare", "VitalDB"],
-        [("Ativo", [internal["mae"], external["mae"]], NAVY), ("Misto", [mixed_internal["mae"], mixed_external["mae"]], TEAL)],
-        16,
+            ("mae", "(a) MAE agregado (pontos BIS)", (0, 16)),
+            ("pearson_r", "(b) Pearson r agregado", (-1, 1)),
+        )
+    ):
+        ax = fig.add_subplot(grid[i, 0])
+        for source in range(2):
+            vals = [metrics(reports[HOLDOUTS[2 * source + m]])[metric] for m in range(2)]
+            ax.plot(vals, [source, source], color=".55", linewidth=0.8)
+            for model, val in enumerate(vals):
+                point(ax, val, source, model)
+        ax.set(
+            yticks=[0, 1],
+            yticklabels=["Figshare", "VitalDB"],
+            xlim=limits,
+            ylim=(1.5, -0.5),
+            title=title,
+        )
+        ax.grid(axis="x", color=".9", linewidth=0.5)
+    ax = fig.add_subplot(grid[:, 1])
+    active = {r["case_id"]: r for r in reports[HOLDOUTS[2]]["per_case"]}
+    mixed = {r["case_id"]: r for r in reports[HOLDOUTS[3]]["per_case"]}
+    ids = sorted(active, key=lambda k: mixed[k]["mae"] - active[k]["mae"])
+    for y, key in enumerate(ids):
+        vals = [active[key]["mae"], mixed[key]["mae"]]
+        ax.plot(vals, [y, y], color=".55", linewidth=0.8)
+        for model, val in enumerate(vals):
+            point(ax, val, y, model, label=LABELS[model] if y == 0 else None)
+    ax.set(
+        yticks=range(len(ids)),
+        yticklabels=[k.removeprefix("vitaldb_") for k in ids],
+        ylim=(len(ids) - 0.4, -0.6),
+        xlim=(0, 24),
+        xticks=[0, 6, 12, 18, 24],
+        xlabel="MAE (pontos BIS)",
+        title="(c) VitalDB: 15 casos pareados",
     )
-    grouped_bar_chart(
-        draw,
-        (940, 245, 1710, 760),
-        "Correlação de Pearson",
-        ["Figshare", "VitalDB"],
-        [("Ativo", [internal["pearson_r"], external["pearson_r"]], NAVY), ("Misto", [mixed_internal["pearson_r"], mixed_external["pearson_r"]], PURPLE)],
-        1,
-        value_format="{:.3f}",
-    )
-    rounded(draw, (270, 820, 1530, 905), "#F8FAFC", GRID, radius=18, width=2)
-    text(draw, (310, 847), "Leitura: melhora exploratoria; o candidato ainda nao foi promovido ao uso ativo.", 23, INK)
-    image.save(OUTPUT / "comparison.png", optimize=True)
+    ax.grid(axis="x", color=".9", linewidth=0.5)
+    ax.legend(loc="lower right", frameon=False)
+    save_figure(fig, "comparison", [f"reports/{n}" for n in HOLDOUTS])
 
 
-def figure_offset() -> None:
-    report = load("offset_sensitivity.json")
-    points = report["results"]
-    offsets = [p["offset_seconds"] for p in points]
-    maes = [p["metrics"]["mae"] for p in points]
-    pears = [p["metrics"]["pearson_r"] for p in points]
-    image, draw = canvas()
-    text(draw, (90, 60), "Sensibilidade ao alinhamento do rotulo BIS", 40, NAVY, True)
-    text(draw, (90, 115), "O checkpoint e a particao permanecem congelados; apenas o offset do rotulo varia.", 23, MUTED)
-
-    def line_panel(top, bottom, values, ymin, ymax, title, color):
-        left, right = 150, 1650
-        text(draw, (150, top - 52), title, 27, NAVY, True)
-        draw.line((left, top, left, bottom), fill=INK, width=3)
-        draw.line((left, bottom, right, bottom), fill=INK, width=3)
-        for tick in [ymin, (ymin + ymax) / 2, ymax]:
-            y = bottom - ((tick - ymin) / (ymax - ymin)) * (bottom - top)
-            draw.line((left, y, right, y), fill=GRID, width=2)
-            text(draw, (90, y - 13), f"{tick:.2f}" if ymax < 2 else f"{tick:g}", 20, MUTED)
-        for value in [-20, -10, 0, 10, 20]:
-            x = left + ((value + 20) / 40) * (right - left)
-            draw.line((x, top, x, bottom), fill=GRID, width=2)
-            text(draw, (x - 24, bottom + 15), f"{value:+g}", 20, INK)
-        points_xy = [
-            (
-                left + ((xv + 20) / 40) * (right - left),
-                bottom - ((yv - ymin) / (ymax - ymin)) * (bottom - top),
+def figure_bootstrap(reports):
+    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.8), layout="constrained")
+    labels = ["Figshare · ativo", "Figshare · misto", "VitalDB · ativo", "VitalDB · misto"]
+    for ax, metric, title, limits in zip(
+        axes,
+        ("pearson_r", "mae"),
+        ("(a) Pearson r", "(b) MAE (pontos BIS)"),
+        ((-1, 1), (0, 16)),
+        strict=True,
+    ):
+        for y, name in enumerate(HOLDOUTS):
+            report = reports[name]
+            ci = report["case_bootstrap"][metric]
+            lo, hi = ci["lower_95"], ci["upper_95"]
+            observed = metrics(report)[metric]
+            ensure(limits[0] <= lo <= hi <= limits[1], f"interval outside axis: {name}")
+            ax.hlines(
+                y, lo, hi, color=COLORS[y % 2], linestyles="solid" if y % 2 == 0 else "dashed"
             )
-            for xv, yv in zip(offsets, values)
-        ]
-        draw.line(points_xy, fill=color, width=7)
-        for point in points_xy:
-            draw.ellipse((point[0] - 9, point[1] - 9, point[0] + 9, point[1] + 9), fill=color, outline=WHITE, width=3)
-
-    line_panel(250, 455, maes, 6, 12, "MAE (menor e melhor)", BLUE)
-    line_panel(570, 775, pears, 0.7, 0.82, "Pearson (maior e melhor)", TEAL)
-    rounded(draw, (340, 790, 1460, 900), "#FFF7E6", ORANGE, radius=18, width=2)
-    text(draw, (380, 815), "Interpretacao: tendencia pos-hoc; nao escolher o offset em pacientes.", 24, INK)
-    image.save(OUTPUT / "offset_sensitivity.png", optimize=True)
-
-
-def interval_bar(draw, y, label, mean, lower, upper, min_value, max_value, color):
-    left, right = 470, 1600
-    span = max_value - min_value
-    def project(value):
-        return left + ((value - min_value) / span) * (right - left)
-    x = project(mean)
-    lo = project(max(min_value, lower))
-    hi = project(min(max_value, upper))
-    text(draw, (100, y - 15), label, 25, INK, True)
-    draw.line((lo, y, hi, y), fill=color, width=9)
-    draw.ellipse((x - 12, y - 12, x + 12, y + 12), fill=color, outline=WHITE, width=3)
-    text(draw, (1640, y - 15), f"{mean:.3f}", 23, color, True)
+            ax.plot([lo, hi], [y, y], "|", color=COLORS[y % 2], markersize=6)
+            point(ax, observed, y, y % 2)
+        ax.set(yticks=range(4), yticklabels=labels, ylim=(3.6, -0.6), xlim=limits, title=title)
+        ax.grid(axis="x", color=".9", linewidth=0.5)
+        if metric == "pearson_r":
+            ax.set_xticks([-1, -0.5, 0, 0.5, 1])
+            ax.axvline(0, color=".5", linewidth=0.7)
+        else:
+            ax.set_xticks([0, 4, 8, 12, 16])
+    save_figure(fig, "bootstrap_intervals", [f"reports/{n}" for n in HOLDOUTS])
 
 
-def figure_bootstrap() -> None:
-    internal = load("figshare_holdout_evaluation.json")["case_bootstrap"]
-    external = load("vitaldb_external_validation.json")["case_bootstrap"]
-    image, draw = canvas()
-    text(draw, (90, 60), "Incerteza exploratoria por caso", 40, NAVY, True)
-    text(draw, (90, 115), "Ponto = media reamostrada; linha = intervalo de 95% das cirurgias inteiras.", 23, MUTED)
-    text(draw, (100, 215), "Pearson", 29, NAVY, True)
-    for y, label, source, color in [
-        (300, "Figshare · 5 casos", internal["pearson_r"], BLUE),
-        (430, "VitalDB · 15 casos", external["pearson_r"], RED),
-    ]:
-        interval_bar(draw, y, label, source["mean"], source["lower_95"], source["upper_95"], -0.2, 1.0, color)
-    text(draw, (100, 610), "MAE (escala 0-16)", 29, NAVY, True)
-    for y, label, source, color in [
-        (695, "Figshare · 5 casos", internal["mae"], BLUE),
-        (825, "VitalDB · 15 casos", external["mae"], RED),
-    ]:
-        interval_bar(draw, y, label, source["mean"], source["lower_95"], source["upper_95"], 0.0, 16.0, color)
-    image.save(OUTPUT / "bootstrap_intervals.png", optimize=True)
+def figure_offset(reports):
+    rows = reports["offset_sensitivity.json"]["results"]
+    offsets = [r["offset_seconds"] for r in rows]
+    fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 2.4), layout="constrained")
+    for i, (ax, metric, title, limits) in enumerate(
+        zip(
+            axes,
+            ("mae", "pearson_r"),
+            ("(a) MAE (pontos BIS)", "(b) Pearson r"),
+            ((6.7, 7.3), (0.76, 0.805)),
+            strict=True,
+        )
+    ):
+        ax.plot(
+            offsets,
+            [r["metrics"][metric] for r in rows],
+            marker=MARKERS[i],
+            color=COLORS[i],
+            linestyle="-" if i == 0 else "--",
+            markerfacecolor=COLORS[i] if i == 0 else "white",
+            markersize=4,
+        )
+        ax.axvline(0, color=".5", linewidth=0.7, linestyle=":")
+        ax.set(
+            xlim=(-22, 22),
+            ylim=limits,
+            xticks=[-20, -10, 0, 10, 20],
+            xlabel="Offset do rótulo BIS (s)",
+            title=title,
+        )
+        ax.grid(axis="y", color=".9", linewidth=0.5)
+    save_figure(fig, "offset_sensitivity", ["reports/offset_sensitivity.json"])
 
 
-def main() -> None:
+def figure_pipeline(reports):
+    corpus = reports["corpus_manifest.json"]
+    models = [json.loads((ROOT / "models" / n).read_text()) for n in MODEL_FILES]
+    active, fixed = models
+    for model, report in zip(models, (reports[HOLDOUTS[0]], reports[HOLDOUTS[1]]), strict=True):
+        ensure(model["checkpoint_sha256"] == report["checkpoint_sha256"], "checkpoint mismatch")
+    splits = [
+        [len(m["split"][k]) for k in ("train_cases", "validation_cases", "test_cases")]
+        for m in models
+    ]
+    ensure(splits == [[13, 5, 5], [16, 6, 6]], "historical split changed")
+    ensure(fixed["dataset_summary"]["n_groups"] == 28, "fixed group count changed")
+    ensure(corpus["summary"]["eligible_training_cases"] == 33, "eligible pool changed")
+    ensure(corpus["summary"]["eligible_training_windows"] == 55471, "pool windows changed")
+    ensure(active["dataset_summary"]["n_cases"] == 23, "active case count changed")
+    ensure(len(reports[HOLDOUTS[0]]["test_cases"]) == 5, "Figshare holdout count changed")
+    ensure(len(reports[HOLDOUTS[2]]["case_ids"]) == 15, "VitalDB holdout count changed")
+    fixed_groups = set().union(*(set(v) for v in fixed["split"].values()))
+    ensure(len(fixed_groups) == 28, "fixed splits overlap")
+    ensure(sum(g.startswith("figshare:") for g in fixed_groups) == 18, "fixed sources changed")
+    ensure(sum(g.startswith("vitaldb:") for g in fixed_groups) == 10, "fixed sources changed")
+    ensure(
+        sum(g.startswith("figshare:") for g in fixed["split"]["train_cases"]) == 12,
+        "fixed Figshare training count changed",
+    )
+    ensure(
+        sum(g.startswith("vitaldb:") for g in fixed["split"]["train_cases"]) == 4,
+        "fixed VitalDB training count changed",
+    )
+    ensure(
+        not fixed_groups.intersection(
+            f"figshare:case:{k}" for k in reports[HOLDOUTS[0]]["test_cases"]
+        ),
+        "historical Figshare holdout entered fixed development",
+    )
+    fig, ax = plt.subplots(figsize=(WIDTH, 3.6))
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+    ax.set(xlim=(0, 1), ylim=(0, 1))
+    ax.axis("off")
+
+    def box(x, y, text, width=0.43, height=0.17):
+        ax.add_patch(
+            Rectangle(
+                (x - width / 2, y - height / 2),
+                width,
+                height,
+                facecolor="white",
+                edgecolor=".2",
+                linewidth=0.7,
+            )
+        )
+        ax.text(x, y, text, ha="center", va="center", fontsize=9, linespacing=1.3)
+
+    def arrow(start, end):
+        ax.annotate(
+            "", xy=end, xytext=start, arrowprops={"arrowstyle": "->", "color": ".25", "lw": 0.8}
+        )
+
+    box(
+        0.5,
+        0.90,
+        "Arquivos retrospectivos: 33 casos / 55.471 janelas\n23 Figshare + 10 VitalDB elegíveis",
+        width=0.65,
+        height=0.15,
+    )
+    box(0.25, 0.65, "Ativo: 23 casos Figshare\nTreino / validação / teste: 13 / 5 / 5")
+    box(0.75, 0.65, "Misto fixo: 28 grupos (18 + 10)\nTreino / validação / teste: 16 / 6 / 6")
+    arrow((0.36, 0.825), (0.25, 0.735))
+    arrow((0.64, 0.825), (0.75, 0.735))
+    box(0.25, 0.39, "CNN ativa\nAjuste: 13 Figshare", height=0.15)
+    box(0.75, 0.39, "CNN mista fixa\nAjuste: 12 Figshare + 4 VitalDB", height=0.15)
+    arrow((0.25, 0.565), (0.25, 0.465))
+    arrow((0.75, 0.565), (0.75, 0.465))
+    box(
+        0.5,
+        0.12,
+        "Avaliação dos dois checkpoints (sem ajuste)\n"
+        "5 casos Figshare históricos + 15 VitalDB congelados",
+        width=0.86,
+        height=0.17,
+    )
+    arrow((0.25, 0.315), (0.35, 0.205))
+    arrow((0.75, 0.315), (0.65, 0.205))
+    save_figure(
+        fig, "pipeline", ["reports/corpus_manifest.json"] + [f"models/{n}" for n in MODEL_FILES]
+    )
+
+
+TRAJECTORY = ROOT / "tmp/pdfs/trajectory-audit"
+
+
+def infer_trajectory():
+    """No case/segment search: case19 fixed before observing predictions."""
+    from dataclasses import asdict
+
+    import numpy as np
+    import torch
+
+    from brainsniffer.config import DEFAULT_MIN_SIGNAL_QUALITY
+    from brainsniffer.data.mat_reader import load_case
+    from brainsniffer.data.preprocess import make_windows
+    from brainsniffer.pipeline.training import load_checkpoint, predict_model, sha256_file
+
+    torch.set_num_threads(2)
+    torch.use_deterministic_algorithms(True)
+    source = ROOT / "data/raw/case19.mat"
+    checkpoint = ROOT / "models/brainsniffer_cnn.pt"
+    model, config, payload = load_checkpoint(checkpoint, device="cpu")
+    ensure("case19" in payload["split"]["test_cases"], "case19 is not holdout")
+    expected = next(r for r in payload["input_files"] if Path(r["path"]).name == source.name)
+    ensure(sha256_file(source) == expected["sha256"], "case19 input hash mismatch")
+    case = load_case(source)
+    ensure(config.label_offset_seconds == 0, "illustration requires unchanged zero offset")
+    windows = make_windows(case, config, min_quality=DEFAULT_MIN_SIGNAL_QUALITY)
+    ensure(len(windows.bis) > 0, "no accepted windows")
+    prediction = predict_model(model, windows.signals, device="cpu", batch_size=64)
+    # Full reference grid, including invalid labels and windows rejected by quality.
+    # NaNs remain NaNs: never connect across omitted windows by compressing time.
+    times = np.arange(case.bis.size) * case.label_interval_seconds
+    reference = case.bis.astype(float).copy()
+    reference[~np.isfinite(reference) | (reference < 0) | (reference > 100)] = np.nan
+    raw = np.full(times.shape, np.nan)
+    indices = np.rint((windows.start_seconds + config.label_offset_seconds)
+                      / case.label_interval_seconds).astype(int)
+    raw[indices] = prediction
+    ensure(np.allclose(reference[indices], windows.bis), "target alignment mismatch")
+    error = prediction.astype(float) - windows.bis
+    TRAJECTORY.mkdir(parents=True, exist_ok=True)
+    np.savez(TRAJECTORY / "case19.npz", reference_seconds=times, reference_bis=reference,
+             cnn_raw_bis=raw, accepted_start_seconds=windows.start_seconds,
+             available_after_seconds=windows.start_seconds + config.window_seconds,
+             quality=windows.quality)
+    np.savetxt(TRAJECTORY / "case19.csv", np.column_stack((times, reference, raw)),
+               delimiter=",", header="reference_seconds,reference_bis,cnn_raw_bis", comments="")
+    audit = {
+        "scope": "research_only", "case": "case19", "selection":
+        "Fixed a priori for consistency with the coordinator's existing smoke demo; "
+        "complete recording, no performance-based case or segment search.",
+        "source_sha256": sha256_file(source), "checkpoint_sha256": sha256_file(checkpoint),
+        "preprocess_config": asdict(config), "min_quality": DEFAULT_MIN_SIGNAL_QUALITY,
+        "device": "cpu", "threads": 2, "batch_size": 64, "torch": str(torch.__version__),
+        "numpy": np.__version__, "n_windows": len(prediction),
+        "duration_seconds": case.duration_seconds, "reference_points": len(times),
+        "missing_reference_points": int(np.isnan(reference).sum()),
+        "missing_prediction_points": int(np.isnan(raw).sum()),
+        "complete_eeg_windows": (case.eeg.size - config.window_samples)
+        // config.window_samples + 1,
+        "reference_without_complete_eeg_window": int(np.sum(
+            times + config.window_seconds > case.duration_seconds)),
+        "rejected_quality_windows": int(np.sum(np.isnan(raw[
+            times + config.window_seconds <= case.duration_seconds]))),
+        "raw_eeg_nonfinite": int((~np.isfinite(case.eeg)).sum()),
+        "mae": float(np.abs(error).mean()), "rmse": float(np.sqrt(np.mean(error**2))),
+        "bias": float(error.mean()), "pearson_r": float(np.corrcoef(windows.bis, prediction)[0, 1]),
+        "alignment": "Offline target=start+offset rounded to BIS grid; availability=start+5s "
+        "plus processing, not measured replay latency. No shifting, no EWMA.",
+        "source_code_sha256": {str(p.relative_to(ROOT)): sha256_file(p) for p in (
+            ROOT / "src/brainsniffer/data/preprocess.py",
+            ROOT / "src/brainsniffer/pipeline/training.py",
+            ROOT / "src/brainsniffer/data/mat_reader.py")},
+    }
+    (TRAJECTORY / "case19.json").write_text(json.dumps(audit, indent=2) + "\n")
+    print(json.dumps(audit, indent=2))
+
+
+def figure_trajectory():
+    import numpy as np
+
+    with np.load(TRAJECTORY / "case19.npz", allow_pickle=False) as saved:
+        time = saved["reference_seconds"] / 60
+        reference, raw = saved["reference_bis"], saved["cnn_raw_bis"]
+    audit = json.loads((TRAJECTORY / "case19.json").read_text())
+    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.5), sharex=True,
+                             gridspec_kw={"height_ratios": [2, 1]}, layout="constrained")
+    axes[0].plot(time, reference, color=COLORS[0], label="BIS referência", linewidth=0.9)
+    axes[0].plot(time, raw, color=COLORS[1], label="CNN ativa bruta", linewidth=0.8)
+    axes[0].set(ylabel="Índice (pontos BIS)", ylim=(0, 100),
+                title="Figshare case19 · gravação completa · comparação offline")
+    axes[0].legend(frameon=False, loc="upper right")
+    axes[1].plot(time, raw - reference, color=COLORS[1], linewidth=0.7)
+    axes[1].axhline(0, color=".4", linewidth=0.7)
+    axes[1].set(ylabel="Erro (pontos BIS)", xlabel="Tempo da referência desde o início (min)")
+    for ax in axes:
+        ax.set_xlim(0, max(audit["duration_seconds"] / 60, time[-1]))
+        ax.grid(color=".9", linewidth=0.5)
+    save_figure(fig, "bis_trajectory", ["data/raw/case19.mat", "models/brainsniffer_cnn.pt",
+                                      "tmp/pdfs/trajectory-audit/case19.json"])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--infer-trajectory", action="store_true",
+                        help="CPU inference on full preselected case19; no training/download")
+    parser.add_argument("--trajectory", action="store_true", help="plot existing trajectory audit")
+    args = parser.parse_args()
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    figure_pipeline()
-    figure_comparison()
-    figure_offset()
-    figure_bootstrap()
-    print(f"generated {len(list(OUTPUT.glob('*.png')))} figures in {OUTPUT}")
+    reports = load_reports()
+    audit_reports(reports)
+    figure_pipeline(reports)
+    figure_comparison(reports)
+    figure_offset(reports)
+    figure_bootstrap(reports)
+    if args.infer_trajectory:
+        infer_trajectory()
+    if args.infer_trajectory or args.trajectory:
+        figure_trajectory()
+    print(f"audited {len(reports)} report snapshots; generated historical figures")
 
 
 if __name__ == "__main__":

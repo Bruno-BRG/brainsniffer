@@ -14,7 +14,8 @@ recomenda dose, não controla bomba e não deve orientar uma cirurgia.
 
 - Reproduzir experimentos com o dataset público EEG and BIS.
 - Comparar uma CNN 1-D compacta com baselines espectrais.
-- Exercitar inferência causal em replay e em streams de pesquisa LSL/JSON.
+- Exercitar inferência causal em replay retrospectivo; JSONL local é opcional
+  para testes de chunks, não entrega de aquisição física. LSL foi removido.
 - Expor qualidade do sinal e abster-se quando a janela não é confiável pela
   heurística atual.
 
@@ -28,7 +29,7 @@ recomenda dose, não controla bomba e não deve orientar uma cirurgia.
 
 ## Dados e rótulo
 
-O treinamento demonstrativo usa 24 arquivos anônimos do dataset [EEG and BIS raw
+O acervo demonstrativo contém 24 arquivos anônimos do dataset [EEG and BIS raw
 data](https://doi.org/10.6084/m9.figshare.5589841.v1), publicado no Figshare sob
 CC BY 4.0. O corpus é descrito com EEG frontal a 128 Hz e BIS a cada 5 s.
 O `case24` é baixado, mas fica fora do checkpoint padrão porque a auditoria
@@ -37,6 +38,10 @@ encontra escala bruta incompatível (0–4095) sem metadado seguro para convers�
 O alvo é o BIS publicado, um índice processado de monitor. Ele é uma referência
 operacional e não uma verdade clínica universal; atrasos, artefatos, EMG, drogas,
 estímulo cirúrgico e contexto do paciente podem alterar sua interpretação.
+
+A separação Figshare é por caso/arquivo; `subject_id` não está disponível no
+manifesto e independência por pessoa não está comprovada. No VitalDB, o
+agrupamento usa `subject_id` quando disponível, com fallback por caso da fonte.
 
 ## Modelo e pré-processamento
 
@@ -49,16 +54,26 @@ estímulo cirúrgico e contexto do paciente podem alterar sua interpretação.
 - Arquitetura experimental disponível em `RobustConv1DDepthEstimator`: blocos
   residuais depthwise-separable, GroupNorm independente do tamanho do batch,
   dilatação temporal, pooling médio/máximo e MC Dropout para incerteza
-  exploratória. Ela é opt-in e não substitui o checkpoint acima.
-- O loop de treino registra split/tamanho, métricas por época, taxa de
-  aprendizado e ambiente; inclui early stopping, `ReduceLROnPlateau`, clipping
-  de gradiente, seed determinística e mixed precision somente quando há CUDA.
+  exploratória. É uma API experimental não integrada à CLI de treino/inferência;
+  não substitui o checkpoint acima nem oferece incerteza validada ou calibrada.
+- A receita histórica persistida registra dez épocas, seed 42, batch 128,
+  learning rate 0,001 e weight decay 0,0001. Recursos posteriores do loop
+  (early stopping, scheduler, clipping de gradiente ou mixed precision) não
+  devem ser atribuídos ao treino histórico apenas por existirem no código atual;
+  os JSON históricos não comprovam sua utilização.
 - Suavização: EWMA somente na apresentação em fluxo; o valor bruto permanece
   disponível.
 - Abstenção: qualidade heurística abaixo de 0,20 produz `stage="abstain"` e não
-  mantém um BIS antigo visível.
+  mantém um BIS antigo visível. SQI é uma heurística de sinal, não probabilidade
+  de acerto, confiança clínica ou calibração da incerteza.
 
-## Avaliação reproduzível atual
+Com `label_offset_seconds=0`, o alvo offline corresponde ao início da janela;
+a emissão online só ocorre ao final de sua aquisição (5 s). Filtros causais não
+eliminam essa diferença temporal nem o atraso do próprio monitor BIS. A imputação
+linear offline pode usar amostras posteriores à lacuna, portanto os resultados
+offline não demonstram equivalência causal ponta a ponta com o stream.
+
+## Resultados históricos do artefato congelado
 
 O checkpoint demonstrativo foi treinado com seed 42, dez épocas e separação por
 caso: 13 casos em treino, 5 em validação e 5 em teste. Foram usadas 31.055
@@ -79,7 +94,7 @@ holdout estimou Pearson médio de 0,789 (95%: 0,703–0,881) e MAE médio de 7,1
 intervalos clínicos, validação externa, calibração, estudo prospectivo,
 comparação multicêntrica ou evidência de segurança.
 
-Uma avaliação exploratória sem retreino nos 15 casos VitalDB compatíveis
+Uma avaliação cruzada de dataset exploratória, sem retreino, nos 15 casos VitalDB compatíveis
 (1–10, 12–14, 16 e 17) teve MAE 12,43, Pearson 0,024 e macro-F1 0,398 em 38.730
 janelas. A expansão ocorreu depois do primeiro piloto 1–5, portanto não é um
 resultado pré-registrado. A variação por caso foi grande; isso é compatível com
@@ -104,15 +119,23 @@ estimou MAE 12,52 [11,05–14,45] e Pearson 0,023 [−0,126–0,193] como interv
 exploratórios de 95%. Quinze casos continuam insuficientes para uma conclusão
 clínica ou uma validação externa definitiva.
 
-O primeiro candidato do corpus misto foi treinado com 23 casos Figshare e 10
-casos VitalDB elegíveis, excluindo do ajuste os cinco casos do holdout Figshare
-histórico e mantendo os 15 VitalDB externos congelados. No holdout Figshare fixo,
-obteve MAE 6,69 e Pearson 0,818; no VitalDB externo, MAE 8,60 e Pearson 0,688.
-Esses resultados sugerem ganho de generalização de domínio, mas o artefato é
-experimental e não foi promovido automaticamente ao checkpoint ativo. O protocolo
+O pool elegível misto contém 23 Figshare + 10 VitalDB. O candidato `fixed`
+exclui os cinco casos do holdout Figshare histórico: seu desenvolvimento contém
+18 Figshare + 10 VitalDB = 28 casos/grupos, divididos em 16/6/6 para
+treino/validação/teste interno; somente 12 Figshare + 4 VitalDB entram no ajuste
+dos pesos. No holdout Figshare fixo, obteve MAE 6,69 e Pearson 0,818; no holdout
+histórico VitalDB, MAE 8,60 e Pearson 0,688. Estes 15 casos não entram no ajuste,
+mas já foram reutilizados para comparação após exposição ao domínio VitalDB;
+não constituem validação externa confirmatória. A melhora sugere adaptação ao
+domínio observado, não transporte comprovado a outra fonte. O candidato não
+foi promovido ao checkpoint ativo. O protocolo
 completo, gates e hashes estão em [`docs/mixed_corpus.md`](mixed_corpus.md).
 
-## Riscos e validação necessária
+## Riscos e validação necessária fora do TCC
+
+O TCC termina na análise de arquivos existentes e replay, sem etapa de hardware
+ou estudo prospectivo. As condições abaixo limitam qualquer projeto separado;
+não são um plano de execução nem promessa de integração desta entrega.
 
 Antes de qualquer contato com pacientes, o laboratório precisa confirmar taxa,
 unidade em microvolt, faixa nominal/saturação, processamento/ganho, referência,
@@ -122,11 +145,11 @@ alvo. A ficha mínima pode ser verificada sem EEG com
 equivalente é `--require-intake`. Isso só libera a bancada técnica. Também precisa fazer revisão por anestesiologista, ética, proteção de dados,
 análise de riscos, validação externa e avaliação regulatória aplicável.
 
-O próximo experimento deve incluir um segundo centro/aparelho, referência clínica
+Um eventual projeto independente precisaria incluir um segundo centro/aparelho, referência clínica
 complementar ao BIS, alinhamento do atraso do monitor, SQI anotado, desempenho por
 paciente/fármaco/qualidade e uma política de abstenção calibrada.
-O plano de execução por etapas, incluindo bancada, validação externa travada e
-modo sombra, está em [`docs/prospective_protocol.md`](prospective_protocol.md) e
+O registro histórico da proposta por etapas, incluindo bancada, validação externa
+travada e modo sombra (fora do escopo definitivo), está em [`docs/_archive/prospective_protocol.md`](_archive/prospective_protocol.md) e
 segue as referências GMLP, DECIDE-AI e TRIPOD+AI.
 
 ## Artefatos e reprodução
@@ -152,27 +175,37 @@ segue as referências GMLP, DECIDE-AI e TRIPOD+AI.
 - Ledger de fontes, hipóteses e limites: `docs/source_ledger.md`.
 - Artigo técnico: `docs/article.md`.
 - Roteiro falado: `docs/talk_script.md`.
-- Contrato de aquisição: `docs/live_acquisition.md`.
-- Protocolo de avanço e gates: `docs/prospective_protocol.md`.
+- Contrato JSONL local opcional e histórico LSL: `docs/_archive/live_acquisition.md`.
+- Proposta histórica fora do TCC: `docs/_archive/prospective_protocol.md`.
 
-Reprodução mínima:
+### Reprodução da avaliação, sem substituir o artefato
+
+Exemplo proposto, não executado nesta revisão documental; requer ambiente,
+arquivos de entrada e par `.pt`/`.json` compatíveis. Grave a nova avaliação em
+outro caminho, sem sobrescrever a evidência histórica:
 
 ```bash
-uv sync --extra dev
-uv run brainsniffer download-data
-uv run brainsniffer train --epochs 10 --min-quality 0.2 \
-  --checkpoint models/brainsniffer_cnn.pt
 uv run brainsniffer evaluate --checkpoint models/brainsniffer_cnn.pt \
-  --report reports/figshare_holdout_evaluation.json \
+  --report /tmp/brainsniffer_figshare_recheck.json \
   --bootstrap-samples 1000 --bootstrap-seed 42
-uv run pytest -q
 ```
+
+### Receita de treino histórico versus código atual
+
+Os campos `training_config`, `preprocess_config`, `split`, `history` e
+`environment` dos JSON descrevem os experimentos históricos. Executar `train`
+com dez épocas no código atual é um novo experimento, não garantia de recuperar
+os pesos históricos. Uma reprodução do treino requer também revisão/ambiente
+históricos e todas as decisões de seleção; novos pesos devem usar outro nome.
+Nenhum treino, teste, avaliação numérica ou build foi executado nesta revisão.
+Relatórios preservados não provam o funcionamento da implementação atual.
 
 O comando `evaluate` não treina novamente: ele lê a divisão por caso salva no
 checkpoint, reconstrói as janelas com a configuração persistida e mostra as
 métricas armazenadas ao lado das métricas recalculadas.
 
 As decisões metodológicas são fundamentadas na literatura de DoA/CNN, no corpus
-publicado, na documentação do LSL e nas limitações documentadas de índices pEEG;
+publicado e nas limitações documentadas de índices pEEG; a documentação LSL
+fundamentou somente o transporte histórico removido, não o escopo atual;
 as fontes completas estão no [README](../README.md) e em
 [`docs/decisions.md`](decisions.md).

@@ -1,6 +1,13 @@
-# Protocolo de avanço: bancada, validação externa e modo sombra
+# Registro histórico: bancada, validação externa e modo sombra
 
-Este documento é um plano de pesquisa para levar o BrainSniffer do replay para
+**Fora do escopo definitivo do TCC.** A entrega usa arquivos existentes e replay
+retrospectivo, sem aquisição física, modo sombra ou etapa clínica. LSL foi
+removido do projeto. O plano abaixo preserva o raciocínio de pesquisa anterior;
+verbos de execução descrevem aquela proposta, não tarefas atuais, capacidades
+validadas ou autorização para executá-la. Qualquer retomada exigiria projeto e
+revisão próprios, inclusive atualização dos recursos técnicos disponíveis.
+
+Este documento registrava um plano para levar o BrainSniffer do replay para
 uma aquisição EEG real. Ele não é protocolo assistencial, não autoriza pesquisa
 em seres humanos e não define uma dose, alarme ou limiar clínico. Qualquer etapa
 com dados de pacientes exige aprovação ética, revisão do anestesiologista,
@@ -27,17 +34,19 @@ O checkpoint deve permanecer congelado durante cada conjunto de avaliação. Uma
 mudança de peso, pré-processamento, alinhamento, limiar ou seleção de casos abre
 uma nova versão e um novo protocolo de análise.
 
-Na entrada ao vivo, validar primeiro a ficha com `validate-intake` e executar o
-gate explícito `--require-metadata --require-intake` (ou manter as opções
-equivalentes marcadas na interface) depois de preencher fabricante, modelo,
+A proposta histórica previa validar a ficha com `validate-intake` e aplicar
+gates de metadata/intake. Incluía a CLI `stream-lsl`, hoje removida; não é uma
+instrução de uso atual. `stream-json` permanece somente como bridge local
+opcional, sem controles no Dash. A ficha previa fabricante, modelo,
 firmware/software, bridge, taxa, unidade em microvolt, faixa nominal, processamento/
 ganho, posição do canal, referência e montagem. A ausência desses campos pode ser tolerada apenas em caracterização
 técnica, nunca como evidência suficiente para um estudo com paciente.
 
 ## Etapa 0 — bancada sem paciente
 
-Usar um publisher LSL ou bridge JSON com sinal sintético conhecido e, quando for
-seguro e permitido, uma entrada de teste do fabricante. Executar:
+A proposta previa publisher LSL (hoje removido) ou bridge JSON com sinal
+sintético conhecido e uma eventual entrada de teste autorizada do fabricante.
+Os critérios históricos, não executáveis como roteiro do TCC, eram:
 
 1. cinco minutos de sinal com timestamps por amostra;
 2. taxa declarada e taxa medida, inclusive uma fonte diferente de 128 Hz;
@@ -116,7 +125,8 @@ inválidos, perda não explicada, saída stale, falha de anonimização, erro qu
 ocultar uma abstenção ou tentativa de usar a saída para comandar tratamento.
 Retomar somente após revisão documentada; não apagar a sessão com erro.
 
-Os comandos e a ficha de hardware estão em [`live_acquisition.md`](live_acquisition.md)
-e [`real_eeg_intake.md`](real_eeg_intake.md). O registro de decisões científicas
-fica em [`decisions.md`](decisions.md), e o estado verificável do protótipo em
-[`project_status.md`](project_status.md).
+O contrato local JSONL atual e a nota sobre artefatos LSL preservados estão em
+[`live_acquisition.md`](live_acquisition.md). A ficha de hardware em
+[`real_eeg_intake.md`](real_eeg_intake.md) é referência fora do escopo do TCC. O registro de decisões científicas
+fica em [`decisions.md`(../decisions.md), e o estado verificável do protótipo em
+[`project_status.md`(../project_status.md).

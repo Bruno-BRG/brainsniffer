@@ -6,7 +6,6 @@ import argparse
 import json
 import math
 import sys
-import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -30,6 +29,7 @@ from .data.corpus import (
 from .data.figshare import available_case_ids, download_dataset, fetch_manifest
 from .data.mat_reader import load_case
 from .data.preprocess import (
+    WindowedEEG,
     data_handling_policy,
     load_windows,
     signal_diagnostics,
@@ -37,13 +37,18 @@ from .data.preprocess import (
     subset_windows,
 )
 from .data.vitaldb import download_vitaldb_case, fetch_vitaldb_subject_map
-from .pipeline.baseline import cross_validate_spectral_baseline, train_spectral_baseline
+from .pipeline.baseline import (
+    BaselineResult,
+    CrossValidationResult,
+    cross_validate_spectral_baseline,
+    train_spectral_baseline,
+)
 from .pipeline.benchmark import benchmark_latency
 from .pipeline.intake import validate_intake_metadata
 from .pipeline.metrics import bootstrap_case_metrics, compute_metrics
 from .pipeline.realtime import replay_case
-from .pipeline.stream_audit import StreamAudit
-from .pipeline.streaming import LSLSource, StreamingResampler
+from .pipeline.stream_audit import MICROVOLT_ALIASES, StreamAudit
+from .pipeline.streaming import StreamingResampler
 from .pipeline.training import (
     build_file_manifest,
     load_checkpoint,
@@ -54,11 +59,255 @@ from .pipeline.training import (
     verify_file_manifest,
 )
 
+BASELINE_REPORT_DECIMAL_PLACES = 12
+
 
 def _checkpoint_sha256(path: Path) -> str | None:
     """Return a checkpoint digest when the path exists (also supports mocked CLI tests)."""
 
     return sha256_file(path) if path.is_file() else None
+
+
+def _json_report_value(value: object) -> object:
+    """Normalize a report payload into deterministic, standards-compliant JSON values."""
+
+    if isinstance(value, np.generic):
+        return _json_report_value(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, float):
+        rounded = round(value, BASELINE_REPORT_DECIMAL_PLACES)
+        return 0.0 if rounded == 0 else rounded
+    if isinstance(value, dict):
+        return {str(key): _json_report_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_report_value(item) for item in value]
+    return value
+
+
+def _write_deterministic_json(path: Path, payload: dict[str, object]) -> None:
+    """Write stable JSON without timestamps, raw arrays, or non-standard NaN values."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            _json_report_value(payload),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _case_partition_counts(case_ids: np.ndarray, cases: tuple[str, ...]) -> dict[str, int]:
+    mask = np.isin(case_ids, np.asarray(cases, dtype=str))
+    return {"n_cases": len(cases), "n_windows": int(mask.sum())}
+
+
+def _baseline_dataset_summary(
+    windows: WindowedEEG,
+    *,
+    n_input_files: int,
+    partitions: dict[str, tuple[str, ...]] | None = None,
+) -> dict[str, object]:
+    case_ids = windows.case_ids.astype(str)
+    summary: dict[str, object] = {
+        "n_input_files": n_input_files,
+        "n_cases": int(np.unique(case_ids).size),
+        "n_windows": int(windows.signals.shape[0]),
+    }
+    if partitions is not None:
+        summary["partitions"] = {
+            name: _case_partition_counts(case_ids, cases) for name, cases in partitions.items()
+        }
+    return summary
+
+
+def _holdout_baseline_report(
+    *,
+    paths: list[Path],
+    windows: WindowedEEG,
+    result: BaselineResult,
+    data_dir: Path,
+    min_quality: float,
+    max_windows: int | None,
+    folds: int,
+    preprocess_config: PreprocessConfig,
+    training_config: TrainingConfig,
+) -> dict[str, object]:
+    split = result.split
+    return {
+        "report_version": 1,
+        "numeric_precision_decimal_places": BASELINE_REPORT_DECIMAL_PLACES,
+        "scope": "research_only",
+        "protocol": "holdout",
+        "effective_configuration": {
+            "data_dir": str(data_dir),
+            "min_quality": float(min_quality),
+            "max_windows": max_windows,
+            "folds": folds,
+            "feature_sampling_rate": result.sampling_rate,
+            "preprocess_config": asdict(preprocess_config),
+            "subset_seed": training_config.seed,
+            "split_configuration": {
+                "validation_fraction": training_config.validation_fraction,
+                "test_fraction": training_config.test_fraction,
+            },
+            "estimator": {
+                "class": "sklearn.ensemble.RandomForestRegressor",
+                "parameters": result.estimator_parameters,
+            },
+        },
+        "seed": result.seed,
+        "split": {
+            "unit": "case",
+            "seed": result.seed,
+            "train_cases": list(split.train_cases),
+            "validation_cases": list(split.validation_cases),
+            "test_cases": list(split.test_cases),
+        },
+        "dataset": _baseline_dataset_summary(
+            windows,
+            n_input_files=len(paths),
+            partitions={
+                "train": split.train_cases,
+                "validation": split.validation_cases,
+                "test": split.test_cases,
+            },
+        ),
+        "feature_names": list(result.feature_names),
+        "metrics": {
+            "validation": result.validation_metrics,
+            "test": result.test_metrics,
+        },
+        "input_files": build_file_manifest(paths),
+        "raw_eeg_in_report": False,
+    }
+
+
+def _cross_validation_baseline_report(
+    *,
+    paths: list[Path],
+    windows: WindowedEEG,
+    result: CrossValidationResult,
+    data_dir: Path,
+    min_quality: float,
+    max_windows: int | None,
+    folds: int,
+    preprocess_config: PreprocessConfig,
+) -> dict[str, object]:
+    case_ids = windows.case_ids.astype(str)
+    fold_splits = []
+    parameters_by_fold = []
+    for case_fold, estimator_parameters in zip(
+        result.case_folds, result.estimator_parameters, strict=True
+    ):
+        fold_splits.append(
+            {
+                "fold": case_fold.fold_index,
+                "train_cases": list(case_fold.train_cases),
+                "test_cases": list(case_fold.test_cases),
+                "train_n_windows": int(np.isin(case_ids, case_fold.train_cases).sum()),
+                "test_n_windows": int(np.isin(case_ids, case_fold.test_cases).sum()),
+            }
+        )
+        parameters_by_fold.append(
+            {"fold": case_fold.fold_index, "parameters": estimator_parameters}
+        )
+    return {
+        "report_version": 1,
+        "numeric_precision_decimal_places": BASELINE_REPORT_DECIMAL_PLACES,
+        "scope": "research_only",
+        "protocol": "grouped_cross_validation",
+        "effective_configuration": {
+            "data_dir": str(data_dir),
+            "min_quality": float(min_quality),
+            "max_windows": max_windows,
+            "folds": folds,
+            "feature_sampling_rate": result.sampling_rate,
+            "preprocess_config": asdict(preprocess_config),
+            "subset_seed": result.seed,
+            "estimator": {
+                "class": "sklearn.ensemble.RandomForestRegressor",
+                "parameters_by_fold": parameters_by_fold,
+            },
+        },
+        "seed": result.seed,
+        "split": {
+            "unit": "case",
+            "seed": result.seed,
+            "n_splits": result.n_splits,
+            "folds": fold_splits,
+        },
+        "dataset": _baseline_dataset_summary(windows, n_input_files=len(paths)),
+        "feature_names": list(result.feature_names),
+        "metrics": {
+            "folds": result.folds,
+            "mean": result.mean,
+            "std": result.std,
+        },
+        "input_files": build_file_manifest(paths),
+        "raw_eeg_in_report": False,
+    }
+
+
+class _OnlineQuality:
+    """Constant-memory prediction statistics (including stale abstentions)."""
+
+    def __init__(self) -> None:
+        self.count = 0
+        self.minimum: float | None = None
+        self.mean: float | None = None
+
+    def append(self, value: float) -> None:
+        value = float(value)
+        self.count += 1
+        self.minimum = value if self.minimum is None else min(self.minimum, value)
+        self.mean = value if self.mean is None else self.mean + (value - self.mean) / self.count
+
+
+def _require_compatible_unit(audit: StreamAudit) -> None:
+    unit = (audit.report().metadata or {}).get("unit")
+    if unit is not None and str(unit).strip().casefold() not in MICROVOLT_ALIASES:
+        raise ValueError("unidade do metadata incompatível com uV")
+
+
+def _push_stream_segments(estimator, resampler, samples, timestamps, *, previous_timestamp,
+                          max_gap_factor):
+    """Split explicit gaps before conversion; never interpolate across lost EEG.
+
+    The caller audits the entire chunk first and rejects it in strict mode.
+    Timestamp origins are retained, and reset discards (does not flush) pending EEG.
+    """
+    values = np.asarray(samples).reshape(-1)
+    times = None if timestamps is None else np.asarray(timestamps, dtype=float).reshape(-1)
+    cuts = []
+    if times is not None and times.size:
+        if times.size != values.size or not np.all(np.isfinite(times)):
+            raise ValueError("timestamps inválidos no stream")
+        differences = np.diff(times)
+        if previous_timestamp is not None:
+            differences = np.concatenate(([times[0] - previous_timestamp], differences))
+            indices = np.arange(times.size)
+        else:
+            indices = np.arange(1, times.size)
+        if np.any(differences <= 0):
+            raise ValueError("timestamps devem ser estritamente crescentes")
+        cuts = indices[differences > max_gap_factor / resampler.source_rate].tolist()
+    start = 0
+    for end in [*cuts, values.size]:
+        if end > start:
+            converted = resampler.process(
+                values[start:end], timestamps=None if times is None else times[start:end]
+            )
+            yield from estimator.push(converted.samples, timestamps=converted.timestamps)
+        if end != values.size:
+            estimator.mark_stale()
+            resampler.reset()
+        start = end
 
 
 def _write_stream_report(
@@ -73,7 +322,7 @@ def _write_stream_report(
     prediction_count: int,
     abstention_count: int,
     stale_abstention_count: int,
-    prediction_qualities: list[float],
+    prediction_qualities: _OnlineQuality,
     fail_on_audit: bool,
     require_intake: bool,
     stale_timeout_seconds: float | None,
@@ -83,7 +332,6 @@ def _write_stream_report(
     """Write privacy-preserving run metadata without retaining raw EEG samples."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    quality = np.asarray(prediction_qualities, dtype=np.float64)
     report = {
         "report_version": 2,
         "source": source,
@@ -115,8 +363,8 @@ def _write_stream_report(
             "abstention_fraction": (
                 abstention_count / prediction_count if prediction_count else None
             ),
-            "quality_min": float(quality.min()) if quality.size else None,
-            "quality_mean": float(quality.mean()) if quality.size else None,
+            "quality_min": prediction_qualities.minimum,
+            "quality_mean": prediction_qualities.mean,
         },
         "audit": audit.report().as_dict(),
         "intake": intake_report,
@@ -492,6 +740,12 @@ def build_parser() -> argparse.ArgumentParser:
     baseline.add_argument("--min-quality", type=float, default=DEFAULT_MIN_SIGNAL_QUALITY)
     baseline.add_argument("--max-windows", type=int, default=None)
     baseline.add_argument("--folds", type=int, default=1, help="2–n casos para CV agrupada")
+    baseline.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="salvar relatório JSON versionável com configuração, split e hashes",
+    )
 
     stream = subparsers.add_parser("stream-json", help="consumir chunks JSON pela entrada padrão")
     stream.add_argument("--checkpoint", type=Path, default=default_model_path())
@@ -521,40 +775,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="terminar com erro assim que a auditoria rejeitar a sessão",
     )
     _add_stream_metadata_arguments(stream)
-
-    lsl = subparsers.add_parser("stream-lsl", help="consumir um stream EEG via Lab Streaming Layer")
-    lsl.add_argument("--checkpoint", type=Path, default=default_model_path())
-    lsl.add_argument("--stream-name", default=None)
-    lsl.add_argument("--stream-type", default="EEG")
-    lsl.add_argument("--channel", type=int, default=0)
-    lsl.add_argument("--stride", type=float, default=1.0)
-    lsl.add_argument("--min-quality", type=float, default=DEFAULT_MIN_SIGNAL_QUALITY)
-    lsl.add_argument(
-        "--max-gap-factor",
-        type=float,
-        default=1.5,
-        help="maior intervalo de timestamp aceito em múltiplos de 1/taxa",
-    )
-    lsl.add_argument("--duration", type=float, default=None)
-    lsl.add_argument("--max-samples", type=int, default=256)
-    lsl.add_argument(
-        "--stale-timeout",
-        type=float,
-        default=2.0,
-        help="segundos sem chunk antes de invalidar ou rejeitar a última estimativa",
-    )
-    lsl.add_argument(
-        "--report",
-        type=Path,
-        default=None,
-        help="salvar relatório da sessão sem armazenar o EEG bruto",
-    )
-    lsl.add_argument(
-        "--fail-on-audit",
-        action="store_true",
-        help="terminar com erro assim que a auditoria rejeitar a sessão",
-    )
-    _add_stream_metadata_arguments(lsl)
 
     latency = subparsers.add_parser(
         "benchmark-latency", help="medir latência do caminho de inferência em streaming"
@@ -1050,30 +1270,67 @@ def main(argv: list[str] | None = None) -> int:
         paths = sorted(args.data_dir.glob("case*.mat"))
         if not paths:
             raise SystemExit(f"Nenhum case*.mat encontrado em {args.data_dir}.")
+        preprocess_config = PreprocessConfig()
+        training_config = TrainingConfig()
         windows = subset_windows(
-            load_windows(paths, min_quality=args.min_quality), args.max_windows
+            load_windows(paths, preprocess_config, min_quality=args.min_quality),
+            args.max_windows,
+            seed=training_config.seed,
         )
         if args.folds > 1:
-            result = cross_validate_spectral_baseline(windows, n_splits=args.folds)
-            print(
-                json.dumps(
-                    {
-                        "n_splits": result.n_splits,
-                        "folds": result.folds,
-                        "mean": result.mean,
-                        "std": result.std,
-                    },
-                    indent=2,
+            result = cross_validate_spectral_baseline(
+                windows,
+                sampling_rate=preprocess_config.sampling_rate,
+                n_splits=args.folds,
+                seed=training_config.seed,
+            )
+            stdout_payload = {
+                "n_splits": result.n_splits,
+                "folds": result.folds,
+                "mean": result.mean,
+                "std": result.std,
+            }
+            if args.report is not None:
+                _write_deterministic_json(
+                    args.report,
+                    _cross_validation_baseline_report(
+                        paths=paths,
+                        windows=windows,
+                        result=result,
+                        data_dir=args.data_dir,
+                        min_quality=args.min_quality,
+                        max_windows=args.max_windows,
+                        folds=args.folds,
+                        preprocess_config=preprocess_config,
+                    ),
                 )
-            )
+            print(json.dumps(stdout_payload, indent=2))
             return 0
-        result = train_spectral_baseline(windows)
-        print(
-            json.dumps(
-                {"validation": result.validation_metrics, "test": result.test_metrics},
-                indent=2,
-            )
+        result = train_spectral_baseline(
+            windows,
+            sampling_rate=preprocess_config.sampling_rate,
+            training_config=training_config,
         )
+        stdout_payload = {
+            "validation": result.validation_metrics,
+            "test": result.test_metrics,
+        }
+        if args.report is not None:
+            _write_deterministic_json(
+                args.report,
+                _holdout_baseline_report(
+                    paths=paths,
+                    windows=windows,
+                    result=result,
+                    data_dir=args.data_dir,
+                    min_quality=args.min_quality,
+                    max_windows=args.max_windows,
+                    folds=args.folds,
+                    preprocess_config=preprocess_config,
+                    training_config=training_config,
+                ),
+            )
+        print(json.dumps(stdout_payload, indent=2))
         return 0
 
     if args.command == "replay":
@@ -1137,7 +1394,7 @@ def main(argv: list[str] | None = None) -> int:
         metadata_base: dict[str, object] = {}
         prediction_count = 0
         abstention_count = 0
-        prediction_qualities: list[float] = []
+        prediction_qualities = _OnlineQuality()
         stream_error: str | None = None
         intake_report: dict[str, object] = validate_intake_metadata({})
         try:
@@ -1152,6 +1409,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 audit.set_metadata(_merge_stream_metadata(metadata_base, payload_metadata))
                 intake_report = validate_intake_metadata(audit.report().metadata)
+                _require_compatible_unit(audit)
                 if args.require_metadata and not audit.metadata_complete():
                     missing = ", ".join(audit.report().metadata_missing)
                     raise ValueError(f"metadata obrigatório incompleto: {missing}")
@@ -1188,6 +1446,7 @@ def main(argv: list[str] | None = None) -> int:
                         configured_source_rate,
                         preprocess.sampling_rate,
                     )
+                previous_timestamp = audit.report().timestamp_last
                 audit.push(
                     samples,
                     source_rate=configured_source_rate,
@@ -1197,10 +1456,10 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError("timestamps obrigatórios ausentes no stream")
                 if args.fail_on_audit and not audit.report().ok:
                     raise RuntimeError("auditoria do stream rejeitou a sessão")
-                converted = resampler.process(samples, timestamps=timestamps)
-                outputs = estimator.push(
-                    converted.samples,
-                    timestamps=converted.timestamps,
+                outputs = _push_stream_segments(
+                    estimator, resampler, samples, timestamps,
+                    previous_timestamp=previous_timestamp,
+                    max_gap_factor=audit.max_gap_factor,
                 )
                 for output in outputs:
                     prediction_count += 1
@@ -1250,145 +1509,6 @@ def main(argv: list[str] | None = None) -> int:
                     fail_on_audit=args.fail_on_audit,
                     require_intake=args.require_intake,
                     stale_timeout_seconds=None,
-                    intake_report=intake_report,
-                    error=stream_error,
-                )
-        return 0
-
-    if args.command == "stream-lsl":
-        model, preprocess, _ = load_checkpoint(args.checkpoint)
-        checkpoint_sha256 = _checkpoint_sha256(args.checkpoint)
-        from .pipeline.realtime import RealtimeEstimator
-
-        audit = StreamAudit(
-            preprocess,
-            min_quality=args.min_quality,
-            max_gap_factor=args.max_gap_factor,
-            require_metadata=args.require_metadata,
-            require_timestamps=args.require_timestamps,
-        )
-        metadata: dict[str, object] = {}
-        source: LSLSource | object | None = None
-        prediction_count = 0
-        abstention_count = 0
-        stale_abstention_count = 0
-        prediction_qualities: list[float] = []
-        stream_error: str | None = None
-        intake_report: dict[str, object] = validate_intake_metadata({})
-        try:
-            if args.stale_timeout < 0:
-                raise ValueError("stale-timeout deve ser não negativo")
-            metadata = _metadata_from_config(args)
-            source = LSLSource.connect(
-                stream_name=args.stream_name,
-                stream_type=args.stream_type,
-                channel_index=args.channel,
-            )
-            audit.set_metadata(getattr(source, "metadata", {}))
-            audit.set_metadata(metadata)
-            intake_report = validate_intake_metadata(audit.report().metadata)
-            if args.require_metadata and not audit.metadata_complete():
-                missing = ", ".join(audit.report().metadata_missing)
-                raise RuntimeError(f"metadata obrigatório incompleto: {missing}")
-            if args.require_intake and not intake_report["ready_for_bench"]:
-                missing = ", ".join(intake_report["missing_fields"])
-                raise RuntimeError(f"ficha do equipamento incompleta: {missing}")
-            estimator = RealtimeEstimator(
-                model,
-                preprocess,
-                stride_seconds=args.stride,
-                min_quality=args.min_quality,
-            )
-            resampler = StreamingResampler(
-                source.sampling_rate,
-                preprocess.sampling_rate,
-            )
-            print(
-                f"Conectado a {source.stream_name!r} ({source.sampling_rate:g} Hz, "
-                f"canal {args.channel}); alvo do modelo={preprocess.sampling_rate} Hz",
-                file=sys.stderr,
-            )
-            deadline = None if args.duration is None else time.monotonic() + args.duration
-            last_data_wall = time.monotonic()
-            stale_notified = False
-            while deadline is None or time.monotonic() < deadline:
-                chunk = source.read_chunk(max_samples=args.max_samples)
-                if chunk.samples.size == 0:
-                    silence_seconds = time.monotonic() - last_data_wall
-                    if silence_seconds >= args.stale_timeout and not stale_notified:
-                        if args.fail_on_audit:
-                            raise RuntimeError(
-                                "sem dados EEG no stream LSL por "
-                                f"{silence_seconds:.2f} s; sessão rejeitada"
-                            )
-                        stale_output = estimator.mark_stale()
-                        prediction_count += 1
-                        abstention_count += 1
-                        stale_abstention_count += 1
-                        prediction_qualities.append(stale_output.quality)
-                        record = asdict(stale_output)
-                        record["checkpoint_sha256"] = checkpoint_sha256
-                        print(json.dumps(record, ensure_ascii=False), flush=True)
-                        stale_notified = True
-                    continue
-                last_data_wall = time.monotonic()
-                stale_notified = False
-                audit.push(
-                    chunk.samples,
-                    source_rate=chunk.sampling_rate,
-                    timestamps=chunk.timestamps,
-                )
-                if args.require_timestamps and audit.report().timestamps_present is not True:
-                    raise RuntimeError("timestamps obrigatórios ausentes no stream")
-                if args.fail_on_audit and not audit.report().ok:
-                    raise RuntimeError("auditoria do stream rejeitou a sessão")
-                converted = resampler.process(
-                    chunk.samples,
-                    timestamps=chunk.timestamps,
-                )
-                for output in estimator.push(converted.samples, timestamps=converted.timestamps):
-                    prediction_count += 1
-                    abstention_count += int(output.stage == "abstain")
-                    prediction_qualities.append(output.quality)
-                    record = asdict(output)
-                    record["checkpoint_sha256"] = checkpoint_sha256
-                    print(json.dumps(record, ensure_ascii=False), flush=True)
-            if args.duration is not None and audit.report().sample_count == 0:
-                raise RuntimeError(
-                    "Nenhuma amostra EEG recebida durante a captura LSL; "
-                    "verifique o outlet, o nome/tipo do stream e a conexão"
-                )
-            intake_report = validate_intake_metadata(audit.report().metadata)
-            if args.require_intake and not intake_report["ready_for_bench"]:
-                missing = ", ".join(intake_report["missing_fields"])
-                raise RuntimeError(f"ficha do equipamento incompleta: {missing}")
-            if args.fail_on_audit and not audit.report().ok:
-                raise RuntimeError("auditoria do stream rejeitou a sessão")
-        except KeyboardInterrupt:
-            stream_error = "interrompido pelo operador"
-            print("\nStream encerrado.", file=sys.stderr)
-        except Exception as error:
-            if source is None:
-                audit.set_metadata(metadata)
-            stream_error = str(error)
-            raise
-        finally:
-            if args.report is not None:
-                _write_stream_report(
-                    args.report,
-                    source="lsl",
-                    checkpoint=args.checkpoint,
-                    checkpoint_sha256=checkpoint_sha256,
-                    audit=audit,
-                    preprocess_config=preprocess,
-                    stride_seconds=args.stride,
-                    prediction_count=prediction_count,
-                    abstention_count=abstention_count,
-                    stale_abstention_count=stale_abstention_count,
-                    prediction_qualities=prediction_qualities,
-                    fail_on_audit=args.fail_on_audit,
-                    require_intake=args.require_intake,
-                    stale_timeout_seconds=args.stale_timeout,
                     intake_report=intake_report,
                     error=stream_error,
                 )

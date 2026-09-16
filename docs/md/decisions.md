@@ -2,6 +2,14 @@
 
 Este documento evita que o protótipo vire uma coleção de hiperparâmetros escolhidos apenas porque melhoraram uma métrica. Cada decisão pode mudar, mas deve mudar junto com uma hipótese e uma referência.
 
+## Escopo atual e leitura do histórico
+
+O TCC foi fechado em arquivos existentes e replay retrospectivo. LSL foi
+removido; JSONL continua opcional/local, sem integração de hardware prometida.
+D8 e D21 preservam decisões históricas superadas, não instruções atuais. D15 e
+as propostas de avanço clínico são histórico fora do escopo, não etapas para
+concluir o TCC. As evidências antigas de LSL não são evidências de JSONL.
+
 ## Matriz de sistemas conhecidos
 
 | Sistema/recurso | Papel conhecido | Decisão no BrainSniffer |
@@ -11,7 +19,7 @@ Este documento evita que o protótipo vire uma coleção de hiperparâmetros esc
 | Entropy / Narcotrend | Famílias de monitores processados que motivam medidas espectrais e classificação de estados. | Usar potência de banda, entropia e frequência de borda em baseline transparente; não copiar algoritmos proprietários. |
 | Openibis | Reimplementação aberta para estudar etapas e limitações de um índice BIS. | Usar como referência de auditabilidade; não apresentar o BrainSniffer como reimplementação do BIS. |
 | AnesNET e CNNs de DoA | Trabalhos que demonstram CNN compacta e inferência rápida em EEG pré-gravado. | Inspirar a escolha de uma CNN 1-D pequena e medir latência, sem reutilizar resultados como validação clínica. |
-| Lab Streaming Layer | Camada aberta para descoberta, transporte, timestamps e sincronização de streams de pesquisa. | Usar como interface vendor-neutral; o driver/bridge e a verificação do canal continuam obrigatórios. |
+| Lab Streaming Layer | Camada aberta para descoberta, transporte, timestamps e sincronização de streams de pesquisa. | Escolha histórica de transporte, removida do projeto; fonte mantida para auditoria, não capacidade atual. |
 
 **Fontes:** [FDA K202621](https://www.accessdata.fda.gov/cdrh_docs/pdf20/K202621.pdf), [review de monitoramento pEEG](https://pubmed.ncbi.nlm.nih.gov/34392880/), [limitações do BIS](https://pubmed.ncbi.nlm.nih.gov/28044337/), [Openibis](https://pmc.ncbi.nlm.nih.gov/articles/PMC9481655/), [AnesNET](https://pubmed.ncbi.nlm.nih.gov/32746339/) e [LSL](https://labstreaminglayer.readthedocs.io/info/intro.html).
 
@@ -23,7 +31,7 @@ Este documento evita que o protótipo vire uma coleção de hiperparâmetros esc
 
 **Cuidado:** BIS é um índice processado e dependente do monitor, não uma verdade clínica universal. A literatura também documenta artefatos, atrasos, influência de drogas e leituras incompatíveis com o estado clínico. Por isso o produto mostra “referência BIS estimada” e qualidade do sinal, não “consciência do paciente”.
 
-**Referências:** [dataset Figshare](https://doi.org/10.6084/m9.figshare.5589841.v1), [Li et al.](https://pmc.ncbi.nlm.nih.gov/articles/PMC9160818/), [Hajat et al.](https://pubmed.ncbi.nlm.nih.gov/28044337/), [FDA K202621](https://www.accessdata.fda.gov/cdrh_docs/pdf20/K202621.pdf).
+**Referências:** [dataset Figshare](https://doi.org/10.6084/m9.figshare.5589841.v1), [Nsugbe e Connelly (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9160818/), [Hajat et al.](https://pubmed.ncbi.nlm.nih.gov/28044337/), [FDA K202621](https://www.accessdata.fda.gov/cdrh_docs/pdf20/K202621.pdf).
 
 ## D2 — Janela de 5 s e EEG a 128 Hz
 
@@ -69,7 +77,11 @@ Para análises de sensibilidade, a baseline também oferece cinco folds agrupado
 
 O software não controla bombas, não recomenda dose e não cria alarmes clínicos. Antes de qualquer estudo prospectivo, precisamos de revisão de anestesiologista, protocolo de ética, anonimização, análise de riscos, plano de incidentes, validação externa e conformidade regulatória. A interface mantém um aviso persistente para não confundir demo de ML com monitor aprovado.
 
-## D8 — Entrada ao vivo por LSL e JSON
+## D8 — Entrada ao vivo por LSL e JSON (histórico superado)
+
+**Estado:** descreve a implementação anterior. O adaptador LSL, seu comando e
+publisher foram removidos. O contrato JSONL local foi preservado, sem herdar
+os resultados LSL ou validar hardware.
 
 **Escolha:** o núcleo de inferência recebe chunks; a primeira integração de rede usa LSL, e um modo JSON pela entrada padrão permite conectar um driver proprietário sem acoplar o projeto a uma marca.
 
@@ -110,7 +122,7 @@ um valor de modelo enganoso.
 
 **Escolha:** a baseline pode rodar `--folds 5`, mantendo todos os segmentos de cada caso no mesmo fold.
 
-**Motivo:** uma única partição pode depender demais de quais pacientes caíram no teste. Folds agrupados expõem a variação entre pacientes, mas não substituem validação externa em outro centro, aparelho ou população.
+**Motivo:** uma única partição pode depender demais de quais pacientes caíram no teste. Folds agrupados expõem a variação entre casos, mas não substituem avaliação independente do desenvolvimento. Validação externa não exige necessariamente outro hospital: independência dos dados e transportabilidade entre centros, aparelhos ou populações são dimensões distintas, que devem ser descritas. No Figshare, caso não comprova identidade única de paciente.
 
 **Comando:** `uv run brainsniffer benchmark-baseline --folds 5`.
 
@@ -138,7 +150,7 @@ ser demonstrada antes de interpretar a avaliação como comparação entre apare
 
 **Referências:** [VitalDB Open Dataset — visão geral](https://vitaldb.net/docs/?documentId=OpenDataset/Overview.md), [API oficial de tracks](https://vitaldb.net/docs/?documentId=API/Web_API_OpenDataset.md) e [acordo de registro/uso](https://vitaldb.net/registration-agreement/).
 
-## Decisões em aberto
+## Questões de pesquisa fora do escopo definitivo do TCC
 
 - Expandir a validação externa para mais casos, centros e aparelhos, respeitando licença e variáveis disponíveis.
 - Definir uma referência clínica complementar ao BIS: resposta a comando, anestesista, MAC, farmacocinética ou MOAA/S conforme o cenário.
@@ -147,7 +159,7 @@ ser demonstrada antes de interpretar a avaliação como comparação entre apare
 - Comparar modelos sob split por paciente e teste temporal/out-of-distribution.
 - Definir requisito de latência, hardware e tratamento de abstention quando a qualidade for baixa.
 
-## D15 — Avanço por gates e modo sombra
+## D15 — Avanço por gates e modo sombra (proposta histórica fora do TCC)
 
 **Escolha:** não conectar o protótipo diretamente à rotina assistencial. O avanço
 será dividido em bancada sem paciente, validação externa com checkpoint travado,
@@ -159,14 +171,15 @@ adequação do conjunto software–hardware–usuário. Os gates preservam a
 reprodutibilidade e permitem detectar mudança de domínio, falhas de aquisição e
 problemas de fatores humanos antes de qualquer saída influenciar o cuidado.
 
-**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e [TRIPOD+AI](https://www.bmj.com/content/385/bmj-2023-078378). O protocolo operacional está em [`docs/prospective_protocol.md`](prospective_protocol.md).
+**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e [TRIPOD+AI](https://www.bmj.com/content/385/bmj-2023-078378). A proposta histórica, não operacional nesta entrega, está em [`docs/_archive/prospective_protocol.md`](_archive/prospective_protocol.md).
 
 ## D16 — Manifesto do sinal e invariância da taxa
 
 **Escolha:** cada sessão de aquisição deve registrar unidade, posição do canal,
 referência, montagem e origem; quando a taxa também aparecer no manifesto, ela
-deve coincidir com a taxa efetiva dos chunks. O descritor XML LSL é aproveitado
-automaticamente, e `--require-metadata` transforma a ausência dos campos mínimos
+deve coincidir com a taxa efetiva dos chunks. Historicamente o adaptador removido
+importava XML LSL; hoje JSONL recebe metadata do chunk, arquivo ou flags.
+`--require-metadata` transforma a ausência dos campos mínimos
 em bloqueio antes da inferência.
 
 **Motivo:** filtro, resampling, janela e escala dependem da taxa e da montagem.
@@ -174,7 +187,7 @@ Aceitar uma declaração divergente cria uma saída numericamente plausível, ma
 fisicamente ambígua. Separar transporte, metadados e algoritmo torna a sessão
 reproduzível e deixa explícito o que ainda precisa ser confirmado no equipamento.
 
-**Referências:** [introdução oficial do LSL](https://labstreaminglayer.readthedocs.io/info/intro.html), [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles) e o [protocolo de avanço](prospective_protocol.md).
+**Referências:** [introdução oficial do LSL](https://labstreaminglayer.readthedocs.io/info/intro.html), [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles) e o [protocolo de avanço](_archive/prospective_protocol.md).
 
 ## D17 — Ficha técnica como gate de onboarding
 
@@ -182,7 +195,8 @@ reproduzível e deixa explícito o que ainda precisa ser confirmado no equipamen
 versionado com fabricante, modelo, firmware/software, bridge, taxa nominal,
 unidade em microvolt, canal, referência, montagem, faixa nominal/saturação e
 processamento/ganho aplicado. O comando `validate-intake` não processa
-EEG; `--require-intake` aplica a mesma exigência ao preflight e aos streams JSON/LSL.
+EEG; `--require-intake` aplica a mesma exigência ao preflight e ao JSONL local.
+A antiga aplicação a LSL foi removida; a ficha não é requisito do TCC.
 
 **Motivo:** o modelo foi treinado em uma combinação específica de taxa, escala,
 canal e montagem. Um número plausível produzido por uma fonte não identificada
@@ -195,7 +209,7 @@ completa. Ainda são obrigatórios o sinal sintético, o teste de perdas e
 reconexões, a comparação de distribuição, a medição ponta a ponta e os gates
 éticos/regulatórios do protocolo prospectivo.
 
-**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](prospective_protocol.md).
+**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](_archive/prospective_protocol.md).
 
 ## D19 — Sensibilidade de alinhamento antes de fixar o rótulo
 
@@ -214,11 +228,11 @@ melhorarem este holdout não demonstra que o monitor tenha exatamente esse atras
 nem autoriza usar o melhor valor em pacientes. O próximo estudo deve pré-registrar
 o alinhamento, verificar relógios e repetir em dados independentes.
 
-**Referências:** [Hajat, Ahmad & Andrzejowski (2017)](https://pubmed.ncbi.nlm.nih.gov/28044337/), [Li et al. (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9160818/) e o [protocolo de avanço](prospective_protocol.md).
+**Referências:** [Hajat, Ahmad & Andrzejowski (2017)](https://pubmed.ncbi.nlm.nih.gov/28044337/), [Nsugbe e Connelly (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9160818/), [Pilge et al. (2006)](https://doi.org/10.1097/00000542-200603000-00016) e o [protocolo de avanço](_archive/prospective_protocol.md). Pilge estudou atrasos variáveis em condições artificiais nos índices testados; não fornece offset universal, nem mede o atraso dos arquivos Figshare.
 
 ## D18 — Auditoria fail-closed durante o stream
 
-**Escolha:** quando `--fail-on-audit` está ativo, o stream JSON/LSL reavalia a
+**Escolha:** quando `--fail-on-audit` está ativo, o stream JSONL reavalia a
 auditoria depois de cada chunk e interrompe antes do resampler e do modelo ao
 detectar amostras inválidas, lacuna temporal, timestamp inválido, taxa
 inconsistente, qualidade abaixo do gate ou outra condição estrutural. A decisão
@@ -233,7 +247,7 @@ válida. O modo sem a flag permanece disponível para caracterização explorat�
 alarme clínico, não estima risco anestésico e não substitui testes de perda,
 reconexão e latência ponta a ponta no hardware.
 
-**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](prospective_protocol.md).
+**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](_archive/prospective_protocol.md).
 
 ## D20 — Incerteza reamostrada por cirurgia
 
@@ -255,9 +269,12 @@ reportada junto com o número de pacientes, não apenas com o número de janelas
 
 **Referências:** [TRIPOD+AI](https://www.bmj.com/content/385/bmj-2023-078378),
 [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e a seção de
-avaliação por caso em [`docs/prospective_protocol.md`](prospective_protocol.md).
+avaliação por caso em [`docs/_archive/prospective_protocol.md`](_archive/prospective_protocol.md).
 
-## D21 — Expiração explícita de uma estimativa após silêncio
+## D21 — Expiração explícita de uma estimativa após silêncio (histórico LSL)
+
+**Estado:** o consumidor e sua flag foram removidos. O relato abaixo preserva
+a política anterior; não descreve timeout do JSONL, que não herda essa evidência.
 
 **Escolha:** o consumidor LSL tem `--stale-timeout` (padrão de engenharia: 2 s).
 Se nenhum chunk chega nesse intervalo, `--fail-on-audit` encerra a sessão com
@@ -277,4 +294,10 @@ finitude, saturação e linha plana continua necessária.
 
 **Referências:** [Lab Streaming Layer — introdução oficial](https://labstreaminglayer.readthedocs.io/info/intro.html),
 [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles)
-e [`docs/real_eeg_intake.md`](real_eeg_intake.md).
+e [`docs/real_eeg_intake.md`](_archive/real_eeg_intake.md).
+
+## Nota de auditoria bibliográfica e relato
+
+As atribuições anteriores “Li et al.” em D1 e D19 foram corrigidas para Nsugbe e Connelly, autores do DOI `10.1049/htl2.12025`. Li Ma é autor do dataset, não desse artigo. O estudo multiescala/LDA sustenta contexto do corpus, não valida a arquitetura CNN do BrainSniffer. As 26 chaves existentes da bibliografia foram preservadas.
+
+O [checklist de relato e ética](_archive/research/reporting_ethics_checklist.md) distingue TRIPOD+AI (relato) de PROBAST+AI (risco de viés/aplicabilidade), alvo instrumental de desfecho clínico, independência de dados de transportabilidade e licença de software de licença de dados/artigos. É um roteiro com pendências humanas, não aprovação ética, regulatória ou parecer formal. Consulte o [ledger](source_ledger.md) para o nível de verificação das fontes.

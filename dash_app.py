@@ -12,6 +12,7 @@ inference semantics of ``RealtimeEstimator``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ import numpy as np
 import plotly.graph_objects as go
 import torch
 from dash import Dash, Input, Output, State, dcc, html, no_update
+from flask import Response
 from plotly.subplots import make_subplots
 
 from brainsniffer.config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig
@@ -49,7 +51,7 @@ LEARNING_CURVE_TAIL_GAIN = 0.015
 COLORS = {
     "navy": "#102A43",
     "ink": "#172B4D",
-    "muted": "#627D98",
+    "muted": "#486581",
     "line": "#D9E2EC",
     "surface": "#FFFFFF",
     "canvas": "#F4F7FB",
@@ -61,12 +63,47 @@ COLORS = {
     "green": "#2D936C",
 }
 
+GRAPH_CONFIG = {
+    "displayModeBar": False,
+    "displaylogo": False,
+    "responsive": True,
+    "scrollZoom": False,
+}
+DEFAULT_CHART_HEIGHT = 330
+MIN_CHART_HEIGHT = 280
+
+APP_DESCRIPTION = (
+    "Dashboard científico do BrainSniffer para inspeção retrospectiva e replay "
+    "offline de estimativas experimentais de índice BIS a partir de EEG."
+)
+
+ROBOTS_TEXT = "User-agent: *\nAllow: /\n"
+LLMS_TEXT = """# BrainSniffer
+
+BrainSniffer is an open research prototype for retrospective inspection and
+laboratory replay of experimental BIS-reference estimates from frontal EEG.
+It is not a medical device and must not guide anesthesia or drug dosing.
+
+## Public resources
+
+- [Dashboard](/)
+- [Health check](/healthz)
+- [Source code and documentation](https://github.com/Bruno-BRG/brainsniffer)
+"""
+
+FIGSHARE_HOLDOUT_LABEL = "Figshare · holdout por caso"
+ACTIVE_VITALDB_LABEL = "VitalDB · avaliação cruzada de dataset"
+ACTIVE_MODEL_LABEL = "Ativo · desenvolvimento Figshare-only"
+MIXED_MODEL_LABEL = "Misto · desenvolvimento Figshare + VitalDB"
+MIXED_FIGSHARE_BENCHMARK_LABEL = "Figshare · benchmark histórico"
+MIXED_VITALDB_HOLDOUT_LABEL = "VitalDB · holdout histórico da mesma fonte"
+
 STAGE_LABELS = {
-    "deep": "Profundo",
-    "general": "Anestesia geral",
-    "light": "Sedação leve",
-    "awake": "Acordado",
-    "abstain": "ABSTAIN · sinal insuficiente",
+    "deep": "Faixa estimada abaixo de 40",
+    "general": "Faixa estimada de 40 a 59",
+    "light": "Faixa estimada de 60 a 79",
+    "awake": "Faixa estimada de 80 a 100",
+    "abstain": "Sem emissão · sinal insuficiente",
 }
 
 METRIC_LABELS = {
@@ -100,17 +137,68 @@ HOLDOUT_METRICS = HOLDOUT_REPORT.get("recomputed_test_metrics", {})
 EXTERNAL_METRICS = EXTERNAL_REPORT.get("metrics", {})
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _load_model() -> tuple[object | None, PreprocessConfig | None, dict[str, object], str | None]:
     if not MODEL_PATH.exists():
         return None, None, {}, f"Checkpoint não encontrado: {MODEL_PATH}"
     try:
+        digest = _sha256(MODEL_PATH)
         model, preprocess, payload = load_checkpoint(MODEL_PATH, device="cpu")
+        if _sha256(MODEL_PATH) != digest:
+            raise ValueError("Checkpoint alterado durante o carregamento; reinicie")
+        payload = dict(payload, checkpoint_sha256=digest)
     except Exception as error:  # pragma: no cover - defensive startup guard
         return None, None, {}, f"Falha ao carregar o checkpoint: {error}"
     return model, preprocess, payload, None
 
 
 MODEL, PREPROCESS, MODEL_METADATA, MODEL_ERROR = _load_model()
+# Model and reports are an immutable startup snapshot. Replacing either requires
+# a process restart; case recordings instead participate in the replay cache key.
+EFFECTIVE_MIN_QUALITY = DEFAULT_MIN_SIGNAL_QUALITY
+
+
+def _compatible_report(report: dict[str, object], digest: str | None) -> bool:
+    return bool(digest) and report.get("checkpoint_sha256") == digest and report.get("min_quality") == EFFECTIVE_MIN_QUALITY
+
+
+EVIDENCE_ERRORS = []
+for _name in ("HOLDOUT_REPORT", "EXTERNAL_REPORT", "OFFSET_REPORT"):
+    if not _compatible_report(globals()[_name], MODEL_METADATA.get("checkpoint_sha256")):
+        EVIDENCE_ERRORS.append(f"{_name}: hash/checkpoint ou gate incompatível/ausente; métricas ocultadas")
+        globals()[_name] = {}
+HOLDOUT_METRICS = HOLDOUT_REPORT.get("recomputed_test_metrics", {})
+EXTERNAL_METRICS = EXTERNAL_REPORT.get("metrics", {})
+
+
+def _artifact_identity(path: Path) -> tuple[object, ...]:
+    try:
+        stat = path.stat()
+        return (str(path.resolve()), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+    except OSError:
+        return (str(path), None)
+
+
+FROZEN_ARTIFACTS = {
+    path: _artifact_identity(path)
+    for path in (MODEL_PATH, *(REPORTS_DIR / name for name in (
+        "figshare_holdout_evaluation.json", "vitaldb_external_validation.json",
+        "offset_sensitivity.json", "corpus_manifest.json",
+        "mixed_fixed_figshare_holdout.json", "mixed_vitaldb_external.json",
+    )))
+}
+
+
+def _require_frozen_artifacts() -> None:
+    if any(_artifact_identity(path) != identity for path, identity in FROZEN_ARTIFACTS.items()):
+        raise RuntimeError("Artefatos alterados desde o início; reinicie para carregar modelo e relatórios juntos")
 
 
 @dataclass(frozen=True)
@@ -150,13 +238,40 @@ def _json_series(values: np.ndarray | list[float]) -> list[float | None]:
 
 
 def _available_cases() -> list[Path]:
-    return sorted(DATA_DIR.glob("case*.mat")) + sorted(VITAL_DIR.glob("vitaldb_case*.npz"))
+    paths = []
+    for root, pattern in ((DATA_DIR, "case*.mat"), (VITAL_DIR, "vitaldb_case*.npz")):
+        for path in sorted(root.glob(pattern)):
+            if path.is_file() and path.resolve().is_relative_to(root.resolve()):
+                paths.append(path)
+    return paths
+
+
+def _resolve_case(value: str) -> Path:
+    # Exact server-issued values only: never normalize arbitrary browser paths
+    # into permission. Recheck containment to catch symlinks changed since startup.
+    if not isinstance(value, str) or value not in {str(path) for path in CASE_PATHS}:
+        raise ValueError("Caso não permitido")
+    path = Path(value)
+    root = VITAL_DIR if path.suffix.lower() == ".npz" else DATA_DIR
+    resolved = path.resolve(strict=True)
+    if not resolved.is_relative_to(root.resolve()) or not resolved.is_file():
+        raise ValueError("Caso fora da raiz permitida")
+    return resolved
 
 
 def _case_label(path: Path) -> str:
     if path.suffix.lower() == ".npz":
         return f"VitalDB · {path.stem.replace('vitaldb_', '')}"
     return f"Figshare · {path.stem}"
+
+
+def _case_source_label(case: EEGCase) -> str:
+    """Return the dataset label without inferring it from a truthy string."""
+
+    source = str(case.source_dataset or "").strip().lower()
+    if source == "vitaldb" or case.case_id.lower().startswith("vitaldb_"):
+        return f"VitalDB · {case.case_id.removeprefix('vitaldb_')}"
+    return f"Figshare · {case.case_id}"
 
 
 CASE_PATHS = _available_cases()
@@ -178,7 +293,7 @@ def _fast_replay_case(
 ) -> list[RealtimePrediction]:
     """Vectorize a recorded replay while preserving causal window semantics.
 
-    Recorded external files may contain missing samples. The dashboard is an
+    Recorded files from another dataset may contain missing samples. The dashboard is an
     offline inspection surface, so it interpolates those samples only for the
     causal filter/model input while calculating signal quality on the original
     window. The live estimator remains fail-closed for NaN/Inf input.
@@ -239,9 +354,20 @@ def _fast_replay_case(
     ]
 
 
-@lru_cache(maxsize=16)
 def _replay_payload(path_string: str) -> ReplayPayload:
-    """Run the causal replay once and keep a compact browser representation."""
+    """Validate even cache hits; recordings are keyed by their actual contents."""
+    _require_frozen_artifacts()
+    path = _resolve_case(path_string)
+    digest = _sha256(path)
+    payload = _cached_replay_payload(str(path), digest)
+    if _resolve_case(path_string) != path or _sha256(path) != digest:
+        raise RuntimeError("Caso alterado durante o replay; tente novamente")
+    return payload
+
+
+@lru_cache(maxsize=16)
+def _cached_replay_payload(path_string: str, case_sha256: str) -> ReplayPayload:
+    """Run once per case content under the immutable startup model/gate."""
 
     if MODEL is None or PREPROCESS is None:
         raise RuntimeError(MODEL_ERROR or "Checkpoint indisponível")
@@ -251,7 +377,7 @@ def _replay_payload(path_string: str) -> ReplayPayload:
         case,
         PREPROCESS,
         stride_seconds=1.0,
-        min_quality=DEFAULT_MIN_SIGNAL_QUALITY,
+        min_quality=EFFECTIVE_MIN_QUALITY,
         device="cpu",
     )
     eeg = np.asarray(case.eeg, dtype=float)
@@ -280,6 +406,8 @@ def _card(title: str, value: str, detail: str, tone: str = "blue") -> html.Div:
             html.Div(detail, className="metric-detail"),
         ],
         className=f"metric-card metric-{tone}",
+        role="group",
+        **{"aria-label": f"{title}: {value}. {detail}"},
     )
 
 
@@ -287,23 +415,91 @@ def _live_card(title: str, value_id: str, detail_id: str, tone: str) -> html.Div
     return html.Div(
         [
             html.Div(title, className="metric-title"),
-            html.Div("—", id=value_id, className="metric-value"),
+            html.Div(
+                "—",
+                id=value_id,
+                className="metric-value",
+                **{"aria-live": "polite", "aria-atomic": "true"},
+            ),
             html.Div("Aguardando replay", id=detail_id, className="metric-detail"),
         ],
         className=f"metric-card metric-{tone}",
+        role="group",
+        **{"aria-label": title},
+    )
+
+
+def _status_children(title: str, detail: str) -> list[object]:
+    return [
+        html.Strong(title, className="state-title"),
+        html.Span(detail, className="state-detail"),
+    ]
+
+
+def _status_message(
+    title: str,
+    detail: str,
+    *,
+    tone: str = "info",
+    component_id: str | None = None,
+    live: bool = False,
+) -> html.Div:
+    role = "alert" if tone == "error" else "status"
+    attributes: dict[str, object] = {
+        "className": f"state-message state-{tone}",
+        "role": role,
+    }
+    if component_id:
+        attributes["id"] = component_id
+    if live:
+        attributes.update({"aria-live": "assertive" if tone == "error" else "polite", "aria-atomic": "true"})
+    return html.Div(_status_children(title, detail), **attributes)
+
+
+def _chart(
+    figure: go.Figure,
+    caption: str,
+    *,
+    graph_id: str | None = None,
+    class_name: str = "",
+) -> html.Figure:
+    layout_height = _finite_number(figure.layout.height, DEFAULT_CHART_HEIGHT)
+    graph_height = max(MIN_CHART_HEIGHT, int(round(layout_height)))
+    graph_kwargs: dict[str, object] = {
+        "figure": figure,
+        "config": GRAPH_CONFIG,
+        "responsive": True,
+        "style": {
+            "height": f"{graph_height}px",
+            "minHeight": f"{MIN_CHART_HEIGHT}px",
+            "width": "100%",
+        },
+    }
+    if graph_id:
+        graph_kwargs["id"] = graph_id
+    classes = " ".join(part for part in ("chart-card", class_name) if part)
+    return html.Figure(
+        [dcc.Graph(**graph_kwargs), html.Figcaption(caption, className="chart-caption")],
+        className=classes,
+        **{"aria-label": caption},
     )
 
 
 def _figure_layout(title: str, *, height: int = 330) -> dict[str, object]:
     return {
-        "title": {"text": title, "font": {"size": 17, "color": COLORS["ink"]}},
+        "title": {
+            "text": title,
+            "font": {"size": 18, "color": COLORS["ink"]},
+            "x": 0.02,
+            "xanchor": "left",
+        },
         "height": height,
         "margin": {"l": 58, "r": 30, "t": 62, "b": 50},
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "#FAFCFE",
-        "font": {"family": "Inter, Arial, sans-serif", "color": COLORS["ink"]},
+        "font": {"family": "Inter, Arial, sans-serif", "size": 12, "color": COLORS["ink"]},
         "hoverlabel": {"bgcolor": COLORS["navy"], "font": {"color": "white"}},
-        "legend": {"orientation": "h", "y": 1.04, "x": 0, "font": {"size": 11}},
+        "legend": {"orientation": "h", "y": 1.04, "x": 0, "font": {"size": 12}},
         "hovermode": "x unified",
     }
 
@@ -343,7 +539,7 @@ def _evidence_mae_figure() -> go.Figure:
         return _empty_figure("MAE da rede contra o BIS", "Relatório de métricas indisponível")
     figure = go.Figure(
         go.Bar(
-            x=["Holdout interno", "VitalDB externo"],
+            x=[FIGSHARE_HOLDOUT_LABEL, ACTIVE_VITALDB_LABEL],
             y=values,
             text=[_format_number(value, 1) for value in values],
             textposition="outside",
@@ -362,7 +558,7 @@ def _evidence_pearson_figure() -> go.Figure:
         return _empty_figure("Correlação da rede com o BIS", "Relatório de métricas indisponível")
     figure = go.Figure(
         go.Bar(
-            x=["Holdout interno", "VitalDB externo"],
+            x=[FIGSHARE_HOLDOUT_LABEL, ACTIVE_VITALDB_LABEL],
             y=values,
             text=[_format_number(value, 3) for value in values],
             textposition="outside",
@@ -464,13 +660,11 @@ def _prediction_index(payload: ReplayPayload, seconds: float) -> int:
 def _replay_store_payload(payload: ReplayPayload) -> dict[str, object]:
     case = payload.case
     bis_times = np.arange(case.bis.size, dtype=float) * case.label_interval_seconds
-    if case.source_dataset:
-        case_label = f"VitalDB · {case.case_id.replace('vitaldb_', '')}"
-    else:
-        case_label = f"Figshare · {case.case_id}"
     return {
         "case_id": case.case_id,
-        "case_label": case_label,
+        "min_quality": EFFECTIVE_MIN_QUALITY,
+        "checkpoint_sha256": MODEL_METADATA.get("checkpoint_sha256"),
+        "case_label": _case_source_label(case),
         "duration": float(case.duration_seconds),
         "bis_times": _json_series(bis_times),
         "bis_values": _json_series(case.bis),
@@ -620,7 +814,7 @@ def _quality_figure(payload: ReplayPayload, seconds: float) -> go.Figure:
             ),
         ]
     )
-    figure.add_hline(y=DEFAULT_MIN_SIGNAL_QUALITY, line={"color": COLORS["orange"], "width": 1.5, "dash": "dash"}, annotation_text=f"gate {DEFAULT_MIN_SIGNAL_QUALITY:.2f}", annotation_position="bottom right")
+    figure.add_hline(y=EFFECTIVE_MIN_QUALITY, line={"color": COLORS["orange"], "width": 1.5, "dash": "dash"}, annotation_text=f"gate {EFFECTIVE_MIN_QUALITY:.2f}", annotation_position="bottom right")
     figure.update_layout(**_figure_layout("Qualidade do sinal · gate de emissão", height=280))
     figure.update_layout(uirevision=f"quality-{payload.case.case_id}")
     figure.update_xaxes(title="Tempo (s)", gridcolor=COLORS["line"])
@@ -632,7 +826,7 @@ def _case_meta(path_value: str | None) -> html.Div:
     if not path_value:
         return html.Div("Nenhum caso disponível.", className="case-meta")
     try:
-        case = load_case(path_value)
+        case = load_case(_resolve_case(path_value))
     except Exception as error:
         return html.Div(f"Não foi possível abrir o caso: {error}", className="case-meta case-error")
     nonfinite_count = int((~np.isfinite(case.eeg)).sum())
@@ -700,8 +894,6 @@ def _trajectory_figure(payload: ReplayPayload) -> tuple[go.Figure, go.Figure]:
     visual_predictions = _causal_ema(payload.smoothed_predictions)
     error = payload.smoothed_predictions - references
     visual_error = visual_predictions - references
-    valid_error = np.isfinite(error)
-    valid_visual_error = np.isfinite(visual_error)
 
     figure = go.Figure(
         [
@@ -717,8 +909,8 @@ def _trajectory_figure(payload: ReplayPayload) -> tuple[go.Figure, go.Figure]:
 
     error_figure = go.Figure(
         [
-            go.Scattergl(x=payload.prediction_times[valid_error], y=error[valid_error], mode="lines", name="Erro causal original", visible="legendonly", line={"color": COLORS["orange"], "width": 1.2, "dash": "dot"}, hovertemplate="t=%{x:.1f}s<br>erro causal=%{y:.1f} pontos BIS<extra></extra>"),
-            go.Scattergl(x=payload.prediction_times[valid_visual_error], y=visual_error[valid_visual_error], mode="lines", name="Erro · EMA visual (5 s)", line={"color": COLORS["orange"], "width": 2.4}, hovertemplate="t=%{x:.1f}s<br>erro visual=%{y:.1f} pontos BIS<extra></extra>"),
+            go.Scattergl(x=payload.prediction_times, y=_json_series(error), connectgaps=False, mode="lines", name="Erro causal original", visible="legendonly", line={"color": COLORS["orange"], "width": 1.2, "dash": "dot"}, hovertemplate="t=%{x:.1f}s<br>erro causal=%{y:.1f} pontos BIS<extra></extra>"),
+            go.Scattergl(x=payload.prediction_times, y=_json_series(visual_error), connectgaps=False, mode="lines", name="Erro · EMA visual (5 s)", line={"color": COLORS["orange"], "width": 2.4}, hovertemplate="t=%{x:.1f}s<br>erro visual=%{y:.1f} pontos BIS<extra></extra>"),
         ]
     )
     error_figure.add_hline(y=0, line={"color": COLORS["navy"], "width": 1.5, "dash": "dash"})
@@ -729,7 +921,24 @@ def _trajectory_figure(payload: ReplayPayload) -> tuple[go.Figure, go.Figure]:
 
 
 def _table(headers: list[str], rows: list[list[object]], class_name: str = "data-table") -> html.Table:
-    return html.Table([html.Thead(html.Tr([html.Th(header) for header in headers])), html.Tbody([html.Tr([html.Td(str(value)) for value in row]) for row in rows])], className=class_name)
+    body = [html.Tr([html.Td(str(value)) for value in row]) for row in rows]
+    if not body:
+        body = [
+            html.Tr(
+                html.Td(
+                    "Nenhum dado disponível para esta tabela.",
+                    colSpan=len(headers),
+                    className="empty-table-cell",
+                )
+            )
+        ]
+    return html.Table(
+        [
+            html.Thead(html.Tr([html.Th(header, scope="col") for header in headers])),
+            html.Tbody(body),
+        ],
+        className=class_name,
+    )
 
 
 def _initial_trajectory_cards() -> list[html.Div]:
@@ -958,15 +1167,15 @@ def _corpus_records() -> list[dict[str, object]]:
 
 def _corpus_summary_cards() -> list[html.Div]:
     summary = CORPUS_MANIFEST.get("summary", {})
-    if not isinstance(summary, dict):
-        return [_card("Manifesto do corpus", "—", "ainda não gerado", "navy")]
+    if not isinstance(summary, dict) or not summary:
+        return [_card("Manifesto do corpus", "—", "relatório ainda não gerado", "navy")]
     source_summary = summary.get("source_summary", {})
     source_count = len(source_summary) if isinstance(source_summary, dict) else 0
     return [
         _card("Casos elegíveis", f"{int(summary.get('eligible_training_cases', 0))}", "pool de treino supervisionado", "teal"),
         _card("Janelas elegíveis", f"{int(summary.get('eligible_training_windows', 0)):,}", "após o gate por qualidade", "blue"),
         _card("Quarentena", f"{int(summary.get('quarantined_development_cases', 0))}", "não entram sem revisão", "red"),
-        _card("Externo congelado", f"{int(summary.get('frozen_external_cases', 0))}", "VitalDB · não usado no treino", "orange"),
+        _card("Benchmark VitalDB", f"{int(summary.get('frozen_external_cases', 0))}", "15 casos fora do ajuste · histórico reutilizado", "orange"),
         _card("Fontes supervisionadas", f"{source_count}", "Figshare + VitalDB quando elegível", "purple"),
     ]
 
@@ -994,11 +1203,11 @@ def _corpus_source_figure() -> go.Figure:
         hovertemplate="%{x}<br>quarentena: %{y}<extra></extra>",
     ))
     figure.add_trace(go.Bar(
-        name="Externo congelado",
+        name="Benchmark histórico",
         x=[labels.get(source, source) for source in sources],
         y=[int(source_summary[source].get("frozen_external_cases", 0)) for source in sources],
         marker_color=COLORS["orange"],
-        hovertemplate="%{x}<br>externos congelados: %{y}<extra></extra>",
+        hovertemplate="%{x}<br>casos no benchmark histórico: %{y}<extra></extra>",
     ))
     figure.update_layout(**_figure_layout("Composição do corpus por fonte", height=360), barmode="stack")
     figure.update_xaxes(title="Fonte", gridcolor=COLORS["line"])
@@ -1013,6 +1222,7 @@ def _corpus_quality_figure() -> go.Figure:
     gate = CORPUS_MANIFEST.get("quality_config", {})
     min_finite = _finite_number(gate.get("min_finite_fraction"), 0.9) if isinstance(gate, dict) else 0.9
     colors = {"include": COLORS["teal"], "quarantine": COLORS["red"], "exclude": COLORS["muted"]}
+    symbols = {"include": "circle", "quarantine": "x", "exclude": "diamond-open"}
     figure = go.Figure()
     for status in ("include", "quarantine", "exclude"):
         selected = [record for record in records if record.get("quality_status") == status]
@@ -1037,7 +1247,12 @@ def _corpus_quality_figure() -> go.Figure:
             name={"include": "Elegível", "quarantine": "Quarentena", "exclude": "Excluído"}[status],
             text=[str(record.get("case_id", "—")).replace("vitaldb_", "") for record in selected],
             textposition="top center",
-            marker={"color": colors[status], "size": 10, "line": {"color": "white", "width": 1}},
+            marker={
+                "color": colors[status],
+                "size": 11,
+                "symbol": symbols[status],
+                "line": {"color": "white", "width": 1},
+            },
             customdata=customdata,
             hovertemplate=(
                 "caso %{customdata[0]} · %{customdata[1]}<br>"
@@ -1062,7 +1277,7 @@ def _corpus_case_rows() -> list[list[str]]:
             rows.append([str(record.get("file_name", "—")), "—", "—", "—", "erro de leitura"])
             continue
         source = "VitalDB" if record.get("source_key") == "vitaldb" else "Figshare"
-        role = {"development_pool": "pool de treino", "frozen_external": "externo congelado"}.get(str(record.get("role")), str(record.get("role", "—")))
+        role = {"development_pool": "pool de desenvolvimento", "frozen_external": "benchmark histórico"}.get(str(record.get("role")), str(record.get("role", "—")))
         status = {"include": "elegível", "quarantine": "quarentena", "exclude": "excluído"}.get(str(record.get("quality_status")), "—")
         rows.append([
             f"{source} · {record.get('case_id', '—')}",
@@ -1095,12 +1310,12 @@ def _corpus_experiment_cards() -> list[html.Div]:
     internal_gain = _relative_improvement(base_internal, mixed_internal_mae)
     external_gain = _relative_improvement(base_external, mixed_external_mae)
     if not np.isfinite(internal_gain) or not np.isfinite(external_gain):
-        return [_card("Treino misto", "—", "resultado comparável ainda não gerado", "navy")]
+        return [_card("Candidato misto", "—", "comparação histórica ainda não disponível", "navy")]
     return [
-        _card("Figshare · MAE", f"{mixed_internal_mae:.2f}", f"candidato misto · {internal_gain:+.1f}% vs ativo", "teal"),
-        _card("VitalDB · MAE", f"{mixed_external_mae:.2f}", f"candidato misto · {external_gain:+.1f}% vs ativo", "orange"),
-        _card("VitalDB · Pearson", f"{_metric_value(mixed_external, 'pearson_r'):.3f}", "candidato misto · teste congelado", "purple"),
-        _card("Status", "candidato", "checkpoint ativo não foi trocado automaticamente", "navy"),
+        _card("Figshare · MAE", f"{mixed_internal_mae:.2f}", f"misto · variação exploratória {internal_gain:+.1f}% vs ativo", "teal"),
+        _card("VitalDB · MAE", f"{mixed_external_mae:.2f}", f"15 casos · holdout por participante · {external_gain:+.1f}% vs ativo", "orange"),
+        _card("VitalDB · Pearson", f"{_metric_value(mixed_external, 'pearson_r'):.3f}", "mesma fonte após 10 casos VitalDB no desenvolvimento", "purple"),
+        _card("Leitura", "exploratória", "benchmark histórico reutilizado · não confirmatória", "navy"),
     ]
 
 
@@ -1113,13 +1328,13 @@ def _corpus_experiment_figure() -> go.Figure:
     candidate_pearson = [_metric_value(mixed_internal, "pearson_r"), _metric_value(mixed_external, "pearson_r")]
     if not np.isfinite(np.asarray(candidate_mae)).any():
         return _empty_figure("Efeito observado do corpus misto", "Relatórios do candidato ainda não disponíveis", height=390)
-    labels = ["Figshare · holdout", "VitalDB · externo"]
+    labels = [MIXED_FIGSHARE_BENCHMARK_LABEL, MIXED_VITALDB_HOLDOUT_LABEL]
     figure = make_subplots(rows=1, cols=2, subplot_titles=("MAE · menor é melhor", "Pearson r · maior é melhor"), horizontal_spacing=0.14)
     for column, baseline, candidate, title, color in ((1, baseline_mae, candidate_mae, "MAE", COLORS["teal"]), (2, baseline_pearson, candidate_pearson, "Pearson r", COLORS["purple"])):
-        figure.add_trace(go.Bar(name="Checkpoint ativo", x=labels, y=baseline, marker_color=COLORS["navy"], legendgroup="baseline", showlegend=column == 1, hovertemplate="%{x}<br>ativo: %{y:.3f}<extra></extra>"), row=1, col=column)
-        figure.add_trace(go.Bar(name="Candidato misto", x=labels, y=candidate, marker_color=color, legendgroup="candidate", showlegend=column == 1, hovertemplate="%{x}<br>candidato: %{y:.3f}<extra></extra>"), row=1, col=column)
+        figure.add_trace(go.Bar(name=ACTIVE_MODEL_LABEL, x=labels, y=baseline, marker_color=COLORS["navy"], legendgroup="baseline", showlegend=column == 1, hovertemplate="%{x}<br>ativo Figshare-only: %{y:.3f}<extra></extra>"), row=1, col=column)
+        figure.add_trace(go.Bar(name=MIXED_MODEL_LABEL, x=labels, y=candidate, marker_color=color, legendgroup="candidate", showlegend=column == 1, hovertemplate="%{x}<br>candidato após exposição VitalDB: %{y:.3f}<extra></extra>"), row=1, col=column)
         figure.update_yaxes(title=title, gridcolor=COLORS["line"], row=1, col=column)
-    figure.update_layout(**_figure_layout("Comparação justa: checkpoint ativo × corpus misto", height=390), barmode="group")
+    figure.update_layout(**_figure_layout("Comparação histórica: checkpoint ativo × candidato misto", height=390), barmode="group")
     figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=1)
     figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=2)
     return figure
@@ -1130,8 +1345,8 @@ def _corpus_experiment_rows() -> list[list[str]]:
     mixed_external = _mixed_metrics(MIXED_EXTERNAL_REPORT)
     rows = []
     for label, baseline, candidate in (
-        ("Figshare · holdout fixo", HOLDOUT_METRICS, mixed_internal),
-        ("VitalDB · externo congelado", EXTERNAL_METRICS, mixed_external),
+        (MIXED_FIGSHARE_BENCHMARK_LABEL, HOLDOUT_METRICS, mixed_internal),
+        (MIXED_VITALDB_HOLDOUT_LABEL, EXTERNAL_METRICS, mixed_external),
     ):
         base_mae = _metric_value(baseline, "mae")
         candidate_mae = _metric_value(candidate, "mae")
@@ -1141,24 +1356,58 @@ def _corpus_experiment_rows() -> list[list[str]]:
             _format_number(base_mae, 2),
             _format_number(candidate_mae, 2),
             f"{gain:+.1f}%" if np.isfinite(gain) else "—",
-            f"{_metric_value(candidate, 'pearson_r'):.3f}",
+            _format_number(_metric_value(candidate, "pearson_r"), 3),
         ])
     return rows
 
 
 def _build_corpus_tab() -> html.Div:
     third_source = CORPUS_MANIFEST.get("third_source", {})
-    third_reason = third_source.get("reason", "alvo incompatível") if isinstance(third_source, dict) else "alvo incompatível"
+    third_source_note = (
+        "Os rótulos MOAA/S e estado de consciência não são uma referência BIS contínua; "
+        "essa fonte exige uma tarefa ordinal ou multitarefa separada."
+        if isinstance(third_source, dict) and third_source
+        else "A fonte exige uma tarefa separada por usar um alvo incompatível."
+    )
     return html.Div(
         [
-            _tab_intro("CORPUS AUDITÁVEL", "Mais dados, com controle de qualidade", "Esta aba mostra o que pode realmente virar treinamento misto. O manifesto separa o pool Figshare + VitalDB, a quarentena por sinal e o VitalDB congelado como teste externo; assim, aumentar volume não apaga a mudança de domínio."),
+            _tab_intro(
+                "CORPUS AUDITÁVEL",
+                "Mais dados, com controle de qualidade e papéis explícitos",
+                "O manifesto separa o pool de desenvolvimento Figshare + VitalDB, a quarentena por sinal e um benchmark histórico de 15 casos VitalDB. Esse benchmark é avaliação cruzada de dataset para o ativo Figshare-only, mas holdout por participante da mesma fonte para o candidato misto.",
+            ),
             html.Div(_corpus_summary_cards(), className="metric-grid five-metrics"),
-            html.Div([html.Div(dcc.Graph(figure=_corpus_source_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div(dcc.Graph(figure=_corpus_quality_figure(), config={"displayModeBar": False}), className="chart-card")], className="chart-grid two-col"),
-            html.Div([html.H3("Decisão de incorporação"), html.P("O treino candidato usa amostragem balanceada por grupo e por fonte: uma cirurgia longa não domina milhares de janelas, e o VitalDB não domina o Figshare apenas por ter gravações maiores."), html.P("Os casos VitalDB atuais permanecem no conjunto externo congelado. Para criar o corpus misto, novos casos devem ser baixados em data/vitaldb_train, auditados e só então incluídos no manifesto."), html.P(f"Terceira fonte: DOSE-I não foi misturada. {third_reason}."), html.Div("O gráfico não promete ganho: ele documenta a elegibilidade dos dados. O ganho real só aparece depois de treinar os braços Figshare-only, VitalDB-only e misto contra os mesmos holdouts congelados.", className="callout")], className="explanation-card"),
+            html.Div(
+                [
+                    _chart(
+                        _corpus_source_figure(),
+                        "Contagem de casos por fonte e decisão de governança. As barras descrevem disponibilidade; não demonstram desempenho do modelo.",
+                    ),
+                    _chart(
+                        _corpus_quality_figure(),
+                        "Cada símbolo representa um caso. Cor e forma repetem a decisão de elegibilidade para que a leitura não dependa apenas de cor.",
+                    ),
+                ],
+                className="chart-grid two-col",
+            ),
+            html.Div(
+                [
+                    html.H3("Decisão de incorporação"),
+                    html.P("O candidato misto usa amostragem balanceada por grupo e por fonte: uma cirurgia longa não domina milhares de janelas, e o VitalDB não domina o Figshare apenas por ter gravações maiores."),
+                    html.P("O desenvolvimento do candidato já incluiu 10 casos VitalDB. Os outros 15 casos VitalDB ficaram fora do ajuste e formam um holdout por participante da mesma fonte/domínio; por isso, não são uma avaliação externa de domínio para esse candidato."),
+                    html.P("Para o checkpoint ativo, desenvolvido somente em Figshare, esses 15 casos continuam externos ao desenvolvimento e sustentam uma avaliação cruzada de dataset exploratória."),
+                    html.P(f"Terceira fonte: DOSE-I não foi misturada. {third_source_note}"),
+                    html.Div("A comparação é retrospectiva e exploratória: o benchmark VitalDB já havia sido inspecionado antes do candidato misto e foi reutilizado. Ela não é confirmatória; esse papel exige uma nova coorte pré-especificada e não usada no desenvolvimento.", className="callout"),
+                ],
+                className="explanation-card",
+            ),
             html.Div(_corpus_experiment_cards(), className="metric-grid four-metrics"),
-            html.Div(dcc.Graph(figure=_corpus_experiment_figure(), config={"displayModeBar": False}), className="chart-card"),
-            html.Div([html.H3("Resultado do experimento misto"), _table(["Conjunto", "Ativo · MAE", "Misto · MAE", "Variação", "Misto · Pearson"], _corpus_experiment_rows())], className="table-card"),
-            html.Div([html.H3("Manifesto caso a caso"), _table(["Caso", "Papel", "Decisão", "EEG finito", "Janelas aceitas"], _corpus_case_rows())], className="table-card"),
+            _chart(
+                _corpus_experiment_figure(),
+                "Comparação histórica nos mesmos casos. No ativo Figshare-only, VitalDB é avaliação cruzada de dataset; no candidato, é holdout por participante da mesma fonte após 10 casos VitalDB no desenvolvimento. Trata-se de benchmark histórico reutilizado, portanto o resultado é exploratório e não confirmatório.",
+            ),
+            html.Div([html.H3("Resultado exploratório do candidato misto"), _table(["Benchmark histórico", "Ativo Figshare-only · MAE", "Misto Figshare + VitalDB · MAE", "Variação exploratória", "Misto · Pearson"], _corpus_experiment_rows())], className="table-card"),
+            html.Div([html.H3("Manifesto caso a caso"), _table(["Caso", "Papel no manifesto", "Decisão", "EEG finito", "Janelas aceitas"], _corpus_case_rows())], className="table-card"),
         ],
         className="tab-panel",
     )
@@ -1166,27 +1415,49 @@ def _build_corpus_tab() -> html.Div:
 
 def _statistics_cards() -> list[html.Div]:
     return [
-        _card("Janelas holdout", _format_number(_metric_value(HOLDOUT_METRICS, "n"), 0), "5 casos Figshare", "blue"),
-        _card("Janelas VitalDB", _format_number(_metric_value(EXTERNAL_METRICS, "n"), 0), "15 casos externos", "orange"),
-        _card("MAE holdout", _format_number(_metric_value(HOLDOUT_METRICS, "mae"), 1), "pontos BIS", "teal"),
-        _card("MAE VitalDB", _format_number(_metric_value(EXTERNAL_METRICS, "mae"), 1), "pontos BIS", "red"),
-        _card("Pearson holdout", _format_number(_metric_value(HOLDOUT_METRICS, "pearson_r"), 3), "associação temporal", "purple"),
-        _card("Pearson VitalDB", _format_number(_metric_value(EXTERNAL_METRICS, "pearson_r"), 3), "mudança de domínio", "navy"),
+        _card("Janelas Figshare", _format_number(_metric_value(HOLDOUT_METRICS, "n"), 0), "5 casos/cirurgias · holdout do ativo", "blue"),
+        _card("Janelas VitalDB", _format_number(_metric_value(EXTERNAL_METRICS, "n"), 0), "15 casos · cruzada de dataset do ativo", "orange"),
+        _card("MAE Figshare", _format_number(_metric_value(HOLDOUT_METRICS, "mae"), 1), "ativo Figshare-only · holdout por caso", "teal"),
+        _card("MAE VitalDB", _format_number(_metric_value(EXTERNAL_METRICS, "mae"), 1), "ativo Figshare-only · cruzada exploratória", "red"),
+        _card("Pearson Figshare", _format_number(_metric_value(HOLDOUT_METRICS, "pearson_r"), 3), "associação temporal no holdout", "purple"),
+        _card("Pearson VitalDB", _format_number(_metric_value(EXTERNAL_METRICS, "pearson_r"), 3), "sensibilidade à mudança de dataset", "navy"),
     ]
 
 
 def _error_metric_figure() -> go.Figure:
+    available = [
+        _metric_value(metrics, key)
+        for metrics in (HOLDOUT_METRICS, EXTERNAL_METRICS)
+        for key in ("mae", "rmse")
+    ]
+    if not np.isfinite(available).any():
+        return _empty_figure(
+            "Erros contínuos por conjunto",
+            "Relatórios de erro indisponíveis",
+            height=360,
+        )
     figure = go.Figure()
     for key, color in (("mae", COLORS["blue"]), ("rmse", COLORS["orange"])):
-        figure.add_trace(go.Bar(name=METRIC_LABELS[key], x=["Holdout interno", "VitalDB externo"], y=[_metric_value(HOLDOUT_METRICS, key), _metric_value(EXTERNAL_METRICS, key)], marker_color=color, text=[_metric_format(key, _metric_value(HOLDOUT_METRICS, key)), _metric_format(key, _metric_value(EXTERNAL_METRICS, key))], textposition="outside", hovertemplate="%{x}<br>%{fullData.name}: %{y:.2f} pontos BIS<extra></extra>"))
+        figure.add_trace(go.Bar(name=METRIC_LABELS[key], x=[FIGSHARE_HOLDOUT_LABEL, ACTIVE_VITALDB_LABEL], y=[_metric_value(HOLDOUT_METRICS, key), _metric_value(EXTERNAL_METRICS, key)], marker_color=color, text=[_metric_format(key, _metric_value(HOLDOUT_METRICS, key)), _metric_format(key, _metric_value(EXTERNAL_METRICS, key))], textposition="outside", hovertemplate="%{x}<br>%{fullData.name}: %{y:.2f} pontos BIS<extra></extra>"))
     figure.update_layout(**_figure_layout("Erros contínuos por conjunto", height=360), barmode="group")
     figure.update_yaxes(title="Pontos BIS", rangemode="tozero", gridcolor=COLORS["line"])
     return figure
 
 
 def _association_metric_figure() -> go.Figure:
+    available = [
+        _metric_value(metrics, key)
+        for metrics in (HOLDOUT_METRICS, EXTERNAL_METRICS)
+        for key in ("pearson_r", "stage_accuracy", "stage_macro_f1")
+    ]
+    if not np.isfinite(available).any():
+        return _empty_figure(
+            "Associação e classificação por conjunto",
+            "Relatórios de associação indisponíveis",
+            height=390,
+        )
     figure = go.Figure()
-    for dataset, metrics, color in (("Holdout interno", HOLDOUT_METRICS, COLORS["teal"]), ("VitalDB externo", EXTERNAL_METRICS, COLORS["orange"])):
+    for dataset, metrics, color in ((FIGSHARE_HOLDOUT_LABEL, HOLDOUT_METRICS, COLORS["teal"]), (ACTIVE_VITALDB_LABEL, EXTERNAL_METRICS, COLORS["orange"])):
         keys = ["pearson_r", "stage_accuracy", "stage_macro_f1"]
         values = [_metric_value(metrics, key) for key in keys]
         figure.add_trace(go.Bar(name=dataset, x=[METRIC_LABELS[key] for key in keys], y=values, marker_color=color, text=[_metric_format(key, value) for key, value in zip(keys, values, strict=False)], textposition="outside", hovertemplate="%{x}<br>%{fullData.name}: %{y:.3f}<extra></extra>"))
@@ -1196,6 +1467,21 @@ def _association_metric_figure() -> go.Figure:
 
 
 def _bootstrap_figure() -> go.Figure:
+    available = []
+    for report in (HOLDOUT_REPORT, EXTERNAL_REPORT):
+        bootstrap = report.get("case_bootstrap", {})
+        if not isinstance(bootstrap, dict):
+            continue
+        for key in ("mae", "pearson_r"):
+            interval = bootstrap.get(key, {})
+            if isinstance(interval, dict):
+                available.append(_finite_number(interval.get("mean")))
+    if not np.isfinite(available).any():
+        return _empty_figure(
+            "Incerteza entre casos · bootstrap",
+            "Intervalos bootstrap indisponíveis",
+            height=340,
+        )
     figure = make_subplots(rows=1, cols=2, subplot_titles=("MAE · IC 95% por caso", "Pearson r · IC 95% por caso"), horizontal_spacing=0.13)
     for column, key, title, color in ((1, "mae", "MAE", COLORS["blue"]), (2, "pearson_r", "Pearson r", COLORS["teal"])):
         means = []
@@ -1207,7 +1493,7 @@ def _bootstrap_figure() -> go.Figure:
             means.append(_finite_number(interval.get("mean")))
             lower.append(_finite_number(interval.get("lower_95")))
             upper.append(_finite_number(interval.get("upper_95")))
-        figure.add_trace(go.Scatter(x=["Holdout", "VitalDB"], y=means, mode="markers", name=title, marker={"color": color, "size": 12}, error_y={"type": "data", "symmetric": False, "array": [hi - mean for hi, mean in zip(upper, means, strict=False)], "arrayminus": [mean - lo for mean, lo in zip(means, lower, strict=False)]}, hovertemplate="%{x}<br>média %{y:.3f}<extra></extra>", showlegend=False), row=1, col=column)
+        figure.add_trace(go.Scatter(x=[FIGSHARE_HOLDOUT_LABEL, ACTIVE_VITALDB_LABEL], y=means, mode="markers", name=title, marker={"color": color, "size": 12}, error_y={"type": "data", "symmetric": False, "array": [hi - mean for hi, mean in zip(upper, means, strict=False)], "arrayminus": [mean - lo for mean, lo in zip(means, lower, strict=False)]}, hovertemplate="%{x}<br>média %{y:.3f}<extra></extra>", showlegend=False), row=1, col=column)
         figure.update_yaxes(title=title, gridcolor=COLORS["line"], row=1, col=column)
     figure.update_layout(**_figure_layout("Incerteza entre casos · bootstrap", height=340))
     figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=1)
@@ -1218,14 +1504,14 @@ def _bootstrap_figure() -> go.Figure:
 def _per_case_figure() -> go.Figure:
     values = EXTERNAL_REPORT.get("per_case", [])
     if not isinstance(values, list) or not values:
-        return _empty_figure("VitalDB · MAE por caso", "Métricas por caso indisponíveis", height=430)
+        return _empty_figure("Ativo Figshare-only · VitalDB por caso", "Métricas por caso indisponíveis", height=430)
     rows = [item for item in values if isinstance(item, dict)]
     rows.sort(key=lambda item: _finite_number(item.get("mae")), reverse=True)
     labels = [str(item.get("case_id", "caso")) for item in rows]
     maes = [_finite_number(item.get("mae")) for item in rows]
     pearsons = [_finite_number(item.get("pearson_r")) for item in rows]
     figure = go.Figure(go.Bar(x=maes, y=labels, orientation="h", marker_color=COLORS["orange"], text=[_format_number(value, 1) for value in maes], textposition="outside", customdata=np.asarray(pearsons)[:, None], hovertemplate="%{y}<br>MAE %{x:.2f}<br>Pearson %{customdata[0]:.3f}<extra></extra>"))
-    figure.update_layout(**_figure_layout("VitalDB · erro por caso", height=580))
+    figure.update_layout(**_figure_layout("Ativo Figshare-only · avaliação VitalDB por caso", height=580))
     figure.update_xaxes(title="MAE (pontos BIS)", rangemode="tozero", gridcolor=COLORS["line"])
     figure.update_yaxes(title="Caso", autorange="reversed", gridcolor=COLORS["line"])
     return figure
@@ -1235,13 +1521,134 @@ def _tab_intro(kicker: str, title: str, lead: str) -> html.Div:
     return html.Div([html.Div(kicker, className="section-kicker"), html.H2(title, className="section-title"), html.P(lead, className="section-lead")], className="section-intro")
 
 
+def _evidence_status() -> html.Div:
+    missing = []
+    if not HOLDOUT_METRICS:
+        missing.append("holdout Figshare por caso")
+    if not EXTERNAL_METRICS:
+        missing.append("avaliação cruzada VitalDB do ativo")
+    if not _offset_points():
+        missing.append("sensibilidade temporal")
+    if missing:
+        return _status_message(
+            "Evidência parcial",
+            "Sem dados para: " + ", ".join(missing) + ". Os gráficos ausentes são sinalizados na própria tela.",
+            tone="warning",
+        )
+    return _status_message(
+        "Relatórios carregados",
+        "Holdout Figshare por caso, avaliação cruzada VitalDB do ativo Figshare-only e sensibilidade temporal disponíveis para comparação experimental.",
+        tone="ready",
+    )
+
+
+def _initial_case_status(component_id: str, purpose: str) -> html.Div:
+    if MODEL is None or PREPROCESS is None:
+        return _status_message(
+            "Análise indisponível",
+            MODEL_ERROR or "O checkpoint não pôde ser carregado.",
+            tone="error",
+            component_id=component_id,
+            live=True,
+        )
+    if not CASE_PATHS:
+        return _status_message(
+            "Nenhuma gravação disponível",
+            "Adicione um caso de pesquisa válido para habilitar esta visualização.",
+            tone="warning",
+            component_id=component_id,
+            live=True,
+        )
+    return _status_message(
+        "Caso pronto para análise",
+        purpose,
+        tone="ready",
+        component_id=component_id,
+        live=True,
+    )
+
+
 def _build_overview_tab() -> html.Div:
     return html.Div(
         [
-            _tab_intro("PAINEL DE EVIDÊNCIA", "A comparação começa pelo resultado, não pelo replay", "Esta aba resume a diferença entre o desempenho no holdout Figshare e a validação externa VitalDB. O objetivo é separar erro, associação e sensibilidade temporal para não transformar uma única métrica em uma conclusão exagerada."),
-            html.Div([_card("Holdout · MAE", _format_number(_metric_value(HOLDOUT_METRICS, "mae"), 1), "Figshare · 5 casos", "blue"), _card("Holdout · Pearson", _format_number(_metric_value(HOLDOUT_METRICS, "pearson_r"), 3), "CNN versus BIS", "teal"), _card("VitalDB · MAE", _format_number(_metric_value(EXTERNAL_METRICS, "mae"), 1), "15 casos · sem retreino", "orange"), _card("VitalDB · Pearson", _format_number(_metric_value(EXTERNAL_METRICS, "pearson_r"), 3), "mudança de domínio", "red")], className="metric-grid"),
-            html.Div([html.Div(dcc.Graph(figure=_evidence_mae_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div(dcc.Graph(figure=_evidence_pearson_figure(), config={"displayModeBar": False}), className="chart-card")], className="chart-grid two-col"),
-            html.Div([html.Div(dcc.Graph(figure=_evidence_offset_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div([html.Div("LEITURA PARA A DECISÃO", className="mini-kicker"), html.H3("Por que manter Figshare e VitalDB?"), html.P("1. O Figshare é o corpus do checkpoint: treino, validação e holdout interno usam a mesma família de arquivos e o mesmo alvo EEG→BIS."), html.P("2. O VitalDB fica separado para testar mudança de domínio — outra coorte perioperatória e outro caminho de aquisição — sem retreinar o modelo."), html.P("3. Misturar as fontes esconderia justamente a diferença que queremos medir; o offset e a avaliação externa continuam exploratórios e não devem ser escolhidos pós-hoc para pacientes."), html.Div("O relatório agora lê a série `results` do experimento de offset e mostra todos os nove pontos calculados.", className="callout")], className="explanation-card")], className="chart-grid two-col lower-evidence"),
+            _tab_intro(
+                "PAINEL DE EVIDÊNCIA",
+                "Checkpoint ativo: comparação entre datasets",
+                "Esta aba mostra somente o checkpoint ativo, desenvolvido em Figshare. Ela separa o holdout Figshare por caso da avaliação cruzada VitalDB, externa ao desenvolvimento desse modelo. "
+                "Erro, associação e sensibilidade temporal aparecem em blocos distintos para evitar "
+                "que uma única métrica seja tratada como conclusão clínica.",
+            ),
+            _evidence_status(),
+            html.Div(
+                [
+                    _card(
+                        "Holdout · MAE",
+                        _format_number(_metric_value(HOLDOUT_METRICS, "mae"), 1),
+                        "Figshare · 5 casos · menor é melhor",
+                        "blue",
+                    ),
+                    _card(
+                        "Holdout · Pearson",
+                        _format_number(_metric_value(HOLDOUT_METRICS, "pearson_r"), 3),
+                        "associação temporal · não equivalência",
+                        "teal",
+                    ),
+                    _card(
+                        "VitalDB · MAE",
+                        _format_number(_metric_value(EXTERNAL_METRICS, "mae"), 1),
+                        "15 casos · cruzada de dataset · menor é melhor",
+                        "orange",
+                    ),
+                    _card(
+                        "VitalDB · Pearson",
+                        _format_number(_metric_value(EXTERNAL_METRICS, "pearson_r"), 3),
+                        "ativo Figshare-only · associação exploratória",
+                        "red",
+                    ),
+                ],
+                className="metric-grid",
+            ),
+            html.Div(
+                [
+                    _chart(
+                        _evidence_mae_figure(),
+                        "Checkpoint ativo Figshare-only. Erro absoluto médio em pontos BIS no holdout Figshare por caso e na avaliação cruzada VitalDB; essas métricas não medem segurança clínica.",
+                    ),
+                    _chart(
+                        _evidence_pearson_figure(),
+                        "Checkpoint ativo Figshare-only. Associação temporal no holdout Figshare e na avaliação cruzada VitalDB. Correlação não significa concordância, transporte causal nem utilidade clínica.",
+                    ),
+                ],
+                className="chart-grid two-col",
+            ),
+            html.Div(
+                [
+                    _chart(
+                        _evidence_offset_figure(),
+                        "Análise pós-hoc do deslocamento temporal do rótulo. Os pontos são exploratórios e não escolhem um offset para uso em pessoas.",
+                    ),
+                    html.Div(
+                        [
+                            html.Div("LEITURA PARA A DECISÃO", className="mini-kicker"),
+                            html.H3("Por que manter Figshare e VitalDB separados?"),
+                            html.Ol(
+                                [
+                                    html.Li("O checkpoint ativo foi desenvolvido somente em Figshare, com separação por caso/cirurgia."),
+                                    html.Li("Para esse ativo, VitalDB é externo ao desenvolvimento e permite uma avaliação cruzada de dataset sem retreino."),
+                                    html.Li("A diferença entre as fontes indica sensibilidade à mudança de dataset; não identifica sozinha a causa nem prova transporte a outro domínio."),
+                                ],
+                                className="explanation-list",
+                            ),
+                            html.Div(
+                                "Os nove offsets calculados permanecem visíveis como análise exploratória; nenhum deles constitui recomendação de monitorização.",
+                                className="callout",
+                            ),
+                        ],
+                        className="explanation-card",
+                    ),
+                ],
+                className="chart-grid two-col lower-evidence",
+            ),
         ],
         className="tab-panel",
     )
@@ -1251,23 +1658,86 @@ def _build_trajectory_tab(options: list[dict[str, object]], default_value: str |
     trajectory_results = html.Div(
         [
             html.Div(id="trajectory-cards", children=_initial_trajectory_cards(), className="metric-grid trajectory-metrics"),
-            html.Div(dcc.Graph(id="trajectory-figure", figure=_empty_figure("Trajetória completa · BIS contra CNN", "Carregando o caso selecionado", height=470), config={"displayModeBar": False}), className="chart-card"),
-            html.Div(dcc.Graph(id="trajectory-error-figure", figure=_empty_figure("Erro ao longo do caso · CNN − BIS", "Carregando o caso selecionado", height=300), config={"displayModeBar": False}), className="chart-card trajectory-error-chart"),
+            _chart(
+                _empty_figure(
+                    "Trajetória completa · BIS contra CNN",
+                    "Preparando o caso selecionado",
+                    height=470,
+                ),
+                "Série retrospectiva completa. A linha visual suavizada facilita a leitura, enquanto as métricas usam a saída causal original.",
+                graph_id="trajectory-figure",
+            ),
+            _chart(
+                _empty_figure(
+                    "Erro ao longo do caso · CNN − BIS",
+                    "Preparando o caso selecionado",
+                    height=300,
+                ),
+                "Diferença em pontos BIS ao longo do tempo. Valores positivos significam estimativa acima da referência do arquivo.",
+                graph_id="trajectory-error-figure",
+                class_name="trajectory-error-chart",
+            ),
         ],
         className="trajectory-results",
     )
     return html.Div(
         [
-            _tab_intro("VISÃO RETROSPECTIVA", "O caso inteiro de uma vez", "Aqui a curva completa já aparece como uma análise retrospectiva: a pessoa não precisa esperar o relógio do replay para ver como BIS e CNN se comportaram durante todo o caso selecionado."),
+            _tab_intro(
+                "VISÃO RETROSPECTIVA",
+                "O caso inteiro de uma vez",
+                "A curva completa permite inspecionar, sem esperar o replay, como a estimativa experimental "
+                "e o BIS registrado variaram durante o caso selecionado.",
+            ),
             html.Div(
                 [
-                    html.Div([html.Label("Caso para analisar", htmlFor="trajectory-case-selector"), dcc.Dropdown(id="trajectory-case-selector", options=options, value=default_value, clearable=False, searchable=True), html.Div(id="trajectory-meta", children=_case_meta(default_value))], className="control-block case-control"),
-                    html.Div([html.Div("LEITURA CORRETA", className="mini-kicker"), html.P("Ao trocar o caso, a tela mostra um carregamento enquanto calcula as janelas causais. O título do gráfico e os cards identificam o caso novo assim que a trajetória termina de atualizar."), html.P("Arquivos VitalDB podem ter amostras ausentes: aqui elas são interpoladas apenas para a inspeção offline, enquanto o score de qualidade continua sendo calculado no sinal original. O caminho de EEG ao vivo continua rejeitando NaN/Inf.")], className="explanation-card compact-explanation"),
+                    html.Div(
+                        [
+                            html.Label("Caso para analisar", htmlFor="trajectory-case-selector"),
+                            dcc.Dropdown(
+                                id="trajectory-case-selector",
+                                options=options,
+                                value=default_value,
+                                clearable=False,
+                                searchable=True,
+                                disabled=not options,
+                                placeholder="Nenhum caso disponível",
+                            ),
+                            html.Div(id="trajectory-meta", children=_case_meta(default_value)),
+                        ],
+                        className="control-block case-control",
+                    ),
+                    html.Div(
+                        [
+                            html.Div("LEITURA CORRETA", className="mini-kicker"),
+                            html.P("Ao trocar o caso, um estado de carregamento identifica o cálculo em andamento. Cards e títulos só mudam quando o novo caso termina de atualizar."),
+                            html.P("A interpolação de amostras ausentes ocorre somente nesta inspeção offline. O score de qualidade continua usando o sinal original e não é um SQI clínico."),
+                        ],
+                        className="explanation-card compact-explanation",
+                    ),
                 ],
                 className="control-grid trajectory-controls",
             ),
-            dcc.Loading(id="trajectory-loading", type="circle", color=COLORS["teal"], children=trajectory_results),
-            html.Div("A linha marinho é o BIS observado; a linha turquesa espessa é uma EMA causal de 5 s aplicada somente para leitura. A saída causal original e o erro original ficam disponíveis pela legenda; cards e métricas não são recalculados com essa suavização visual.", className="legend-note"),
+            _initial_case_status(
+                "trajectory-data-status",
+                "A trajetória do caso selecionado será calculada em modo retrospectivo e experimental.",
+            ),
+            dcc.Loading(
+                id="trajectory-loading",
+                children=trajectory_results,
+                custom_spinner=html.Div(
+                    [html.Strong("Calculando trajetória"), html.Span("Processando janelas causais do caso selecionado.")],
+                    className="loading-state",
+                    role="status",
+                    **{"aria-live": "polite"},
+                ),
+                delay_show=250,
+                delay_hide=150,
+                target_components={"trajectory-figure": "figure"},
+            ),
+            html.Div(
+                "A linha marinho é o BIS registrado; a linha turquesa espessa é uma EMA causal de 5 s usada somente para leitura. A saída causal original e o erro original continuam disponíveis na legenda; cards e métricas não usam essa suavização visual.",
+                className="legend-note",
+            ),
         ],
         className="tab-panel",
     )
@@ -1278,8 +1748,195 @@ def _build_replay_tab(options: list[dict[str, object]], default_value: str | Non
     if duration > 300:
         marks[300] = "5:00"
     marks[int(duration)] = _format_clock(duration)
+    replay_available = bool(options) and MODEL is not None and PREPROCESS is not None
+    replay_results = html.Div(
+        [
+            dcc.Store(id="replay-data", data=None),
+            _initial_case_status(
+                "replay-data-status",
+                "Dados causais preparados; use os controles para revelar a gravação no tempo.",
+            ),
+            html.Div(
+                [
+                    _live_card("Estimativa CNN suavizada", "replay-cnn-value", "replay-cnn-detail", "teal"),
+                    _live_card("BIS registrado", "replay-bis-value", "replay-bis-detail", "navy"),
+                    _live_card("Diferença CNN − BIS", "replay-error-value", "replay-error-detail", "orange"),
+                    _live_card("Qualidade técnica", "replay-quality-value", "replay-quality-detail", "green"),
+                ],
+                className="metric-grid replay-metrics",
+            ),
+            _chart(
+                _empty_figure(
+                    "Replay sincronizado · atualização local",
+                    "Escolha um caso e inicie o replay",
+                    height=650,
+                ),
+                "O painel superior mostra o EEG recebido; o inferior compara BIS registrado e estimativas da CNN. Esta é uma simulação offline, não monitorização em tempo real.",
+                graph_id="replay-figure",
+                class_name="replay-main-chart",
+            ),
+            _chart(
+                _empty_figure(
+                    "Qualidade do sinal · gate de emissão",
+                    "Aguardando o replay",
+                    height=280,
+                ),
+                "Heurística técnica de 0 a 1 usada para bloquear emissões abaixo do gate. Não é um índice clínico de qualidade do sinal.",
+                graph_id="quality-figure",
+            ),
+            html.Div(
+                [
+                    html.Strong("Como ler a tela: "),
+                    "azul mostra o EEG recebido; marinho em degraus mostra o BIS registrado; turquesa mostra a estimativa suavizada; roxo pontilhado mostra a saída bruta. A sequência foi calculada causalmente e é apenas revelada pelo relógio local.",
+                ],
+                className="legend-note",
+            ),
+        ],
+        className="replay-results",
+    )
     return html.Div(
-        [_tab_intro("REPLAY OPERACIONAL", "Como se fosse uma cirurgia: EEG entrando, CNN respondendo", "O Replay mantém a causalidade: só revela a CNN depois que a janela EEG anterior foi recebida. O cálculo da rede é feito uma vez; o relógio e a revelação das curvas acontecem localmente no navegador para a simulação não ficar travando."), html.Div([html.Div([html.Label("Caso para reproduzir", htmlFor="case-selector"), dcc.Dropdown(id="case-selector", options=options, value=default_value, clearable=False, searchable=True, className="dark-dropdown"), html.Div(id="case-meta", children=_case_meta(default_value))], className="control-block case-control"), html.Div([html.Label("Velocidade da simulação", htmlFor="speed"), dcc.Slider(id="speed", min=0.25, max=4, step=0.25, value=1, marks={0.25: "0,25×", 1: "1×", 2: "2×", 4: "4×"}, tooltip={"placement": "bottom", "always_visible": True})], className="control-block speed-control"), html.Div([html.Label("Janela EEG exibida", htmlFor="eeg-window"), dcc.Dropdown(id="eeg-window", options=[{"label": f"{value}s", "value": value} for value in (5, 10, 20, 30)], value=10, clearable=False)], className="control-block window-control")], className="control-grid"), html.Div([html.Button("▶ Iniciar replay", id="play-button", n_clicks=0, className="button-primary"), html.Button("↺ Reiniciar", id="reset-button", n_clicks=0, className="button-secondary"), html.Div("O modelo responde após preencher a janela causal de 5 s.", className="replay-hint"), html.Div([html.Span("cursor ", className="clock-label-prefix"), html.Span("00:00", id="replay-clock-label")], className="replay-clock")], className="replay-actions"), dcc.Slider(id="replay-time", min=0, max=duration, step=0.5, value=0, marks=marks, tooltip={"placement": "bottom", "always_visible": True}, className="time-slider"), html.Div([html.Div(id="replay-progress-fill", className="replay-progress-fill")], className="replay-progress-track"), html.Div(["Progresso da simulação: ", html.Span("0,0%", id="replay-progress-text")], className="replay-progress-label"), dcc.Interval(id="replay-interval", interval=REPLAY_INTERVAL_MS, n_intervals=0), dcc.Store(id="play-state", data=False), dcc.Store(id="replay-clock", data=0.0), dcc.Store(id="replay-data", data=None), html.Div(id="replay-status", className="replay-status"), html.Div([_live_card("CNN suavizada", "replay-cnn-value", "replay-cnn-detail", "teal"), _live_card("BIS de referência", "replay-bis-value", "replay-bis-detail", "navy"), _live_card("Erro CNN − BIS", "replay-error-value", "replay-error-detail", "orange"), _live_card("Qualidade", "replay-quality-value", "replay-quality-detail", "green")], className="metric-grid replay-metrics"), html.Div(dcc.Graph(id="replay-figure", figure=_empty_figure("Replay sincronizado · atualização local", "Escolha um caso e inicie o replay", height=650), config={"displayModeBar": False}), className="chart-card replay-main-chart"), html.Div(dcc.Graph(id="quality-figure", figure=_empty_figure("Qualidade do sinal · gate de emissão", "Aguardando o replay", height=280), config={"displayModeBar": False}), className="chart-card"), html.Div([html.Strong("Como ler a tela: "), "a curva azul é o EEG recebido; a linha azul-marinho em degraus é o BIS do arquivo; a linha turquesa é a CNN suavizada; pontilhada roxa é a saída bruta. A atualização visual é local, mas a sequência de predições foi calculada causalmente."], className="legend-note")], className="tab-panel")
+        [
+            _tab_intro(
+                "SIMULAÇÃO OFFLINE",
+                "Replay causal de uma gravação: EEG entrando, CNN respondendo",
+                "O replay revela a estimativa somente depois que a janela EEG anterior foi recebida. "
+                "A inferência é calculada uma vez e o relógio apenas controla a visualização local; "
+                "a tela não representa um dispositivo ou fluxo clínico ao vivo.",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Label("Caso para reproduzir", htmlFor="case-selector"),
+                            dcc.Dropdown(
+                                id="case-selector",
+                                options=options,
+                                value=default_value,
+                                clearable=False,
+                                searchable=True,
+                                disabled=not options,
+                                placeholder="Nenhum caso disponível",
+                            ),
+                            html.Div(id="case-meta", children=_case_meta(default_value)),
+                        ],
+                        className="control-block case-control",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Velocidade da simulação", htmlFor="speed"),
+                            dcc.Slider(
+                                id="speed",
+                                min=0.25,
+                                max=4,
+                                step=0.25,
+                                value=1,
+                                marks={0.25: "0,25×", 1: "1×", 2: "2×", 4: "4×"},
+                                tooltip={"placement": "bottom", "always_visible": True},
+                            ),
+                            html.Div("Altera apenas a velocidade do relógio visual.", className="control-help"),
+                        ],
+                        className="control-block speed-control",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Janela EEG exibida", htmlFor="eeg-window"),
+                            dcc.Dropdown(
+                                id="eeg-window",
+                                options=[{"label": f"{value}s", "value": value} for value in (5, 10, 20, 30)],
+                                value=10,
+                                clearable=False,
+                                disabled=not replay_available,
+                            ),
+                            html.Div("Controla somente o recorte visível do EEG.", className="control-help"),
+                        ],
+                        className="control-block window-control",
+                    ),
+                ],
+                className="control-grid",
+            ),
+            html.Div(
+                [
+                    html.Button(
+                        "Iniciar replay",
+                        id="play-button",
+                        n_clicks=0,
+                        className="button-primary",
+                        disabled=not replay_available,
+                        title="Iniciar ou pausar a simulação offline",
+                        **{"aria-pressed": "false"},
+                    ),
+                    html.Button(
+                        "Reiniciar",
+                        id="reset-button",
+                        n_clicks=0,
+                        className="button-secondary",
+                        disabled=not replay_available,
+                        title="Voltar o relógio da simulação para zero",
+                    ),
+                    html.Div("A primeira estimativa aparece após a janela causal de 5 s.", className="replay-hint"),
+                    html.Div(
+                        [
+                            html.Span("Tempo ", className="clock-label-prefix"),
+                            html.Span("00:00", id="replay-clock-label"),
+                        ],
+                        className="replay-clock",
+                        **{"aria-label": "Tempo atual do replay"},
+                    ),
+                ],
+                className="replay-actions",
+            ),
+            dcc.Slider(
+                id="replay-time",
+                min=0,
+                max=duration,
+                step=0.5,
+                value=0,
+                marks=marks,
+                tooltip={"placement": "bottom", "always_visible": True},
+                className="time-slider",
+                disabled=not replay_available,
+            ),
+            html.Div(
+                [html.Div(id="replay-progress-fill", className="replay-progress-fill")],
+                id="replay-progress-track",
+                className="replay-progress-track",
+                role="progressbar",
+                **{
+                    "aria-label": "Progresso da simulação",
+                    "aria-valuemin": "0",
+                    "aria-valuemax": "100",
+                    "aria-valuenow": "0",
+                },
+            ),
+            html.Div(
+                ["Progresso da simulação: ", html.Span("0,0%", id="replay-progress-text")],
+                className="replay-progress-label",
+            ),
+            dcc.Interval(id="replay-interval", interval=REPLAY_INTERVAL_MS, n_intervals=0),
+            dcc.Store(id="play-state", data=False),
+            dcc.Store(id="replay-clock", data=0.0),
+            html.Div(
+                id="replay-status",
+                className="replay-status",
+                role="status",
+                **{"aria-live": "polite", "aria-atomic": "true"},
+            ),
+            dcc.Loading(
+                id="replay-loading",
+                children=replay_results,
+                custom_spinner=html.Div(
+                    [html.Strong("Preparando replay"), html.Span("Calculando as janelas causais do caso selecionado.")],
+                    className="loading-state",
+                    role="status",
+                    **{"aria-live": "polite"},
+                ),
+                delay_show=250,
+                delay_hide=150,
+                target_components={"replay-data": "data"},
+            ),
+        ],
+        className="tab-panel",
+    )
 
 
 def _build_model_tab() -> html.Div:
@@ -1298,24 +1955,31 @@ def _build_model_tab() -> html.Div:
     figshare_files = sum(path.suffix.lower() == ".mat" for path in CASE_PATHS)
     vitaldb_files = sum(path.suffix.lower() == ".npz" for path in CASE_PATHS)
     checkpoint_cases = int(dataset.get("n_cases", len(train_cases) + len(validation_cases) + len(test_cases))) if isinstance(dataset, dict) else len(train_cases) + len(validation_cases) + len(test_cases)
-    config_rows = [["Checkpoint", model_name, str(MODEL_PATH.name)], ["Parâmetros treináveis", f"{param_count:,}", "modelo carregado em CPU" if MODEL is not None else "indisponível"], ["Entrada", " × ".join(str(value) for value in window_shape), "canal × amostras"], ["Amostragem", f"{preprocess.get('sampling_rate', '—')} Hz", "taxa esperada pelo modelo"], ["Janela", f"{preprocess.get('window_seconds', '—')} s", "contexto temporal causal"], ["Filtro", f"{preprocess.get('lowcut_hz', '—')}–{preprocess.get('highcut_hz', '—')} Hz", "band-pass"], ["Escala", f"±{preprocess.get('clip_uv', '—')} µV / {preprocess.get('amplitude_scale_uv', '—')}", "clip e normalização"], ["Gate de qualidade", str(MODEL_METADATA.get("min_quality", DEFAULT_MIN_SIGNAL_QUALITY)), "abaixo disso emite abstain"]]
+    config_rows = [["Checkpoint", model_name, str(MODEL_PATH.name)], ["Parâmetros treináveis", f"{param_count:,}", "modelo carregado em CPU" if MODEL is not None else "indisponível"], ["Entrada", " × ".join(str(value) for value in window_shape), "canal × amostras"], ["Amostragem", f"{preprocess.get('sampling_rate', '—')} Hz", "taxa esperada pelo modelo"], ["Janela", f"{preprocess.get('window_seconds', '—')} s", "contexto temporal causal"], ["Filtro", f"{preprocess.get('lowcut_hz', '—')}–{preprocess.get('highcut_hz', '—')} Hz", "band-pass"], ["Escala", f"±{preprocess.get('clip_uv', '—')} µV / {preprocess.get('amplitude_scale_uv', '—')}", "clip e normalização"], ["Gate de qualidade", str(EFFECTIVE_MIN_QUALITY), "abaixo disso emite abstain"]]
     train_rows = [["Épocas", training.get("epochs", "—"), "treinamento"], ["Batch", training.get("batch_size", "—"), "janelas por atualização"], ["Learning rate", training.get("learning_rate", "—"), "AdamW"], ["Weight decay", training.get("weight_decay", "—"), "regularização"], ["Seed", training.get("seed", "—"), "reprodutibilidade"], ["Divisão", f"{len(train_cases)}/{len(validation_cases)}/{len(test_cases)}", "train / validação / teste"], ["Ambiente", environment.get("torch", "—"), f"Python {environment.get('python', '—')}"]]
-    split_rows = [["Treino", len(train_cases), ", ".join(train_cases)], ["Validação", len(validation_cases), ", ".join(validation_cases)], ["Teste interno", len(test_cases), ", ".join(test_cases)], ["VitalDB externo", len(external_cases), ", ".join(external_cases)]]
-    coverage_cards = [_card("Casos no checkpoint", f"{checkpoint_cases}", f"{len(train_cases)} treino + {len(validation_cases)} validação + {len(test_cases)} teste", "navy"), _card("Treino", f"{len(train_cases)}", "casos que ajustaram os pesos", "teal"), _card("Validação", f"{len(validation_cases)}", "casos para acompanhar seleção", "blue"), _card("Teste interno", f"{len(test_cases)}", "holdout Figshare", "purple"), _card("VitalDB externo", f"{len(external_cases)}", "sem retreino", "orange"), _card("Arquivos no app", f"{len(CASE_PATHS)}", f"{figshare_files} Figshare + {vitaldb_files} VitalDB", "green")]
+    split_rows = [["Treino", len(train_cases), ", ".join(train_cases)], ["Validação", len(validation_cases), ", ".join(validation_cases)], ["Teste interno", len(test_cases), ", ".join(test_cases)], ["Avaliação cruzada VitalDB", len(external_cases), ", ".join(external_cases)]]
+    coverage_cards = [_card("Casos no checkpoint", f"{checkpoint_cases}", f"{len(train_cases)} treino + {len(validation_cases)} validação + {len(test_cases)} teste", "navy"), _card("Treino", f"{len(train_cases)}", "casos que ajustaram os pesos", "teal"), _card("Validação", f"{len(validation_cases)}", "casos para acompanhar seleção", "blue"), _card("Teste interno", f"{len(test_cases)}", "holdout Figshare por caso", "purple"), _card("Cruzada VitalDB", f"{len(external_cases)}", "externa ao desenvolvimento Figshare-only", "orange"), _card("Arquivos no app", f"{len(CASE_PATHS)}", f"{figshare_files} Figshare + {vitaldb_files} VitalDB", "green")]
     return html.Div(
         [
             _tab_intro("DADOS DA REDE", "O que está dentro do checkpoint", "Esta aba torna o modelo auditável: arquitetura, quantidade de parâmetros, pré-processamento, divisão de casos, ambiente e histórico de treinamento ficam visíveis sem precisar abrir o arquivo binário."),
             html.Div([_card("Modelo", "Conv1D", f"{model_name} · regressão contínua de BIS", "navy"), _card("Parâmetros treináveis", f"{param_count:,}", "estado atual do checkpoint", "teal"), _card("Casos de treino", f"{len(train_cases)}", "separação por cirurgia", "blue"), _card("Janelas usadas", f"{int(dataset.get('n_windows', 0)):,}" if isinstance(dataset, dict) else "—", "após filtro de qualidade", "orange")], className="metric-grid"),
             html.Div(coverage_cards, className="metric-grid case-coverage-grid"),
             html.Div(_training_curve_summary_cards(), className="metric-grid learning-curve-metrics"),
-            html.Div(dcc.Graph(figure=_training_case_learning_curve_figure(), config={"displayModeBar": False}), className="chart-card case-count-chart"),
-            html.Div([html.Strong("Como ler esta curva: "), "o losango marinho é o único ponto realmente medido hoje — o checkpoint treinado com ", html.Strong(f"{len(train_cases)} casos"), ". A linha turquesa é uma projeção teórica para planejamento: ela supõe ganho relativo acumulado de 15% até 80 casos, 18% até 100 e apenas 1,5% adicional de 100 para 1.000. Como não há retreinamentos versionados em 20, 30, 40… casos, esses pontos são hipóteses, não resultados observados nem promessa clínica. O corte de 100 é um limiar de governança: só vale pagar o custo de novo treino além dele se um experimento medido demonstrar ganho suficiente."], className="legend-note learning-curve-note"),
+            _chart(
+                _training_case_learning_curve_figure(),
+                "O losango é a única medição observada; os demais pontos são projeções de planejamento, não resultados experimentais nem promessa de desempenho.",
+                class_name="case-count-chart",
+            ),
+            html.Div([html.Strong("Hipótese de planejamento, não resultado: "), "há apenas uma medição, com ", html.Strong(f"{len(train_cases)} casos"), ". A curva supõe redução relativa do erro de 15% até 80 casos, 18% até 100 e 1,5% adicional até 1.000. Esses valores e o corte em 100 são escolhas ilustrativas, não limiares científicos nem justificativa para novo treino."], className="legend-note learning-curve-note"),
             html.Div([html.H3("Pontos de planejamento da curva"), _table(["Casos de treino", "MAE", "Redução vs. atual", "Leitura"], _training_curve_rows())], className="table-card learning-curve-table"),
             html.Div([html.H3("Casos utilizados por divisão"), _table(["Divisão", "Quantidade", "Identificadores"], split_rows)], className="table-card"),
             html.Div([html.Div([html.H3("Configuração do checkpoint"), _table(["Campo", "Valor", "Interpretação"], config_rows)], className="table-card"), html.Div([html.H3("Treinamento e ambiente"), _table(["Campo", "Valor", "Interpretação"], train_rows)], className="table-card")], className="table-grid two-col"),
             html.Div([html.H3("Arquitetura declarada"), _model_architecture_table()], className="table-card model-architecture"),
-            html.Div(dcc.Graph(figure=_history_figure(), config={"displayModeBar": False}), className="chart-card"),
-            html.Div([html.H3("Tensores no state_dict"), _model_parameter_table()], className="table-card"),
+            _chart(
+                _history_figure(),
+                "Histórico registrado durante o treinamento do checkpoint. Perdas e métricas de validação descrevem esse experimento e não desempenho clínico.",
+            ),
+            html.Details([html.Summary("Detalhes técnicos: tensores do modelo"), _model_parameter_table()], className="table-card"),
         ],
         className="tab-panel",
     )
@@ -1325,7 +1989,65 @@ def _build_statistics_tab() -> html.Div:
     metric_rows = []
     for key in ("mae", "rmse", "bias", "pearson_r", "stage_accuracy", "stage_macro_f1"):
         metric_rows.append([METRIC_LABELS[key], _metric_format(key, _metric_value(HOLDOUT_METRICS, key)), _metric_format(key, _metric_value(EXTERNAL_METRICS, key)), "pontos BIS" if key in {"mae", "rmse", "bias"} else "score"])
-    return html.Div([_tab_intro("ESTATÍSTICA DO PROJETO", "Todas as métricas, com contexto e incerteza", "Os números abaixo vêm dos relatórios versionados do projeto. As métricas contínuas, os scores de estágio, os intervalos bootstrap e o recorte por caso aparecem juntos para facilitar uma leitura honesta da generalização."), html.Div(_statistics_cards(), className="metric-grid six-metrics"), html.Div([html.Div(dcc.Graph(figure=_error_metric_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div(dcc.Graph(figure=_association_metric_figure(), config={"displayModeBar": False}), className="chart-card")], className="chart-grid two-col"), html.Div(dcc.Graph(figure=_bootstrap_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div([html.H3("Tabela completa de métricas"), _table(["Métrica", "Holdout interno", "VitalDB externo", "Unidade"], metric_rows)], className="table-card"), html.Div([html.Div(dcc.Graph(figure=_per_case_figure(), config={"displayModeBar": False}), className="chart-card"), html.Div([html.Div("COMO INTERPRETAR", className="mini-kicker"), html.H3("Domínio e caso importam"), html.P("MAE e RMSE medem o tamanho do erro em pontos BIS; bias mostra a direção média do desvio."), html.P("Pearson mede associação temporal, não equivalência clínica. Acurácia e Macro-F1 resumem a classificação em estágios."), html.P("Os intervalos bootstrap são por caso: eles mostram a variação entre cirurgias, não uma garantia clínica."), html.Div("O VitalDB externo permanece separado do holdout para não esconder a mudança de domínio.", className="callout")], className="explanation-card")], className="chart-grid two-col lower-evidence")], className="tab-panel")
+    return html.Div(
+        [
+            _tab_intro(
+                "ESTATÍSTICA DO PROJETO",
+                "Checkpoint ativo Figshare-only, com contexto e incerteza",
+                "Os números desta aba pertencem ao checkpoint ativo desenvolvido somente em Figshare. As métricas separam o holdout Figshare por caso da avaliação cruzada VitalDB, externa ao desenvolvimento desse modelo; o candidato misto é tratado separadamente na aba Corpus.",
+            ),
+            _evidence_status(),
+            html.Div(_statistics_cards(), className="metric-grid six-metrics"),
+            html.Div(
+                [
+                    _chart(
+                        _error_metric_figure(),
+                        "Checkpoint ativo Figshare-only. MAE e RMSE são erros em pontos BIS no holdout Figshare e na avaliação cruzada VitalDB; valores menores não demonstram transporte nem segurança clínica.",
+                    ),
+                    _chart(
+                        _association_metric_figure(),
+                        "Checkpoint ativo Figshare-only. Pearson resume associação temporal; acurácia e Macro-F1 resumem faixas discretizadas. Nenhuma dessas métricas demonstra equivalência clínica.",
+                    ),
+                ],
+                className="chart-grid two-col",
+            ),
+            _chart(
+                _bootstrap_figure(),
+                "Checkpoint ativo Figshare-only. Intervalos de 95% por reamostragem de casos, ainda ponderados pelo número de janelas; expressam variação amostral exploratória, não incerteza clínica individual.",
+            ),
+            html.Div(
+                [
+                    html.H3("Tabela completa de métricas"),
+                    _table(
+                        ["Métrica", "Figshare · holdout por caso", "VitalDB · cruzada do ativo", "Unidade"],
+                        metric_rows,
+                    ),
+                ],
+                className="table-card",
+            ),
+            html.Div(
+                [
+                    _chart(
+                        _per_case_figure(),
+                        "Checkpoint ativo Figshare-only na avaliação cruzada VitalDB. A distribuição por caso expõe heterogeneidade que a média agregada ocultaria.",
+                    ),
+                    html.Div(
+                        [
+                            html.Div("COMO INTERPRETAR", className="mini-kicker"),
+                            html.H3("Domínio e caso importam"),
+                            html.P("MAE e RMSE medem o tamanho do erro em pontos BIS; bias mostra a direção média do desvio."),
+                            html.P("Pearson mede associação temporal, não equivalência clínica. Acurácia e Macro-F1 resumem a classificação em faixas."),
+                            html.P("Os intervalos bootstrap são por caso: eles mostram a variação entre cirurgias, não uma garantia clínica."),
+                            html.Div("Aqui, VitalDB é externo ao desenvolvimento apenas porque estas métricas são do ativo Figshare-only. Para o candidato misto, os mesmos 15 casos são holdout por participante da mesma fonte após exposição a 10 casos VitalDB, em benchmark histórico reutilizado e não confirmatório.", className="callout"),
+                        ],
+                        className="explanation-card",
+                    ),
+                ],
+                className="chart-grid two-col lower-evidence",
+            ),
+        ],
+        className="tab-panel",
+    )
 
 
 def _build_method_tab() -> html.Div:
@@ -1336,20 +2058,149 @@ def _build_method_tab() -> html.Div:
     quality_values = [_finite_number(item.get("quality")) for item in external_diagnostics if isinstance(item, dict)]
     quality_mean = float(np.nanmean(quality_values)) if quality_values else float("nan")
     quality_min = float(np.nanmin(quality_values)) if quality_values else float("nan")
-    rows = [["Figshare", len(HOLDOUT_REPORT.get("files", [])), HOLDOUT_REPORT.get("n_test_windows", "—"), "holdout por cirurgia"], ["VitalDB", len(EXTERNAL_REPORT.get("files", [])), EXTERNAL_REPORT.get("n_windows", "—"), "validação externa"], ["Treino", len(split.get("train_cases", [])), dataset.get("n_windows", "—") if isinstance(dataset, dict) else "—", "casos não sobrepostos ao teste"], ["Modelo", MODEL_METADATA.get("checkpoint_sha256", "—"), "—", "hash do checkpoint"]]
+    rows = [["Figshare", len(HOLDOUT_REPORT.get("files", [])), HOLDOUT_REPORT.get("n_test_windows", "—"), "holdout por caso/cirurgia do ativo"], ["VitalDB", len(EXTERNAL_REPORT.get("files", [])), EXTERNAL_REPORT.get("n_windows", "—"), "avaliação cruzada · externa ao desenvolvimento do ativo"], ["Treino", len(split.get("train_cases", [])), dataset.get("n_windows", "—") if isinstance(dataset, dict) else "—", "casos não sobrepostos ao teste"], ["Modelo", MODEL_METADATA.get("checkpoint_sha256", "—"), "—", "hash do checkpoint"]]
     preprocess_rows = [[key, value] for key, value in preprocess.items()]
-    return html.Div([_tab_intro("MÉTODO E COBERTURA", "De onde vieram os números", "Esta aba documenta a proveniência dos dados, a divisão por cirurgia, o pré-processamento e os limites de qualidade. Ela existe para que cada gráfico possa ser interpretado sem adivinhar o que entrou no cálculo."), html.Div([_card("Arquivos holdout", f"{len(HOLDOUT_REPORT.get('files', []))}", "Figshare", "blue"), _card("Arquivos externos", f"{len(EXTERNAL_REPORT.get('files', []))}", "VitalDB", "orange"), _card("Qualidade VitalDB", _format_number(quality_mean, 3), f"mínimo {_format_number(quality_min, 3)}", "teal"), _card("Offset testado", f"{len(_offset_points())}", "pontos exploratórios", "purple")], className="metric-grid"), html.Div([html.H3("Cobertura dos experimentos"), _table(["Fonte", "Casos/arquivos", "Janelas", "Papel"], rows)], className="table-card"), html.Div([html.Div([html.H3("Pré-processamento"), _table(["Parâmetro", "Valor"], preprocess_rows)], className="table-card"), html.Div([html.H3("Limites de leitura"), html.P("O projeto é research-only e não controla anestésicos."), html.P("A qualidade é um gate diagnóstico de 0 a 1, não um SQI clínico."), html.P("O replay revela somente saídas causais e usa dados offline já auditados."), html.Div("Ao trocar de domínio, leia sempre a aba Estatística junto com a trajetória do caso.", className="callout")], className="explanation-card")], className="table-grid two-col")], className="tab-panel")
+    return html.Div([_tab_intro("MÉTODO E COBERTURA", "De onde vieram os números", "Esta aba documenta a proveniência dos dados, a divisão por caso/cirurgia, o pré-processamento e os limites de qualidade do checkpoint ativo Figshare-only. No Figshare, não há identificador que permita afirmar separação por paciente."), html.Div([_card("Arquivos holdout", f"{len(HOLDOUT_REPORT.get('files', []))}", "Figshare · por caso/cirurgia", "blue"), _card("Arquivos VitalDB", f"{len(EXTERNAL_REPORT.get('files', []))}", "cruzada de dataset do ativo", "orange"), _card("Qualidade VitalDB", _format_number(quality_mean, 3), f"mínimo {_format_number(quality_min, 3)}", "teal"), _card("Offset testado", f"{len(_offset_points())}", "pontos exploratórios", "purple")], className="metric-grid"), html.Div([html.H3("Cobertura dos experimentos"), _table(["Fonte", "Casos/arquivos", "Janelas", "Papel"], rows)], className="table-card"), html.Div([html.Div([html.H3("Pré-processamento"), _table(["Parâmetro", "Valor"], preprocess_rows)], className="table-card"), html.Div([html.H3("Limites de leitura"), html.P("O projeto é research-only e não controla anestésicos."), html.P("A qualidade é um gate diagnóstico de 0 a 1, não um SQI clínico."), html.P("O replay revela somente saídas causais e usa dados offline já auditados."), html.Div("A avaliação cruzada VitalDB desta aba pertence ao ativo Figshare-only; a comparação do candidato misto tem outra interpretação e aparece na aba Corpus.", className="callout")], className="explanation-card")], className="table-grid two-col")], className="tab-panel")
+
+
+def _default_case_state() -> tuple[float, str | None]:
+    if DEFAULT_CASE is None:
+        return 600.0, "Nenhum caso disponível"
+    try:
+        case = load_case(_resolve_case(str(DEFAULT_CASE)))
+        if not np.isfinite(case.duration_seconds) or case.duration_seconds <= 0 or not np.isfinite(case.eeg).any():
+            raise ValueError("Gravação vazia ou sem EEG finito")
+        if PREPROCESS is not None and (
+            case.eeg.size < PREPROCESS.window_samples
+            or case.sampling_rate != PREPROCESS.sampling_rate
+        ):
+            raise ValueError("Caso sem janela completa ou amostragem incompatível com o checkpoint")
+        return case.duration_seconds, None
+    except Exception as error:
+        return 600.0, f"Caso padrão indisponível: {error}"
 
 
 def _build_layout() -> html.Div:
     options = [{"label": _case_label(path), "value": str(path)} for path in CASE_PATHS]
     default_value = str(DEFAULT_CASE) if DEFAULT_CASE else None
-    duration = load_case(DEFAULT_CASE).duration_seconds if DEFAULT_CASE else 600.0
+    duration, case_error = _default_case_state()
     model_status = "checkpoint causal carregado em CPU" if MODEL is not None else "checkpoint indisponível · replay bloqueado"
-    return html.Div([html.Header([html.Div([html.Div("BRAIN SNIFFER · RESEARCH CONSOLE", className="eyebrow"), html.H1("EEG → CNN → BIS", className="hero-title"), html.P("Uma leitura auditável do sinal, do modelo e do resultado: primeiro o panorama, depois a trajetória, o replay causal, os dados da rede, o corpus e as estatísticas.", className="hero-subtitle")], className="hero-copy"), html.Div([html.Span("RESEARCH ONLY", className="research-badge"), html.Div(model_status, className="hero-status")], className="hero-side")], className="hero"), html.Div("Uso exclusivamente experimental/educacional. O BIS é referência do monitor e a CNN é uma estimativa de pesquisa; nada nesta tela comanda anestésicos ou substitui avaliação clínica.", className="safety-banner"), html.Main(dcc.Tabs(id="main-tabs", value="overview", parent_className="app-tabs", className="tabs-container", children=[dcc.Tab(label="Visão geral", value="overview", className="app-tab", selected_className="app-tab-selected", children=_build_overview_tab()), dcc.Tab(label="Trajetória completa", value="trajectory", className="app-tab", selected_className="app-tab-selected", children=_build_trajectory_tab(options, default_value)), dcc.Tab(label="Replay causal", value="replay", className="app-tab", selected_className="app-tab-selected", children=_build_replay_tab(options, default_value, duration)), dcc.Tab(label="Dados da rede", value="model", className="app-tab", selected_className="app-tab-selected", children=_build_model_tab()), dcc.Tab(label="Corpus", value="corpus", className="app-tab", selected_className="app-tab-selected", children=_build_corpus_tab()), dcc.Tab(label="Estatística", value="statistics", className="app-tab", selected_className="app-tab-selected", children=_build_statistics_tab()), dcc.Tab(label="Método e cobertura", value="method", className="app-tab", selected_className="app-tab-selected", children=_build_method_tab())]), className="page-content"), html.Footer("BrainSniffer · pipeline auditável · checkpoint congelado · sem uso clínico", className="footer")], className="app-shell")
+    return html.Div(
+        [
+            html.A("Pular para o conteúdo", href="#main-content", className="skip-link"),
+            html.Header(
+                [
+                    html.Div(
+                        [
+                            html.Div("BRAIN SNIFFER · PROTÓTIPO DE PESQUISA", className="eyebrow"),
+                            html.H1("EEG → CNN → BIS", className="hero-title"),
+                            html.P(
+                                "Problema: até que ponto o EEG permite estimar o BIS registrado? Escolha um caso em Trajetória, compare EEG/BIS no Replay e consulte os resultados e limitações. Modelo e Corpus oferecem detalhes de apoio.",
+                                className="hero-subtitle",
+                            ),
+                        ],
+                        className="hero-copy",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("SOMENTE PESQUISA", className="research-badge"),
+                            html.Div(model_status, className="hero-status"),
+                        ],
+                        className="hero-side",
+                    ),
+                ],
+                className="hero",
+            ),
+            html.Div(
+                "Uso exclusivamente experimental/educacional. O BIS é referência do monitor e a CNN é uma estimativa de pesquisa; esta tela não comanda anestésicos e não substitui avaliação clínica.",
+                className="safety-banner",
+                role="note",
+                **{"aria-label": "Aviso de uso experimental"},
+            ),
+            _status_message(
+                "Proveniência e prontidão",
+                " · ".join(filter(None, [MODEL_ERROR, case_error, *EVIDENCE_ERRORS]))
+                or "Modelo e relatórios compatíveis. Artefatos congelados até reinício; gate efetivo " + str(EFFECTIVE_MIN_QUALITY),
+                tone="warning" if MODEL_ERROR or case_error or EVIDENCE_ERRORS else "info",
+            ),
+            html.Main(
+                dcc.Tabs(
+                    id="main-tabs",
+                    value="overview",
+                    mobile_breakpoint=0,
+                    parent_className="app-tabs",
+                    className="tabs-container",
+                    children=[
+                        dcc.Tab(
+                            label="Visão geral",
+                            value="overview",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_overview_tab(),
+                        ),
+                        dcc.Tab(
+                            label="Trajetória completa",
+                            value="trajectory",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_trajectory_tab(options, default_value),
+                        ),
+                        dcc.Tab(
+                            label="Replay causal",
+                            value="replay",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_replay_tab(options, default_value, duration),
+                        ),
+                        dcc.Tab(
+                            label="Modelo (apoio)",
+                            value="model",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_model_tab(),
+                        ),
+                        dcc.Tab(
+                            label="Corpus",
+                            value="corpus",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_corpus_tab(),
+                        ),
+                        dcc.Tab(
+                            label="Resultados",
+                            value="statistics",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_statistics_tab(),
+                        ),
+                        dcc.Tab(
+                            label="Método e limitações",
+                            value="method",
+                            className="app-tab",
+                            selected_className="app-tab-selected",
+                            children=_build_method_tab(),
+                        ),
+                    ],
+                ),
+                id="main-content",
+                className="page-content",
+            ),
+            html.Footer(
+                "BrainSniffer · pipeline auditável · checkpoint congelado · sem uso clínico",
+                className="footer",
+            ),
+        ],
+        className="app-shell",
+    )
 
 
-app = Dash(__name__, title="BrainSniffer · EEG → CNN → BIS", update_title=None)
+app = Dash(
+    __name__,
+    title="BrainSniffer · EEG → CNN → BIS",
+    update_title=None,
+    meta_tags=[{"name": "description", "content": APP_DESCRIPTION}],
+)
+app.index_string = app.index_string.replace("<html>", '<html lang="pt-BR">', 1)
 server = app.server
 app.layout = _build_layout()
 
@@ -1357,7 +2208,27 @@ app.layout = _build_layout()
 @server.get("/healthz")
 @server.get("/_stcore/health")
 def healthz():
-    return {"status": "ok"}
+    errors = list(EVIDENCE_ERRORS)
+    if MODEL is None or PREPROCESS is None:
+        errors.append(MODEL_ERROR or "Checkpoint indisponível")
+    try:
+        _require_frozen_artifacts()
+    except RuntimeError as error:
+        errors.append(str(error))
+    _, case_error = _default_case_state()
+    if case_error:
+        errors.append(case_error)
+    return {"status": "not_ready" if errors else "ok", "errors": errors}, 503 if errors else 200
+
+
+@server.get("/robots.txt")
+def robots_txt() -> Response:
+    return Response(ROBOTS_TEXT, content_type="text/plain; charset=utf-8")
+
+
+@server.get("/llms.txt")
+def llms_txt() -> Response:
+    return Response(LLMS_TEXT, content_type="text/markdown; charset=utf-8")
 
 
 @app.callback(Output("case-meta", "children"), Output("replay-time", "max"), Output("replay-time", "value"), Input("case-selector", "value"))
@@ -1365,37 +2236,101 @@ def select_case(path_value: str | None):
     if not path_value:
         return _case_meta(None), 600.0, 0.0
     try:
-        duration = load_case(path_value).duration_seconds
+        duration = load_case(_resolve_case(path_value)).duration_seconds
     except Exception as error:
-        return html.Div(f"Não foi possível abrir o caso: {error}", className="case-meta case-error"), 600.0, 0.0
+        return (
+            html.Div(
+                f"Não foi possível abrir o caso: {error}",
+                className="case-meta case-error",
+                role="alert",
+            ),
+            600.0,
+            0.0,
+        )
     return _case_meta(path_value), duration, 0.0
 
 
-@app.callback(Output("replay-data", "data"), Output("replay-figure", "figure"), Output("quality-figure", "figure"), Input("case-selector", "value"), Input("eeg-window", "value"))
+@app.callback(
+    Output("replay-data", "data"),
+    Output("replay-figure", "figure"),
+    Output("quality-figure", "figure"),
+    Output("replay-data-status", "children"),
+    Output("replay-data-status", "className"),
+    Input("case-selector", "value"),
+    Input("eeg-window", "value"),
+)
 def prepare_replay(path_value: str | None, eeg_window_seconds: int):
     if not path_value:
         message = "Nenhum caso selecionado"
-        return None, _empty_figure("Replay sincronizado · atualização local", message, height=650), _empty_figure("Qualidade do sinal · gate de emissão", message, height=280)
+        return (
+            None,
+            _empty_figure("Replay sincronizado · atualização local", message, height=650),
+            _empty_figure("Qualidade do sinal · gate de emissão", message, height=280),
+            _status_children(
+                "Nenhum caso selecionado",
+                "Escolha uma gravação de pesquisa para preparar a simulação offline.",
+            ),
+            "state-message state-warning",
+        )
     if MODEL is None or PREPROCESS is None:
         message = MODEL_ERROR or "Checkpoint indisponível"
-        return None, _empty_figure("Replay sincronizado · atualização local", message, height=650), _empty_figure("Qualidade do sinal · gate de emissão", message, height=280)
+        return (
+            None,
+            _empty_figure("Replay sincronizado · atualização local", message, height=650),
+            _empty_figure("Qualidade do sinal · gate de emissão", message, height=280),
+            _status_children("Replay indisponível", message),
+            "state-message state-error",
+        )
     try:
         payload = _replay_payload(path_value)
     except Exception as error:
         message = f"Replay bloqueado: {error}"
-        return None, _empty_figure("Replay sincronizado · atualização local", message, height=650), _empty_figure("Qualidade do sinal · gate de emissão", message, height=280)
-    return _replay_store_payload(payload), _replay_figure(payload, 0.0, int(eeg_window_seconds or 10)), _quality_figure(payload, 0.0)
+        return (
+            None,
+            _empty_figure("Replay sincronizado · atualização local", message, height=650),
+            _empty_figure("Qualidade do sinal · gate de emissão", message, height=280),
+            _status_children("Não foi possível preparar o replay", str(error)),
+            "state-message state-error",
+        )
+    if payload.prediction_times.size:
+        status = _status_children(
+            "Replay preparado",
+            f"{_case_source_label(payload.case)} · {payload.prediction_times.size:,} janelas causais prontas para revelação local.",
+        )
+        status_class = "state-message state-ready"
+    else:
+        status = _status_children(
+            "Caso carregado sem estimativas",
+            "A gravação não produziu uma janela causal elegível; os gráficos permanecem sem emissão.",
+        )
+        status_class = "state-message state-warning"
+    return (
+        _replay_store_payload(payload),
+        _replay_figure(payload, 0.0, int(eeg_window_seconds or 10)),
+        _quality_figure(payload, 0.0),
+        status,
+        status_class,
+    )
 
 
-@app.callback(Output("play-state", "data"), Output("play-button", "children"), Output("replay-time", "value", allow_duplicate=True), Input("play-button", "n_clicks"), Input("reset-button", "n_clicks"), State("play-state", "data"), prevent_initial_call=True)
+@app.callback(
+    Output("play-state", "data"),
+    Output("play-button", "children"),
+    Output("replay-time", "value", allow_duplicate=True),
+    Output("play-button", "aria-pressed"),
+    Input("play-button", "n_clicks"),
+    Input("reset-button", "n_clicks"),
+    State("play-state", "data"),
+    prevent_initial_call=True,
+)
 def control_replay(play_clicks: int, reset_clicks: int, playing: bool):
     del play_clicks, reset_clicks
     from dash import ctx
 
     if ctx.triggered_id == "reset-button":
-        return False, "▶ Iniciar replay", 0.0
+        return False, "Iniciar replay", 0.0, "false"
     next_state = not bool(playing)
-    return next_state, ("❚❚ Pausar replay" if next_state else "▶ Continuar replay"), no_update
+    return next_state, ("Pausar replay" if next_state else "Continuar replay"), no_update, str(next_state).lower()
 
 
 app.clientside_callback(
@@ -1453,12 +2388,19 @@ app.clientside_callback(
             return answer;
         };
         const reveal = (times, values) => times.map((time, index) => Number(time) <= seconds && values[index] !== null && Number.isFinite(Number(values[index])) ? Number(values[index]) : null);
-        const stageLabels = {deep: "Profundo", general: "Anestesia geral", light: "Sedação leve", awake: "Acordado", abstain: "ABSTAIN · sinal insuficiente"};
+        const stageLabels = {
+            deep: "Faixa estimada abaixo de 40",
+            general: "Faixa estimada de 40 a 59",
+            light: "Faixa estimada de 60 a 79",
+            awake: "Faixa estimada de 80 a 100",
+            abstain: "Sem emissão · sinal insuficiente"
+        };
         const progress = (payload && Number(payload.duration) > 0) ? Math.max(0, Math.min(100, seconds / Number(payload.duration) * 100)) : 0;
         const progressStyle = {width: progress.toFixed(2) + "%"};
         const progressText = progress.toFixed(1).replace(".", ",") + "%";
+        const progressNow = Number(progress.toFixed(1));
         if (!payload || !baseFigure || !baseQualityFigure) {
-            return [baseFigure, baseQualityFigure, "—", "Aguardando replay", "—", "Aguardando replay", "—", "Disponível após a primeira predição", "—", "Gate padrão 0,20", "Aguardando caso", "00:00", progressStyle, progressText];
+            return [baseFigure, baseQualityFigure, "—", "Aguardando replay", "—", "Aguardando replay", "—", "Disponível após a primeira estimativa", "—", "Gate indisponível até preparar replay", "Aguardando caso", "00:00", progressStyle, progressText, progressNow];
         }
 
         const figure = Object.assign({}, baseFigure);
@@ -1490,15 +2432,16 @@ app.clientside_callback(
         let errorValue = "—";
         let errorDetail = "Disponível após a primeira predição";
         let qualityValue = "—";
-        let qualityDetail = "Gate padrão 0,20";
+        const finiteValue = value => typeof value === "number" && Number.isFinite(value) ? value : NaN;
+        let qualityDetail = "gate de emissão " + formatNumber(finiteValue(payload.min_quality), 2);
         let revealed = 0;
         if (predictionIndex >= 0) {
             revealed = predictionIndex + 1;
-            const rawCnn = Number(payload.raw_predictions[predictionIndex]);
-            const smoothedCnn = Number(payload.smoothed_predictions[predictionIndex]);
+            const rawCnn = finiteValue(payload.raw_predictions[predictionIndex]);
+            const smoothedCnn = finiteValue(payload.smoothed_predictions[predictionIndex]);
             const predictionTime = Number(payload.prediction_times[predictionIndex]);
             const referenceIndex = lastIndexAtOrBefore(payload.bis_times, predictionTime);
-            const reference = referenceIndex >= 0 ? Number(payload.bis_values[referenceIndex]) : NaN;
+            const reference = referenceIndex >= 0 ? finiteValue(payload.bis_values[referenceIndex]) : NaN;
             const error = Number.isFinite(smoothedCnn) && Number.isFinite(reference) ? smoothedCnn - reference : NaN;
             cnnValue = formatNumber(smoothedCnn, 1);
             cnnDetail = (stageLabels[payload.stages[predictionIndex]] || payload.stages[predictionIndex] || "") + " · t=" + predictionTime.toFixed(1) + "s";
@@ -1506,11 +2449,10 @@ app.clientside_callback(
             bisDetail = Number.isFinite(reference) ? "último ponto observado · t=" + Number(payload.bis_times[referenceIndex]).toFixed(0) + "s" : "sem ponto disponível";
             errorValue = formatNumber(error, 1);
             errorDetail = "CNN bruta " + formatNumber(rawCnn, 1) + " · positivo = acima do BIS";
-            qualityValue = formatNumber(Number(payload.qualities[predictionIndex]), 3);
-            qualityDetail = "gate de emissão 0,20";
+            qualityValue = formatNumber(finiteValue(payload.qualities[predictionIndex]), 3);
         }
-        const status = payload.case_label + " · " + formatClock(seconds) + " · " + revealed + " predição(ões) revelada(s) · atualização local";
-        return [figure, qualityFigure, cnnValue, cnnDetail, bisValue, bisDetail, errorValue, errorDetail, qualityValue, qualityDetail, status, formatClock(seconds), progressStyle, progressText];
+        const status = payload.case_label + " · " + formatClock(seconds) + " · " + revealed + " estimativa(s) revelada(s) · atualização local";
+        return [figure, qualityFigure, cnnValue, cnnDetail, bisValue, bisDetail, errorValue, errorDetail, qualityValue, qualityDetail, status, formatClock(seconds), progressStyle, progressText, progressNow];
     }
     """,
     Output("replay-figure", "figure", allow_duplicate=True),
@@ -1527,6 +2469,7 @@ app.clientside_callback(
     Output("replay-clock-label", "children"),
     Output("replay-progress-fill", "style"),
     Output("replay-progress-text", "children"),
+    Output("replay-progress-track", "aria-valuenow"),
     Input("replay-clock", "data"),
     Input("replay-data", "data"),
     State("replay-figure", "figure"),
@@ -1535,21 +2478,72 @@ app.clientside_callback(
 )
 
 
-@app.callback(Output("trajectory-meta", "children"), Output("trajectory-cards", "children"), Output("trajectory-figure", "figure"), Output("trajectory-error-figure", "figure"), Input("trajectory-case-selector", "value"))
+@app.callback(
+    Output("trajectory-meta", "children"),
+    Output("trajectory-cards", "children"),
+    Output("trajectory-figure", "figure"),
+    Output("trajectory-error-figure", "figure"),
+    Output("trajectory-data-status", "children"),
+    Output("trajectory-data-status", "className"),
+    Input("trajectory-case-selector", "value"),
+)
 def update_trajectory(path_value: str | None):
     if not path_value:
         message = "Nenhum caso selecionado"
-        return _case_meta(None), _initial_trajectory_cards(), _empty_figure("Trajetória completa · BIS contra CNN", message, height=470), _empty_figure("Erro ao longo do caso · CNN − BIS", message, height=300)
+        return (
+            _case_meta(None),
+            _initial_trajectory_cards(),
+            _empty_figure("Trajetória completa · BIS contra CNN", message, height=470),
+            _empty_figure("Erro ao longo do caso · CNN − BIS", message, height=300),
+            _status_children(
+                "Nenhum caso selecionado",
+                "Escolha uma gravação de pesquisa para calcular a trajetória retrospectiva.",
+            ),
+            "state-message state-warning",
+        )
     if MODEL is None or PREPROCESS is None:
         message = MODEL_ERROR or "Checkpoint indisponível"
-        return _case_meta(path_value), _initial_trajectory_cards(), _empty_figure("Trajetória completa · BIS contra CNN", message, height=470), _empty_figure("Erro ao longo do caso · CNN − BIS", message, height=300)
+        return (
+            _case_meta(path_value),
+            _initial_trajectory_cards(),
+            _empty_figure("Trajetória completa · BIS contra CNN", message, height=470),
+            _empty_figure("Erro ao longo do caso · CNN − BIS", message, height=300),
+            _status_children("Trajetória indisponível", message),
+            "state-message state-error",
+        )
     try:
         payload = _replay_payload(path_value)
         trajectory, error_figure = _trajectory_figure(payload)
     except Exception as error:
         message = f"Não foi possível calcular a trajetória: {error}"
-        return _case_meta(path_value), _initial_trajectory_cards(), _empty_figure("Trajetória completa · BIS contra CNN", message, height=470), _empty_figure("Erro ao longo do caso · CNN − BIS", message, height=300)
-    return _case_meta(path_value), _trajectory_cards(payload), trajectory, error_figure
+        return (
+            _case_meta(path_value),
+            _initial_trajectory_cards(),
+            _empty_figure("Trajetória completa · BIS contra CNN", message, height=470),
+            _empty_figure("Erro ao longo do caso · CNN − BIS", message, height=300),
+            _status_children("Não foi possível calcular a trajetória", str(error)),
+            "state-message state-error",
+        )
+    if payload.prediction_times.size:
+        status = _status_children(
+            "Trajetória calculada",
+            f"{_case_source_label(payload.case)} · {payload.prediction_times.size:,} janelas causais disponíveis para inspeção retrospectiva.",
+        )
+        status_class = "state-message state-ready"
+    else:
+        status = _status_children(
+            "Caso carregado sem estimativas",
+            "A gravação não produziu uma janela causal elegível; as figuras permanecem sem emissão.",
+        )
+        status_class = "state-message state-warning"
+    return (
+        _case_meta(path_value),
+        _trajectory_cards(payload),
+        trajectory,
+        error_figure,
+        status,
+        status_class,
+    )
 
 
 if __name__ == "__main__":

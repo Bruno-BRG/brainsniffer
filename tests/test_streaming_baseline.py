@@ -2,95 +2,9 @@ import numpy as np
 import pytest
 from scipy.signal import resample_poly
 
-from brainsniffer.pipeline.baseline import spectral_features
-from brainsniffer.pipeline.streaming import LSLSource, StreamingResampler, resample_chunk
-
-
-class _FakeInfo:
-    def name(self):
-        return "Fake EEG"
-
-    def type(self):
-        return "EEG"
-
-    def channel_count(self):
-        return 2
-
-    def nominal_srate(self):
-        return 128
-
-
-class _FakeInlet:
-    def info(self):
-        return _FakeInfo()
-
-    def pull_chunk(self, timeout, max_samples):
-        return [[1.0, 10.0], [2.0, 20.0]], [1.0, 1.01]
-
-
-class _FakeXml:
-    def __init__(self, *, children=None, values=None, empty=False):
-        self._children = children or {}
-        self._values = values or {}
-        self._empty = empty
-
-    def child(self, name):
-        return self._children.get(name, _FakeXml(empty=True))
-
-    def child_value(self, name):
-        return self._values.get(name, "")
-
-    def next_sibling(self):
-        return _FakeXml(empty=True)
-
-    def empty(self):
-        return self._empty
-
-
-class _MetadataInfo(_FakeInfo):
-    def source_id(self):
-        return "device-123"
-
-    def desc(self):
-        channel = _FakeXml(
-            values={
-                "label": "Fpz",
-                "unit": "uV",
-                "reference": "linked ears",
-                "montage": "frontal referenced",
-            }
-        )
-        return _FakeXml(children={"channels": _FakeXml(children={"channel": channel})})
-
-
-class _MetadataInlet(_FakeInlet):
-    def info(self):
-        return _MetadataInfo()
-
-
-def test_lsl_source_selects_a_channel_and_preserves_timestamps():
-    source = LSLSource(_FakeInlet(), channel_index=1)
-    chunk = source.read_chunk()
-    assert source.stream_name == "Fake EEG"
-    assert source.metadata == {
-        "source_name": "Fake EEG",
-        "stream_type": "EEG",
-        "channel_index": 1,
-        "channel_count": 2,
-        "sampling_rate": 128.0,
-    }
-    assert chunk.samples.tolist() == [10.0, 20.0]
-    assert chunk.timestamps.tolist() == [1.0, 1.01]
-
-
-def test_lsl_source_reads_channel_metadata_from_descriptor():
-    source = LSLSource(_MetadataInlet(), channel_index=0)
-
-    assert source.metadata["source_id"] == "device-123"
-    assert source.metadata["channel_name"] == "Fpz"
-    assert source.metadata["unit"] == "uV"
-    assert source.metadata["reference"] == "linked ears"
-    assert source.metadata["montage"] == "frontal referenced"
+from brainsniffer.data.preprocess import WindowedEEG
+from brainsniffer.pipeline.baseline import cross_validate_spectral_baseline, spectral_features
+from brainsniffer.pipeline.streaming import StreamingResampler, resample_chunk
 
 
 def test_resample_chunk_reaches_model_rate():
@@ -174,9 +88,104 @@ def test_streaming_resampler_rejects_nonfinite_samples_without_state_change():
     assert resampler._input_buffer.size == 0
 
 
+@pytest.mark.parametrize("source_rate,target_rate,up,down", [
+    (64., 128., 2, 1), (256., 128., 1, 2), (200., 128., 16, 25),
+])
+@pytest.mark.parametrize("count", [0, 1, 2, 37])
+def test_resample_chunk_uses_target_grid(source_rate, target_rate, up, down, count):
+    samples = np.arange(count, dtype=np.float32)
+    timestamps = 10. + np.arange(count) / source_rate
+    chunk = resample_chunk(samples, source_rate, target_rate, timestamps=timestamps)
+    expected = resample_poly(samples, up, down) if count else samples
+    np.testing.assert_allclose(chunk.samples, expected)
+    np.testing.assert_allclose(chunk.timestamps, 10. + np.arange(expected.size) / target_rate)
+    assert chunk.timestamps.size == chunk.samples.size
+    assert np.all(np.diff(chunk.timestamps) > 0)
+    assert chunk.sampling_rate == target_rate
+
+
+@pytest.mark.parametrize(
+    "source_rate,target_rate", [(0, 128), (128, -1), (np.nan, 128), (128, np.inf)]
+)
+@pytest.mark.parametrize("samples", [[], [1.]])
+def test_resample_chunk_rejects_invalid_rates_even_for_empty_input(
+    source_rate, target_rate, samples
+):
+    with pytest.raises(ValueError, match="source_rate e target_rate"):
+        resample_chunk(samples, source_rate, target_rate)
+
+
+@pytest.mark.parametrize("source_rate,target_rate", [(256, 128), (64, 128), (128, 128)])
+@pytest.mark.parametrize("with_timestamps", [False, True])
+@pytest.mark.parametrize("flush_before_reset", [False, True])
+def test_streaming_resampler_reset_matches_fresh_instance(
+    source_rate, target_rate, with_timestamps, flush_before_reset
+):
+    resampler = StreamingResampler(source_rate, target_rate, max_denominator=123)
+    old = np.arange(137, dtype=np.float32)
+    resampler.process(old, 100. + np.arange(old.size) / source_rate)
+    if flush_before_reset:
+        resampler.flush()
+    configuration = (resampler.source_rate, resampler.target_rate, resampler.up, resampler.down,
+                     resampler._history_samples, resampler._holdback_outputs)
+    assert resampler.reset() is None
+    assert resampler.flush().samples.size == 0
+    assert resampler.flush().timestamps.size == 0
+    resampler.reset()  # Idempotent; pending output stays discarded.
+    assert configuration == (
+        resampler.source_rate, resampler.target_rate, resampler.up, resampler.down,
+        resampler._history_samples, resampler._holdback_outputs,
+    )
+    fresh = StreamingResampler(source_rate, target_rate, max_denominator=123)
+    new = np.sin(np.arange(89, dtype=np.float32))
+    for start in range(0, new.size, 7):
+        samples = new[start:start + 7]
+        timestamps = (np.arange(start, start + samples.size) / source_rate
+                      if with_timestamps else None)
+        actual = resampler.process(samples, timestamps)
+        expected = fresh.process(samples, timestamps)
+        np.testing.assert_array_equal(actual.samples, expected.samples)
+        np.testing.assert_array_equal(actual.timestamps, expected.timestamps)
+    actual, expected = resampler.flush(), fresh.flush()
+    np.testing.assert_array_equal(actual.samples, expected.samples)
+    np.testing.assert_array_equal(actual.timestamps, expected.timestamps)
+
+
 def test_spectral_features_are_finite_and_named():
     signals = np.zeros((2, 1, 640), dtype=np.float32)
     signals[0, 0] = np.sin(np.linspace(0, 10 * np.pi, 640, dtype=np.float32))
     features, names = spectral_features(signals)
     assert features.shape == (2, len(names))
     assert np.isfinite(features).all()
+
+
+def test_grouped_baseline_exposes_effective_fold_provenance():
+    samples = np.arange(640, dtype=np.float32) / 128
+    signals = []
+    labels = []
+    case_ids = []
+    for case_index in range(4):
+        for window_index in range(3):
+            frequency = 2.0 + case_index * 3.0 + window_index
+            signals.append(np.sin(2 * np.pi * frequency * samples))
+            labels.append(30.0 + case_index * 12.0 + window_index * 3.0)
+            case_ids.append(f"case{case_index + 1}")
+    windows = WindowedEEG(
+        signals=np.asarray(signals, dtype=np.float32)[:, None, :],
+        bis=np.asarray(labels, dtype=np.float32),
+        case_ids=np.asarray(case_ids),
+        start_seconds=np.tile(np.asarray([0.0, 5.0, 10.0], dtype=np.float32), 4),
+        quality=np.ones(12, dtype=np.float32),
+    )
+
+    result = cross_validate_spectral_baseline(windows, n_splits=2, seed=7)
+
+    assert result.seed == 7
+    assert result.sampling_rate == 128
+    assert len(result.case_folds) == 2
+    assert result.feature_names[0:5] == ("delta", "theta", "alpha", "beta", "gamma")
+    assert result.estimator_parameters[0]["random_state"] == 7
+    assert result.estimator_parameters[1]["random_state"] == 8
+    all_test_cases = [case for fold in result.case_folds for case in fold.test_cases]
+    assert sorted(all_test_cases) == ["case1", "case2", "case3", "case4"]
+    assert all(set(fold.train_cases).isdisjoint(fold.test_cases) for fold in result.case_folds)

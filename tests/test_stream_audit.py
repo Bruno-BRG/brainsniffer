@@ -126,3 +126,59 @@ def test_stream_audit_rejects_invalid_metadata_rate():
 
     with pytest.raises(ValueError, match="sampling_rate do metadata"):
         audit.set_metadata({"sampling_rate": "unknown"})
+
+
+@pytest.mark.parametrize("samples", [
+    [0., 1., 1., 2., 4., 4.],
+    [0., np.nan, np.inf, 2., -np.inf, 0.],
+])
+def test_stream_audit_is_invariant_under_every_partition(samples):
+    samples = np.asarray(samples)
+    timestamps = 10. + np.arange(samples.size) / 100
+    timestamps[2] = np.nan
+    whole = StreamAudit()
+    whole.push(samples, source_rate=100, timestamps=timestamps)
+    expected = whole.report().as_dict()
+    expected.pop("chunk_count")
+    safe = np.nan_to_num(samples, nan=0., posinf=0., neginf=0.)
+    assert expected["flatline_fraction"] == np.mean(np.abs(np.diff(safe)) < 1e-5)
+    # Includes one chunk, all singleton chunks, and every mixed partition.
+    for mask in range(1 << (samples.size - 1)):
+        cuts = [0] + [i for i in range(1, samples.size) if mask & (1 << (i - 1))]
+        cuts.append(samples.size)
+        audit = StreamAudit()
+        for start, end in zip(cuts, cuts[1:]):
+            audit.push(samples[start:end], source_rate=100, timestamps=timestamps[start:end])
+            audit.push([], source_rate=100, timestamps=[])
+        actual = audit.report().as_dict()
+        actual.pop("chunk_count")
+        assert actual == expected
+
+
+@pytest.mark.parametrize("unit", ["uV", "µV", "μV", " UV ", "microvolt", "Microvolts"])
+def test_stream_audit_accepts_documented_microvolt_aliases(unit):
+    audit = StreamAudit()
+    audit.set_metadata({"unit": unit})
+    audit.push([0., 1.], source_rate=100)
+    assert audit.report().ok
+
+
+@pytest.mark.parametrize("required", [False, True])
+@pytest.mark.parametrize("unit", ["V", "mV", "nV", "unknown", 1])
+def test_stream_audit_rejects_explicit_incompatible_units(required, unit):
+    audit = StreamAudit(require_metadata=required)
+    audit.set_metadata({"unit": unit, "channel_name": "Fpz", "reference": "ref", "montage": "unknown"})
+    audit.push([0., 1.], source_rate=100)
+    report = audit.report()
+    assert not report.ok
+    assert "unidade do metadata incompatível com uV" in report.warnings
+
+
+@pytest.mark.parametrize("required", [False, True])
+def test_stream_audit_missing_unit_is_separate_presence_policy(required):
+    audit = StreamAudit(require_metadata=required)
+    audit.push([0., 1.], source_rate=100)
+    report = audit.report()
+    assert report.ok is (not required)
+    assert "unit" in report.metadata_missing
+    assert "unidade do metadata incompatível com uV" not in report.warnings

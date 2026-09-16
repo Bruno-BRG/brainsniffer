@@ -15,6 +15,23 @@ from ..data.preprocess import StreamingPreprocessor, bis_stage, signal_quality
 
 @dataclass(frozen=True)
 class RealtimePrediction:
+    """Prediction emitted after consuming ``sample_index`` samples (a count).
+
+    ``elapsed_seconds`` is that count / sampling rate, not the BIS label time
+    or wall-clock inference completion time. For a full window of W samples
+    emitted at count N, the EEG occupies sample indices [N-W, N), with nominal
+    interval [(N-W)/fs, N/fs). The last sample is at (N-1)/fs.
+    ``source_timestamp`` is the most recently supplied sample timestamp (None
+    if none was supplied), not a window-start or target timestamp; it can refer
+    to an earlier chunk when subsequent pushes omit timestamps.
+
+    Training's historical target is window start + label_offset_seconds,
+    rounded to the nearest reference-label index by ``make_windows``. It is
+    not necessarily the emission time. These fields do not shift that target.
+    After source silence, counts exclude the unobserved gap; a stale abstention
+    retains the last count/timestamp and does not describe a full window.
+    """
+
     sample_index: int
     elapsed_seconds: float
     raw_bis: float | None
@@ -25,7 +42,16 @@ class RealtimePrediction:
 
 
 class RealtimeEstimator:
-    """Buffer one channel of EEG and emit a prediction every stride."""
+    """Buffer one channel of EEG and emit a prediction every stride.
+
+    Only causal preprocessing configurations are compatible with this live
+    filter. A checkpoint's preprocessing config must be passed unchanged;
+    zero-phase (causal=False) checkpoints cannot be made compatible merely
+    by switching their flag. Emission timestamps describe availability after
+    a full EEG window, not its historical start+offset training target (see
+    :class:`RealtimePrediction`). EWMA combines successive predictions and
+    therefore has no single instantaneous reference-label timestamp.
+    """
 
     def __init__(
         self,
@@ -37,8 +63,13 @@ class RealtimeEstimator:
         min_quality: float = 0.2,
         device: str = "cpu",
     ) -> None:
-        self.model = model.to(device).eval()
         self.config = config or PreprocessConfig()
+        if not self.config.causal:
+            raise ValueError(
+                "RealtimeEstimator requer causal=True; configuração causal=False "
+                "do checkpoint é incompatível com o preprocessamento live"
+            )
+        self.model = model.to(device).eval()
         self.device = device
         self.window_samples = self.config.window_samples
         self.stride_samples = max(1, int(round(stride_seconds * self.config.sampling_rate)))
@@ -56,26 +87,36 @@ class RealtimeEstimator:
         self._smoothed: float | None = None
         self._last_source_timestamp: float | None = None
 
+    def _abstain(self, quality: float) -> RealtimePrediction:
+        """Invalidate EWMA so recovery cannot reuse a pre-failure estimate."""
+
+        self._smoothed = None
+        return RealtimePrediction(
+            sample_index=self._samples_seen,
+            elapsed_seconds=self._samples_seen / self.config.sampling_rate,
+            raw_bis=None,
+            smoothed_bis=None,
+            stage="abstain",
+            quality=quality,
+            source_timestamp=self._last_source_timestamp,
+        )
+
     @torch.inference_mode()
     def _predict_buffer(self) -> RealtimePrediction:
         raw = np.asarray(self._raw_buffer, dtype=np.float32)
         quality = signal_quality(raw, self.config)
-        if quality < self.min_quality:
-            # Do not carry a stale BIS value across a poor-signal interval.
-            # The next valid window starts a fresh smoother state.
-            self._smoothed = None
-            return RealtimePrediction(
-                sample_index=self._samples_seen,
-                elapsed_seconds=self._samples_seen / self.config.sampling_rate,
-                raw_bis=None,
-                smoothed_bis=None,
-                stage="abstain",
-                quality=quality,
-                source_timestamp=self._last_source_timestamp,
-            )
+        if quality <= 0.0 or quality < self.min_quality:
+            # Zero quality is unusable even when the tunable threshold is 0:
+            # disabling threshold filtering must not enable flatline estimates.
+            return self._abstain(quality)
         processed = np.asarray(self._processed_buffer, dtype=np.float32)
         tensor = torch.from_numpy(processed[None, None, :]).float().to(self.device)
-        raw_bis = float(torch.clamp(self.model(tensor), 0.0, 100.0).detach().cpu().item())
+        output = self.model(tensor)
+        # Check before clamp: +/-Inf would otherwise become plausible 0/100.
+        # Preserve EEG quality as its own diagnostic; model failure is not SQI.
+        if not torch.isfinite(output).all():
+            return self._abstain(quality)
+        raw_bis = float(torch.clamp(output, 0.0, 100.0).detach().cpu().item())
         if self._smoothed is None:
             self._smoothed = raw_bis
         else:
@@ -97,7 +138,12 @@ class RealtimeEstimator:
         samples: np.ndarray | list[float],
         timestamps: np.ndarray | list[float] | None = None,
     ) -> list[RealtimePrediction]:
-        """Push samples and return zero or more predictions."""
+        """Push samples and return zero or more predictions.
+
+        Optional timestamps identify individual source samples. Predictions
+        retain the latest supplied timestamp at emission; label_offset_seconds
+        does not modify timestamps or shift the EEG window.
+        """
 
         samples_array = np.asarray(samples, dtype=np.float32).reshape(-1)
         if samples_array.size and not np.isfinite(samples_array).all():

@@ -7,6 +7,9 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from ..data.preprocess import bis_stage
 
+# Match bis_stage's valid research taxonomy; never infer labels from a sample.
+STAGE_LABELS = ("deep", "general", "light", "awake")
+
 
 def _correlation(left: np.ndarray, right: np.ndarray) -> float:
     if left.size < 2 or np.std(left) == 0 or np.std(right) == 0:
@@ -15,7 +18,14 @@ def _correlation(left: np.ndarray, right: np.ndarray) -> float:
 
 
 def compute_metrics(target: np.ndarray, prediction: np.ndarray) -> dict[str, float]:
-    """Compute metrics while excluding non-finite pairs."""
+    """Compute metrics while excluding non-finite pairs.
+
+    Stage macro-F1 averages the four fixed BIS bands, assigning zero to absent
+    bands. This differs from historical reports using sample-inferred labels,
+    including bootstrap replicates missing bands. Finite out-of-range values
+    retain bis_stage's ``invalid`` sentinel (not a fifth averaged class); no
+    clipping or additional pair exclusion is applied here.
+    """
 
     target = np.asarray(target, dtype=np.float64).reshape(-1)
     prediction = np.asarray(prediction, dtype=np.float64).reshape(-1)
@@ -39,7 +49,13 @@ def compute_metrics(target: np.ndarray, prediction: np.ndarray) -> dict[str, flo
         "pearson_r": _correlation(target, prediction),
         "stage_accuracy": float(accuracy_score(target_stage, prediction_stage)),
         "stage_macro_f1": float(
-            f1_score(target_stage, prediction_stage, average="macro", zero_division=0)
+            f1_score(
+                target_stage,
+                prediction_stage,
+                labels=STAGE_LABELS,
+                average="macro",
+                zero_division=0,
+            )
         ),
     }
 
@@ -57,6 +73,10 @@ def bootstrap_case_metrics(
     Resampling whole cases, rather than individual windows, preserves the main
     dependence structure of a longitudinal surgical recording. The result is an
     exploratory uncertainty summary, not a clinical confidence statement.
+    Metrics remain pooled over windows, not equally weighted case metrics.
+    Stage macro-F1 uses the same four fixed bands in every replicate. ``mean``
+    is the bootstrap mean, not the observed point estimate. Callers must supply
+    the largest known independent grouping (e.g. subject for repeat cases).
     """
 
     if n_bootstrap < 1:

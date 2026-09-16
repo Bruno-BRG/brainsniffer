@@ -19,152 +19,6 @@ class EEGChunk:
     stream_name: str = ""
 
 
-def _lsl_channel_metadata(info: object, channel_index: int) -> dict[str, object]:
-    """Read common channel fields from an optional LSL XML descriptor."""
-
-    metadata: dict[str, object] = {}
-    for method_name, key in (("source_id", "source_id"),):
-        method = getattr(info, method_name, None)
-        if callable(method):
-            try:
-                value = str(method()).strip()
-            except Exception:
-                value = ""
-            if value:
-                metadata[key] = value
-
-    desc_method = getattr(info, "desc", None)
-    if not callable(desc_method):
-        return metadata
-    try:
-        channels = desc_method().child("channels")
-        if channels.empty():
-            return metadata
-        channel = channels.child("channel")
-        for _ in range(channel_index):
-            channel = channel.next_sibling()
-            if channel.empty():
-                return metadata
-        fields = {
-            "label": "channel_name",
-            "name": "channel_name",
-            "unit": "unit",
-            "reference": "reference",
-            "montage": "montage",
-        }
-        for xml_name, key in fields.items():
-            value = str(channel.child_value(xml_name)).strip()
-            if value and key not in metadata:
-                metadata[key] = value
-    except Exception:
-        # Metadata is helpful but optional; malformed vendor XML must not make
-        # the transport parser crash. ``--require-metadata`` still fails later
-        # if the required fields remain absent.
-        return metadata
-    return metadata
-
-
-class LSLSource:
-    """Pull one channel from an LSL EEG stream.
-
-    The optional ``pylsl`` dependency is imported only when a connection is
-    requested. An acquisition vendor must expose a compatible LSL outlet or
-    provide a separate bridge to it.
-    """
-
-    def __init__(self, inlet: object, *, channel_index: int = 0) -> None:
-        self.inlet = inlet
-        self.channel_index = channel_index
-        info = inlet.info()
-        self.stream_name = str(info.name())
-        self.stream_type = str(info.type())
-        self.channel_count = int(info.channel_count())
-        self.sampling_rate = float(info.nominal_srate())
-        self._descriptor_metadata = _lsl_channel_metadata(info, self.channel_index)
-        if self.channel_index < 0 or self.channel_index >= self.channel_count:
-            raise ValueError("channel_index está fora da quantidade de canais do stream")
-        if not np.isfinite(self.sampling_rate) or self.sampling_rate <= 0:
-            raise ValueError("O stream LSL precisa declarar uma taxa regular positiva")
-
-    @classmethod
-    def connect(
-        cls,
-        *,
-        stream_name: str | None = None,
-        stream_type: str = "EEG",
-        channel_index: int = 0,
-        timeout_seconds: float = 5.0,
-    ) -> LSLSource:
-        """Discover one stream by name/type and connect to it."""
-
-        try:
-            import pylsl
-        except ImportError as error:
-            raise RuntimeError(
-                "Modo LSL requer a dependência opcional: uv sync --extra live"
-            ) from error
-
-        streams = pylsl.resolve_streams(wait_time=timeout_seconds)
-        candidates = [
-            info
-            for info in streams
-            if (not stream_name or str(info.name()) == stream_name)
-            and (not stream_type or str(info.type()) == stream_type)
-        ]
-        if not candidates:
-            filters = []
-            if stream_name:
-                filters.append(f"name={stream_name!r}")
-            if stream_type:
-                filters.append(f"type={stream_type!r}")
-            query = ", ".join(filters) or "qualquer stream"
-            raise RuntimeError(f"Nenhum stream LSL encontrado para {query}")
-        inlet = pylsl.StreamInlet(candidates[0], max_buflen=5, recover=True)
-        return cls(inlet, channel_index=channel_index)
-
-    def read_chunk(self, *, timeout_seconds: float = 0.2, max_samples: int = 256) -> EEGChunk:
-        """Pull at most ``max_samples`` and return an empty chunk on timeout."""
-
-        samples, timestamps = self.inlet.pull_chunk(
-            timeout=timeout_seconds,
-            max_samples=max_samples,
-        )
-        if len(samples) == 0:
-            return EEGChunk(
-                samples=np.empty(0, dtype=np.float32),
-                timestamps=np.empty(0, dtype=np.float64),
-                sampling_rate=self.sampling_rate,
-                stream_name=self.stream_name,
-            )
-        array = np.asarray(samples, dtype=np.float32)
-        if array.ndim == 1:
-            array = array[:, None]
-        if array.ndim != 2 or array.shape[1] <= self.channel_index:
-            raise ValueError("O chunk LSL não tem a forma esperada (amostras, canais)")
-        timestamp_array = np.asarray(timestamps, dtype=np.float64).reshape(-1)
-        if timestamp_array.size != array.shape[0]:
-            raise ValueError("O chunk LSL precisa de um timestamp por amostra")
-        return EEGChunk(
-            samples=array[:, self.channel_index],
-            timestamps=timestamp_array,
-            sampling_rate=self.sampling_rate,
-            stream_name=self.stream_name,
-        )
-
-    @property
-    def metadata(self) -> dict[str, object]:
-        """Return source facts known from the LSL stream descriptor."""
-
-        return {
-            "source_name": self.stream_name,
-            "stream_type": self.stream_type,
-            "channel_index": self.channel_index,
-            "channel_count": self.channel_count,
-            "sampling_rate": self.sampling_rate,
-            **self._descriptor_metadata,
-        }
-
-
 def _ceil_resampled_length(sample_count: int, up: int, down: int) -> int:
     return (sample_count * up + down - 1) // down
 
@@ -199,13 +53,7 @@ class StreamingResampler:
         self.up = ratio.numerator
         self.down = ratio.denominator
         self._passthrough = np.isclose(source_rate, target_rate)
-        self._source_seen = 0
-        self._emitted_output = 0
-        self._buffer_start = 0
-        self._input_buffer = np.empty(0, dtype=np.float32)
-        self._timestamp_buffer = np.empty(0, dtype=np.float64)
-        self._timestamps_enabled: bool | None = None
-        self._last_timestamp: float | None = None
+        self.reset()
 
         if not self._passthrough:
             # These values mirror scipy's default Kaiser-window FIR length.
@@ -217,6 +65,21 @@ class StreamingResampler:
         else:
             self._holdback_outputs = 0
             self._history_samples = 0
+
+    def reset(self) -> None:
+        """Discard overlap, pending output and timestamp history; retain rates/filter.
+
+        No delayed tail is emitted. The next ``process`` starts an independent
+        stream and may choose a different timestamp origin or presence policy.
+        """
+
+        self._source_seen = 0
+        self._emitted_output = 0
+        self._buffer_start = 0
+        self._input_buffer = np.empty(0, dtype=np.float32)
+        self._timestamp_buffer = np.empty(0, dtype=np.float64)
+        self._timestamps_enabled: bool | None = None
+        self._last_timestamp: float | None = None
 
     def _validate_timestamps(
         self,
@@ -395,7 +258,8 @@ def resample_chunk(
 
     For a production acquisition path, resampling state should be carried
     across chunks; this stateless helper is explicit so that the limitation is
-    visible during replay and pilot experiments.
+    visible during replay and pilot experiments. Output timestamps use the
+    declared regular grid ``t0 + k / target_rate``, not the input endpoints.
     """
 
     samples = np.asarray(samples, dtype=np.float32).reshape(-1)
@@ -406,15 +270,17 @@ def resample_chunk(
     )
     if timestamp_array is not None and timestamp_array.size != samples.size:
         raise ValueError("timestamps deve ter o mesmo número de elementos que samples")
+    if not np.isfinite(source_rate) or not np.isfinite(target_rate):
+        raise ValueError("source_rate e target_rate devem ser finitos")
+    if source_rate <= 0 or target_rate <= 0:
+        raise ValueError("source_rate e target_rate devem ser positivos")
     if samples.size == 0:
         return EEGChunk(
             samples,
             timestamp_array if timestamp_array is not None else np.empty(0, dtype=np.float64),
             float(target_rate),
         )
-    if source_rate <= 0 or target_rate <= 0:
-        raise ValueError("source_rate e target_rate devem ser positivos")
-    if np.isclose(source_rate, target_rate):
+    if source_rate == target_rate:
         return EEGChunk(
             samples,
             timestamp_array if timestamp_array is not None else np.empty(0, dtype=np.float64),
@@ -425,10 +291,8 @@ def resample_chunk(
     converted_timestamps = (
         timestamp_array if timestamp_array is not None else np.empty(0, dtype=np.float64)
     )
-    if timestamp_array is not None and timestamp_array.size > 1 and converted.size > 1:
-        converted_timestamps = np.linspace(
-            timestamp_array[0], timestamp_array[-1], converted.size, dtype=np.float64
+    if timestamp_array is not None:
+        converted_timestamps = (
+            timestamp_array[0] + np.arange(converted.size, dtype=np.float64) / target_rate
         )
-    elif timestamp_array is not None and timestamp_array.size == 1:
-        converted_timestamps = np.full(converted.size, timestamp_array[0], dtype=np.float64)
     return EEGChunk(converted, converted_timestamps, float(target_rate))

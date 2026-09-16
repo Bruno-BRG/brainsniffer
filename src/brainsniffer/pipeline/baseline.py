@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 
 from ..config import TrainingConfig
 from ..data.preprocess import WindowedEEG
-from ..data.split import CaseSplit, group_kfold_case_ids, split_case_ids
+from ..data.split import CaseSplit, GroupFold, group_kfold_case_ids, split_case_ids
 from .metrics import compute_metrics
 
 BANDS = (
@@ -28,6 +28,9 @@ class BaselineResult:
     validation_metrics: dict[str, float]
     test_metrics: dict[str, float]
     feature_names: tuple[str, ...]
+    seed: int
+    sampling_rate: int
+    estimator_parameters: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,23 @@ class CrossValidationResult:
     folds: tuple[dict[str, float], ...]
     mean: dict[str, float]
     std: dict[str, float]
+    case_folds: tuple[GroupFold, ...]
+    feature_names: tuple[str, ...]
+    seed: int
+    sampling_rate: int
+    estimator_parameters: tuple[dict[str, object], ...]
+
+
+def _estimator_parameters(random_state: int) -> dict[str, object]:
+    """Return the exact Random Forest configuration used by one fit."""
+
+    return {
+        "n_estimators": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "random_state": random_state,
+        "n_jobs": -1,
+    }
 
 
 def spectral_features(
@@ -104,13 +124,8 @@ def train_spectral_baseline(
     train_mask = np.isin(case_ids, split.train_cases)
     validation_mask = np.isin(case_ids, split.validation_cases)
     test_mask = np.isin(case_ids, split.test_cases)
-    model = RandomForestRegressor(
-        n_estimators=100,
-        max_depth=12,
-        min_samples_leaf=2,
-        random_state=training_config.seed,
-        n_jobs=-1,
-    )
+    estimator_parameters = _estimator_parameters(training_config.seed)
+    model = RandomForestRegressor(**estimator_parameters)
     model.fit(features[train_mask], windows.bis[train_mask])
     validation_prediction = np.clip(model.predict(features[validation_mask]), 0.0, 100.0)
     test_prediction = np.clip(model.predict(features[test_mask]), 0.0, 100.0)
@@ -119,6 +134,9 @@ def train_spectral_baseline(
         validation_metrics=compute_metrics(windows.bis[validation_mask], validation_prediction),
         test_metrics=compute_metrics(windows.bis[test_mask], test_prediction),
         feature_names=feature_names,
+        seed=training_config.seed,
+        sampling_rate=sampling_rate,
+        estimator_parameters=estimator_parameters,
     )
 
 
@@ -131,20 +149,17 @@ def cross_validate_spectral_baseline(
 ) -> CrossValidationResult:
     """Evaluate the spectral baseline with patient-level test folds."""
 
-    features, _ = spectral_features(windows.signals, sampling_rate)
+    features, feature_names = spectral_features(windows.signals, sampling_rate)
     case_ids = windows.case_ids.astype(str)
     folds = group_kfold_case_ids(case_ids, n_splits=n_splits, seed=seed)
     fold_metrics: list[dict[str, float]] = []
+    estimator_parameters: list[dict[str, object]] = []
     for fold in folds:
         train_mask = np.isin(case_ids, fold.train_cases)
         test_mask = np.isin(case_ids, fold.test_cases)
-        model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=12,
-            min_samples_leaf=2,
-            random_state=seed + fold.fold_index,
-            n_jobs=-1,
-        )
+        fold_estimator_parameters = _estimator_parameters(seed + fold.fold_index)
+        estimator_parameters.append(fold_estimator_parameters)
+        model = RandomForestRegressor(**fold_estimator_parameters)
         model.fit(features[train_mask], windows.bis[train_mask])
         prediction = np.clip(model.predict(features[test_mask]), 0.0, 100.0)
         metrics = compute_metrics(windows.bis[test_mask], prediction)
@@ -157,4 +172,9 @@ def cross_validate_spectral_baseline(
         folds=tuple(fold_metrics),
         mean=mean,
         std=std,
+        case_folds=folds,
+        feature_names=feature_names,
+        seed=seed,
+        sampling_rate=sampling_rate,
+        estimator_parameters=tuple(estimator_parameters),
     )

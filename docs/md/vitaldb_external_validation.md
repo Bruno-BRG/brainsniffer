@@ -39,11 +39,11 @@ baixa apenas `BIS/EEG1_WAV` e `BIS/BIS`, interpola o BIS numérico para uma grad
 data/vitaldb/vitaldb_case1.npz
 ```
 
-O mesmo download está disponível na aba **Dados** da interface Dash; a interface
-Streamlit legada também mantém o fluxo. Informe
-os números separados por vírgula, por exemplo `1,2,3`; depois use **Avaliar
-VitalDB sem retreino** para ver as métricas por caso. Essa tela é apenas uma
-conveniência para pesquisa e repete o mesmo caminho do comando CLI.
+Download e avaliação sem retreino são operações da CLI, não controles do Dash.
+Repita `--case` no download (por exemplo, `--case 1 --case 2 --case 3`) e use
+`evaluate-external` para calcular métricas por caso e salvar o relatório, conforme
+os exemplos abaixo. O Dash é a única interface web e inspeciona dados e
+relatórios locais preparados pelo operador; não oferece treino nem captura LSL.
 
 O `.npz` não é incluído automaticamente no treino Figshare. Antes de usá-lo,
 devemos fechar um protocolo de validação externa: escolher casos sem consultar o

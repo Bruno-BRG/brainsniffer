@@ -10,6 +10,8 @@ import numpy as np
 from ..config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig
 
 REQUIRED_METADATA_FIELDS = ("unit", "channel_name", "reference", "montage")
+# Case-insensitive spellings; Unicode micro sign and Greek mu are equivalent.
+MICROVOLT_ALIASES = frozenset(("uv", "μv", "microvolt", "microvolts"))
 
 
 def _normalize_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
@@ -156,7 +158,7 @@ class StreamAudit:
         )
 
     def metadata_complete(self) -> bool:
-        """Whether unit, channel identity, reference, and montage are known."""
+        """Whether required fields are present, not whether montage is compatible."""
 
         return not self._metadata_missing()
 
@@ -211,14 +213,16 @@ class StreamAudit:
             self._sum_squares += float(np.square(finite_values).sum())
 
         previous = self._last_sample
-        if previous is not None and finite[0] and abs(previous - samples_array[0]) < 1e-5:
-            self._flatline_count += 1
+        # Preserve the existing zero-substitution flatline diagnostic, including
+        # at chunk boundaries. Nonfinite samples independently fail the audit.
+        if previous is not None:
+            self._flatline_count += int(abs(previous - safe[0]) < 1e-5)
             self._difference_count += 1
         if samples_array.size > 1:
             differences = np.abs(np.diff(safe))
             self._flatline_count += int((differences < 1e-5).sum())
             self._difference_count += differences.size
-        self._last_sample = float(samples_array[-1]) if np.isfinite(samples_array[-1]) else None
+        self._last_sample = float(safe[-1])
 
         if timestamp_array is not None:
             finite_timestamps = np.isfinite(timestamp_array)
@@ -284,6 +288,10 @@ class StreamAudit:
             warnings.append(f"qualidade heurística abaixo de {self.min_quality:g}")
         metadata_missing = self._metadata_missing()
         metadata_complete = not metadata_missing
+        unit = (self._metadata or {}).get("unit")
+        unit_compatible = unit is None or str(unit).casefold() in MICROVOLT_ALIASES
+        if not unit_compatible:
+            warnings.append("unidade do metadata incompatível com uV")
         if not metadata_complete:
             warnings.append(
                 "metadata obrigatório incompleto: " + ", ".join(metadata_missing)
@@ -298,6 +306,7 @@ class StreamAudit:
                 and (self._timestamps_present is True or not self.require_timestamps)
                 and quality >= self.min_quality
                 and (metadata_complete or not self.require_metadata)
+                and unit_compatible
             ),
             sample_count=self._sample_count,
             chunk_count=self._chunk_count,

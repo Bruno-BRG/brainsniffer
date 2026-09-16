@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
+import pickle
 import platform
 import random
 from collections.abc import Sequence
@@ -15,13 +17,16 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
+from torch.torch_version import TorchVersion
 from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
 from ..config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig, TrainingConfig, resolve_device
 from ..data.preprocess import WindowedEEG, bis_stage
 from ..data.split import CaseSplit, split_case_ids
 from ..models.cnn import Conv1DDepthEstimator
-from .metrics import compute_metrics
+
+CHECKPOINT_SCHEMA_VERSION = 1
+SUPPORTED_MODEL_NAME = "Conv1DDepthEstimator"
 
 
 @dataclass(frozen=True)
@@ -105,8 +110,9 @@ def runtime_metadata() -> dict[str, str | None]:
     return {
         "project": _installed_version("brainsniffer") or "0.1.0",
         "python": platform.python_version(),
-        "torch": torch.__version__,
-        "numpy": np.__version__,
+        # TorchVersion is a str subclass with a pickle global, not a plain str.
+        "torch": str(torch.__version__),
+        "numpy": str(np.__version__),
         "scipy": _installed_version("scipy"),
         "scikit_learn": _installed_version("scikit-learn"),
         "deterministic_algorithms": str(torch.are_deterministic_algorithms_enabled()),
@@ -277,6 +283,9 @@ def train_model(
     corpus_manifest_path: str | Path | None = None,
 ) -> TrainingResult:
     """Train the baseline CNN and evaluate only on unseen surgical cases."""
+
+    # Loading checkpoints does not require the evaluation stack.
+    from .metrics import compute_metrics
 
     preprocess_config = preprocess_config or PreprocessConfig()
     training_config = training_config or TrainingConfig()
@@ -452,8 +461,37 @@ def train_model(
     if checkpoint is not None:
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
         checkpoint_payload = {
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
             "model_state": model.state_dict(),
-            "model_name": "Conv1DDepthEstimator",
+            "model_name": SUPPORTED_MODEL_NAME,
+            "effective_training": {
+                "device": str(device),
+                "optimizer": "AdamW",
+                "loss": "SmoothL1Loss",
+                "scheduler": {
+                    "name": "ReduceLROnPlateau",
+                    "mode": "min",
+                    "factor": scheduler.factor,
+                    "patience": scheduler.patience,
+                    "min_lrs": list(scheduler.min_lrs),
+                    "threshold": scheduler.threshold,
+                    "threshold_mode": scheduler.threshold_mode,
+                    "cooldown": scheduler.cooldown,
+                    "eps": scheduler.eps,
+                    "final_learning_rates": [
+                        float(group["lr"]) for group in optimizer.param_groups
+                    ],
+                },
+                "gradient_clip_norm": training_config.gradient_clip_norm,
+                "mixed_precision": use_amp,
+                "amp_dtype": "float16" if use_amp else None,
+                "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+                "deterministic_warn_only": (
+                    torch.is_deterministic_algorithms_warn_only_enabled()
+                ),
+                "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
+                "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
+            },
             "preprocess_config": asdict(preprocess_config),
             "training_config": asdict(training_config),
             "split": asdict(split),
@@ -483,31 +521,12 @@ def train_model(
         checkpoint.with_suffix(".json").write_text(
             json.dumps(
                 {
-                    "model_name": "Conv1DDepthEstimator",
-                    "preprocess_config": asdict(preprocess_config),
-                    "training_config": asdict(training_config),
-                    "validation_metrics": validation_metrics,
-                    "test_metrics": test_metrics,
-                    "split": asdict(split),
-                    "dataset_summary": dataset_summary,
-                    "min_quality": min_quality,
-                    "history": history,
-                    "environment": environment,
-                    "input_files": input_file_manifest,
-                    "corpus_manifest": (
-                        {
-                            "path": str(corpus_manifest_path),
-                            "sha256": sha256_file(corpus_manifest_path),
-                        }
-                        if corpus_manifest_path is not None
-                        else None
-                    ),
-                    "split_unit": split_unit,
-                    "checkpoint_sha256": checkpoint_sha256,
-                    "best_epoch": best_epoch,
-                    "stopped_early": len(history) < training_config.epochs,
-                    "mixed_precision": use_amp,
-                    "split_sizes": split_sizes,
+                    key: value
+                    for key, value in {
+                        **checkpoint_payload,
+                        "checkpoint_sha256": checkpoint_sha256,
+                    }.items()
+                    if key != "model_state"
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -531,14 +550,38 @@ def train_model(
 def load_checkpoint(
     path: str | Path, *, device: str = "cpu"
 ) -> tuple[nn.Module, PreprocessConfig, dict]:
-    """Load a saved CNN and its preprocessing configuration."""
+    """Load a baseline checkpoint using only PyTorch's restricted unpickler.
+
+    Returns ``(model, preprocess_config, payload)``. Unversioned baseline
+    dictionaries remain supported; explicit schema versions must equal 1.
+    Missing model names, other architectures, malformed inference settings and
+    incompatible state dictionaries raise ValueError. Unsupported pickle globals
+    also raise ValueError: there is no unsafe retry. The sole application-added
+    global is TorchVersion, scoped to the load for historical environment metadata.
+    Other unsupported globals (including NumPy objects) remain rejected and need
+    separate review/migration; this API never rewrites artifacts or invents schema.
+
+    A sidecar checksum detects corruption, not authenticity. Restricted loading
+    does not make arbitrary files trusted or prevent resource exhaustion; use
+    artifacts from a trusted source and a maintained PyTorch installation.
+    PyTorch's safe-global registry is process-wide: callers must not concurrently
+    mutate it or register arbitrary globals in this trusted inference process.
+    """
 
     path = Path(path)
     metadata_path = path.with_suffix(".json")
     sidecar: dict[str, object] = {}
     if metadata_path.exists():
         sidecar = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(sidecar, dict):
+            raise ValueError("O manifesto do checkpoint deve ser um objeto JSON")
         expected_sha256 = sidecar.get("checkpoint_sha256")
+        if "checkpoint_sha256" in sidecar and (
+            not isinstance(expected_sha256, str)
+            or len(expected_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in expected_sha256)
+        ):
+            raise ValueError("SHA-256 do manifesto inválido")
         if expected_sha256:
             actual_sha256 = sha256_file(path)
             if actual_sha256 != expected_sha256:
@@ -546,12 +589,86 @@ def load_checkpoint(
                     "SHA-256 do checkpoint não coincide com o manifesto: "
                     f"esperado {expected_sha256}, obtido {actual_sha256}"
                 )
-    payload = torch.load(path, map_location=device, weights_only=False)
+    try:
+        # Reviewed legacy exception: the original brainsniffer_cnn.pt contains
+        # only torch.torch_version.TorchVersion beyond PyTorch's allowed globals,
+        # at environment['torch'] (GLOBAL offset 6166, NEWOBJ of a string).
+        # TorchVersion inherits str.__new__/__init__, has empty __slots__, and
+        # no __setstate__; added methods only compare versions. Reconstruction
+        # therefore does not import/execute checkpoint-selected application code.
+        # Keep this explicit singleton, never derive an allowlist from the file.
+        # Preserve an existing registration: safe_globals removes its entries
+        # on exit even if a caller had registered them before entering.
+        additions = [] if TorchVersion in torch.serialization.get_safe_globals() else [TorchVersion]
+        with torch.serialization.safe_globals(additions):
+            # Validate on CPU before allocating accelerator memory; no retry.
+            payload = torch.load(path, map_location="cpu", weights_only=True)
+    except (pickle.UnpicklingError, TypeError, RuntimeError, EOFError) as exc:
+        raise ValueError(
+            "Checkpoint rejeitado pelo loader restrito (weights_only=True); "
+            "formato incompatível ou globals não permitidos. Sem fallback inseguro."
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("O checkpoint deve ser um dicionário")
+    if "schema_version" in payload and (
+        type(payload["schema_version"]) is not int
+        or payload["schema_version"] != CHECKPOINT_SCHEMA_VERSION
+    ):
+        raise ValueError("schema_version do checkpoint não suportada")
+    if payload.get("model_name") != SUPPORTED_MODEL_NAME:
+        raise ValueError("model_name não suportado; esperado Conv1DDepthEstimator")
+    for key in ("schema_version", "model_name", "preprocess_config"):
+        if key in sidecar and sidecar[key] != payload.get(key):
+            raise ValueError(f"Manifesto e checkpoint divergem em {key}")
+    state = payload.get("model_state")
+    if not isinstance(state, dict) or not state or any(
+        not isinstance(key, str) or type(value) is not torch.Tensor
+        for key, value in state.items()
+    ):
+        raise ValueError("model_state deve mapear nomes para tensores")
+    config = payload.get("preprocess_config")
+    if not isinstance(config, dict):
+        raise ValueError("preprocess_config deve ser um dicionário")
+    try:
+        preprocess = PreprocessConfig(**config)
+    except TypeError as exc:
+        raise ValueError("preprocess_config contém campos inválidos") from exc
+    for key, value in asdict(preprocess).items():
+        if key == "causal":
+            valid = type(value) is bool
+        elif key == "notch_hz" and value is None:
+            valid = True
+        else:
+            valid = type(value) in (int, float) and math.isfinite(value)
+        if not valid:
+            raise ValueError(f"preprocess_config inválida: {key}")
+    if (
+        type(preprocess.sampling_rate) is not int
+        or preprocess.sampling_rate <= 0
+        or type(preprocess.filter_order) is not int
+        or preprocess.filter_order <= 0
+        or preprocess.window_seconds <= 0
+        or preprocess.window_samples < 8
+        or not 0 < preprocess.lowcut_hz < preprocess.highcut_hz < preprocess.sampling_rate / 2
+        or preprocess.notch_quality <= 0
+        or preprocess.amplitude_scale_uv <= 0
+        or preprocess.clip_uv <= 0
+        or (preprocess.notch_hz is not None and preprocess.notch_hz <= 0)
+    ):
+        raise ValueError("preprocess_config fora dos limites suportados")
+    model = Conv1DDepthEstimator()
+    expected_state = model.state_dict()
+    if state.keys() != expected_state.keys() or any(
+        state[key].shape != expected.shape
+        or state[key].dtype != expected.dtype
+        or state[key].layout != torch.strided
+        or not bool(torch.isfinite(state[key]).all())
+        for key, expected in expected_state.items()
+    ):
+        raise ValueError("model_state incompatível com a CNN baseline ou não finito")
+    model.load_state_dict(state, strict=True)
+    model.to(device).eval()
     for key in ("checkpoint_sha256", "input_files"):
         if key in sidecar:
             payload[key] = sidecar[key]
-    model = Conv1DDepthEstimator().to(device)
-    model.load_state_dict(payload["model_state"])
-    model.eval()
-    preprocess = PreprocessConfig(**payload.get("preprocess_config", {}))
     return model, preprocess, payload

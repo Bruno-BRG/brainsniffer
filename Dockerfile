@@ -1,8 +1,11 @@
 FROM python:3.12-slim
 
+COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /usr/local/bin/uv
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_PYTHON_DOWNLOADS=never \
+    PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
@@ -10,15 +13,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0+cpu"
-
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
-RUN python -m pip install --no-cache-dir .
+# Validate and consume uv.lock; do not substitute an unlocked CPU-only torch wheel.
+# src/ and README.md are present for the non-editable Hatch package build.
+RUN uv sync --locked --no-dev --no-editable --python /usr/local/bin/python --no-cache
 
-COPY app.py ./app.py
 COPY dash_app.py ./dash_app.py
 COPY assets ./assets
 COPY data ./data
