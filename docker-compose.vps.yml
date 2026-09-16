@@ -1,0 +1,44 @@
+services:
+  brainsniffer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: brainsniffer:local
+    container_name: brainsniffer
+    restart: unless-stopped
+    expose:
+      - "8501"
+    networks:
+      coolify:
+        aliases:
+          - brainsniffer
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/healthz', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.middlewares.brainsniffer-gzip.compress=true
+      - traefik.http.middlewares.brainsniffer-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.brainsniffer-http.entrypoints=http
+      - traefik.http.routers.brainsniffer-http.middlewares=brainsniffer-redirect
+      - traefik.http.routers.brainsniffer-http.rule=Host(`brainsniffer.brunorocha.dev.br`)
+      - traefik.http.routers.brainsniffer-http.service=brainsniffer
+      - traefik.http.routers.brainsniffer-https.entrypoints=https
+      - traefik.http.routers.brainsniffer-https.middlewares=brainsniffer-gzip
+      - traefik.http.routers.brainsniffer-https.rule=Host(`brainsniffer.brunorocha.dev.br`)
+      - traefik.http.routers.brainsniffer-https.service=brainsniffer
+      - traefik.http.routers.brainsniffer-https.tls=true
+      - traefik.http.routers.brainsniffer-https.tls.certresolver=letsencrypt
+      - traefik.http.services.brainsniffer.loadbalancer.server.port=8501
+
+networks:
+  coolify:
+    external: true
+    name: coolify

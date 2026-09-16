@@ -1,0 +1,18 @@
+{
+  "unit": "uV",
+  "channel_name": "Fpz",
+  "reference": "linked ears",
+  "montage": "frontal referenced",
+  "sampling_rate": 256,
+  "source_name": "BrainSnifferSyntheticEEG",
+  "device_manufacturer": "BrainSniffer synthetic fixture",
+  "device_model": "synthetic-eeg-1ch",
+  "firmware": "fixture-1.0",
+  "bridge": "examples/lsl_synthetic_publisher.py",
+  "channel_count": 1,
+  "signal_type": "synthetic EEG sine wave",
+  "timestamp_clock": "liblsl local_clock",
+  "nominal_range": "-100 to 100 uV",
+  "processing_applied": "none; generated sine wave",
+  "authorization_reference": "bench-only synthetic data; no patient"
+}

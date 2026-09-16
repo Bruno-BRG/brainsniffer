@@ -1,0 +1,674 @@
+"""Reproducible case-level training and checkpointing."""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import math
+import pickle
+import platform
+import random
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch import nn
+from torch.torch_version import TorchVersion
+from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
+
+from ..config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig, TrainingConfig, resolve_device
+from ..data.preprocess import WindowedEEG, bis_stage
+from ..data.split import CaseSplit, split_case_ids
+from ..models.cnn import Conv1DDepthEstimator
+
+CHECKPOINT_SCHEMA_VERSION = 1
+SUPPORTED_MODEL_NAME = "Conv1DDepthEstimator"
+
+
+@dataclass(frozen=True)
+class TrainingResult:
+    checkpoint_path: Path | None
+    split: CaseSplit
+    history: list[dict[str, float]]
+    validation_metrics: dict[str, float]
+    test_metrics: dict[str, float]
+    device: str
+    dataset_summary: dict[str, object]
+    quality_threshold: float
+    input_files: list[dict[str, object]]
+
+
+def summarize_windows(windows: WindowedEEG) -> dict[str, object]:
+    """Create a JSON-serializable audit summary for a training run."""
+
+    stage_counts: dict[str, int] = {}
+    for value in windows.bis:
+        stage = bis_stage(float(value))
+        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+    quality = windows.quality.astype(np.float64)
+    group_ids = (
+        windows.group_ids.astype(str)
+        if windows.group_ids is not None
+        else windows.case_ids.astype(str)
+    )
+    source_datasets = (
+        windows.source_datasets.astype(str)
+        if windows.source_datasets is not None
+        else np.full(windows.case_ids.shape, "unknown", dtype=str)
+    )
+    return {
+        "n_windows": int(windows.signals.shape[0]),
+        "n_cases": int(np.unique(windows.case_ids.astype(str)).size),
+        "n_groups": int(np.unique(group_ids).size),
+        "window_shape": list(windows.signals.shape[1:]),
+        "stage_counts": stage_counts,
+        "source_counts": {
+            source: int((source_datasets == source).sum())
+            for source in sorted(np.unique(source_datasets).tolist())
+        },
+        "quality": {
+            "min": float(quality.min()) if quality.size else None,
+            "mean": float(quality.mean()) if quality.size else None,
+            "median": float(np.median(quality)) if quality.size else None,
+            "max": float(quality.max()) if quality.size else None,
+        },
+    }
+
+
+def set_seed(seed: int, *, deterministic: bool = True) -> None:
+    """Seed every RNG used by training and request deterministic kernels.
+
+    ``warn_only`` keeps this reproducibility setting usable on machines where
+    a newly introduced accelerator kernel has no deterministic implementation;
+    the selected setting is still recorded in the checkpoint metadata.
+    """
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = not deterministic
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
+
+
+def _installed_version(package_name: str) -> str | None:
+    try:
+        return version(package_name)
+    except PackageNotFoundError:
+        return None
+
+
+def runtime_metadata() -> dict[str, str | None]:
+    """Capture the software environment needed to interpret a checkpoint."""
+
+    return {
+        "project": _installed_version("brainsniffer") or "0.1.0",
+        "python": platform.python_version(),
+        # TorchVersion is a str subclass with a pickle global, not a plain str.
+        "torch": str(torch.__version__),
+        "numpy": str(np.__version__),
+        "scipy": _installed_version("scipy"),
+        "scikit_learn": _installed_version("scikit-learn"),
+        "deterministic_algorithms": str(torch.are_deterministic_algorithms_enabled()),
+        "cuda": torch.version.cuda,
+        "cudnn": str(torch.backends.cudnn.version())
+        if torch.backends.cudnn.is_available()
+        else None,
+    }
+
+
+def sha256_file(path: str | Path, *, chunk_size: int = 1024 * 1024) -> str:
+    """Return the SHA-256 digest of an artifact without loading it all at once."""
+
+    if chunk_size < 1:
+        raise ValueError("chunk_size deve ser positivo")
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_file_manifest(paths: Sequence[str | Path]) -> list[dict[str, object]]:
+    """Record path, size, and SHA-256 for the files used by an experiment."""
+
+    manifest: list[dict[str, object]] = []
+    for raw_path in paths:
+        path = Path(raw_path)
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest.append(
+            {
+                "path": str(path),
+                "size_bytes": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+        )
+    return manifest
+
+
+def verify_file_manifest(manifest: object) -> None:
+    """Fail closed when a recorded input file is missing or has changed."""
+
+    if manifest in (None, []):
+        return
+    if not isinstance(manifest, list):
+        raise ValueError("O manifesto de arquivos de entrada é inválido")
+    for entry in manifest:
+        if not isinstance(entry, dict) or not entry.get("path") or not entry.get("sha256"):
+            raise ValueError("O manifesto de arquivos de entrada é inválido")
+        path = Path(str(entry["path"]))
+        if not path.is_file():
+            raise ValueError(f"Arquivo de entrada do manifesto ausente: {path}")
+        actual = sha256_file(path)
+        if actual != str(entry["sha256"]):
+            raise ValueError(
+                f"SHA-256 do arquivo de entrada não coincide: {path} "
+                f"(esperado {entry['sha256']}, obtido {actual})"
+            )
+
+
+def _mask_for_cases(case_ids: np.ndarray, cases: tuple[str, ...]) -> np.ndarray:
+    return np.isin(case_ids.astype(str), np.asarray(cases, dtype=str))
+
+
+def _seed_worker(worker_id: int) -> None:
+    """Seed NumPy/Python RNGs for a deterministic DataLoader worker."""
+
+    del worker_id
+    worker_seed = torch.initial_seed() % (2**32)
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+@torch.inference_mode()
+def predict_model(
+    model: nn.Module,
+    signals: np.ndarray,
+    *,
+    device: str,
+    batch_size: int = 512,
+) -> np.ndarray:
+    model.eval()
+    values: list[np.ndarray] = []
+    for start in range(0, signals.shape[0], batch_size):
+        batch = torch.from_numpy(signals[start : start + batch_size]).float().to(device)
+        values.append(model(batch).detach().cpu().numpy())
+    return np.concatenate(values) if values else np.empty(0, dtype=np.float32)
+
+
+def _loader(
+    signals: np.ndarray,
+    labels: np.ndarray,
+    mask: np.ndarray,
+    config: TrainingConfig,
+    shuffle: bool,
+    *,
+    group_ids: np.ndarray | None = None,
+    source_ids: np.ndarray | None = None,
+) -> DataLoader:
+    dataset = TensorDataset(
+        torch.from_numpy(signals[mask]).float(),
+        torch.from_numpy(labels[mask]).float(),
+    )
+    sampler = None
+    if config.balance_groups:
+        if group_ids is None:
+            raise ValueError("balance_groups requer group_ids")
+        selected_groups = group_ids[mask].astype(str)
+        unique, counts = np.unique(selected_groups, return_counts=True)
+        weights_by_group = {
+            group: 1.0 / float(count) for group, count in zip(unique, counts, strict=False)
+        }
+        if config.balance_sources:
+            if source_ids is None:
+                raise ValueError("balance_sources requer source_ids")
+            selected_sources = source_ids[mask].astype(str)
+            group_source = {
+                group: source
+                for group, source in zip(selected_groups, selected_sources, strict=False)
+            }
+            source_group_counts = {
+                source: sum(group_source.get(group) == source for group in unique)
+                for source in np.unique(selected_sources)
+            }
+            weights = torch.as_tensor(
+                [
+                    weights_by_group[group]
+                    / max(source_group_counts[group_source[group]], 1)
+                    for group in selected_groups
+                ],
+                dtype=torch.double,
+            )
+        else:
+            weights = torch.as_tensor(
+                [weights_by_group[group] for group in selected_groups],
+                dtype=torch.double,
+            )
+        sampler = WeightedRandomSampler(
+            weights,
+            num_samples=len(selected_groups),
+            replacement=True,
+            generator=torch.Generator().manual_seed(config.seed),
+        )
+        shuffle = False
+    generator = torch.Generator().manual_seed(config.seed)
+
+    return DataLoader(
+        dataset,
+        batch_size=config.batch_size,
+        shuffle=shuffle,
+        sampler=sampler,
+        num_workers=config.num_workers,
+        pin_memory=False,
+        worker_init_fn=_seed_worker if config.num_workers else None,
+        generator=generator,
+    )
+
+
+def train_model(
+    windows: WindowedEEG,
+    *,
+    preprocess_config: PreprocessConfig | None = None,
+    training_config: TrainingConfig | None = None,
+    checkpoint_path: str | Path | None = None,
+    min_quality: float = DEFAULT_MIN_SIGNAL_QUALITY,
+    input_files: Sequence[str | Path] | None = None,
+    corpus_manifest_path: str | Path | None = None,
+) -> TrainingResult:
+    """Train the baseline CNN and evaluate only on unseen surgical cases."""
+
+    # Loading checkpoints does not require the evaluation stack.
+    from .metrics import compute_metrics
+
+    preprocess_config = preprocess_config or PreprocessConfig()
+    training_config = training_config or TrainingConfig()
+    if not 0 <= min_quality <= 1:
+        raise ValueError("min_quality deve estar entre 0 e 1")
+    if windows.signals.shape[0] == 0:
+        raise ValueError("Nenhuma janela válida disponível para treinamento")
+    if training_config.epochs < 1:
+        raise ValueError("epochs deve ser positivo")
+    if training_config.batch_size < 1:
+        raise ValueError("batch_size deve ser positivo")
+    if training_config.num_workers < 0:
+        raise ValueError("num_workers não pode ser negativo")
+    if (
+        training_config.early_stopping_patience is not None
+        and training_config.early_stopping_patience < 1
+    ):
+        raise ValueError("early_stopping_patience deve ser positivo ou None")
+    if training_config.early_stopping_min_delta < 0:
+        raise ValueError("early_stopping_min_delta não pode ser negativo")
+    if not 0 < training_config.scheduler_factor < 1:
+        raise ValueError("scheduler_factor deve estar entre 0 e 1")
+    if training_config.scheduler_patience < 0:
+        raise ValueError("scheduler_patience não pode ser negativo")
+    if training_config.scheduler_min_lr < 0:
+        raise ValueError("scheduler_min_lr não pode ser negativo")
+    if (
+        training_config.gradient_clip_norm is not None
+        and training_config.gradient_clip_norm <= 0
+    ):
+        raise ValueError("gradient_clip_norm deve ser positivo ou None")
+    if windows.quality.size and float(windows.quality.min()) + 1e-6 < min_quality:
+        raise ValueError(
+            "As janelas contêm sinais abaixo de min_quality; filtre-as antes do treinamento"
+        )
+    dataset_summary = summarize_windows(windows)
+    input_file_manifest = build_file_manifest(input_files) if input_files is not None else []
+    set_seed(training_config.seed, deterministic=training_config.deterministic)
+    environment = runtime_metadata()
+    device = resolve_device(training_config.device)
+    split_ids = (
+        windows.group_ids.astype(str)
+        if windows.group_ids is not None
+        else windows.case_ids.astype(str)
+    )
+    split_unit = "group" if windows.group_ids is not None else "case"
+    split = split_case_ids(
+        split_ids,
+        validation_fraction=training_config.validation_fraction,
+        test_fraction=training_config.test_fraction,
+        seed=training_config.seed,
+    )
+    train_mask = _mask_for_cases(split_ids, split.train_cases)
+    validation_mask = _mask_for_cases(split_ids, split.validation_cases)
+    test_mask = _mask_for_cases(split_ids, split.test_cases)
+    split_sizes = {
+        "train": int(train_mask.sum()),
+        "validation": int(validation_mask.sum()),
+        "test": int(test_mask.sum()),
+    }
+    empty_splits = [name for name, size in split_sizes.items() if size == 0]
+    if empty_splits:
+        raise ValueError("A divisão não contém janelas válidas em: " + ", ".join(empty_splits))
+
+    model = Conv1DDepthEstimator().to(device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=training_config.learning_rate,
+        weight_decay=training_config.weight_decay,
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=training_config.scheduler_factor,
+        patience=training_config.scheduler_patience,
+        min_lr=training_config.scheduler_min_lr,
+    )
+    criterion = nn.SmoothL1Loss()
+    train_loader = _loader(
+        windows.signals,
+        windows.bis,
+        train_mask,
+        training_config,
+        shuffle=True,
+        group_ids=split_ids,
+        source_ids=(
+            windows.source_datasets.astype(str)
+            if windows.source_datasets is not None
+            else None
+        ),
+    )
+    dataset_summary["split_unit"] = split_unit
+    dataset_summary["balanced_groups"] = bool(training_config.balance_groups)
+    dataset_summary["balanced_sources"] = bool(training_config.balance_sources)
+    history: list[dict[str, float]] = []
+    best_state = copy.deepcopy(model.state_dict())
+    best_validation_mae = float("inf")
+    best_epoch = 0
+    epochs_without_improvement = 0
+    use_amp = bool(
+        training_config.mixed_precision
+        and torch.device(device).type == "cuda"
+        and torch.cuda.is_available()
+    )
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    dataset_summary["split_sizes"] = split_sizes
+    dataset_summary["mixed_precision"] = use_amp
+    dataset_summary["deterministic"] = bool(training_config.deterministic)
+
+    for epoch in range(1, training_config.epochs + 1):
+        model.train()
+        losses: list[float] = []
+        for batch, labels in train_loader:
+            optimizer.zero_grad(set_to_none=True)
+            with torch.autocast("cuda", dtype=torch.float16, enabled=use_amp):
+                prediction = model(batch.to(device, non_blocking=use_amp))
+                loss = criterion(prediction, labels.to(device, non_blocking=use_amp))
+            scaler.scale(loss).backward()
+            if training_config.gradient_clip_norm is not None:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), training_config.gradient_clip_norm
+                )
+            scaler.step(optimizer)
+            scaler.update()
+            losses.append(float(loss.detach().cpu()))
+
+        validation_prediction = predict_model(
+            model, windows.signals[validation_mask], device=device
+        )
+        validation_metrics = compute_metrics(windows.bis[validation_mask], validation_prediction)
+        row = {
+            "epoch": float(epoch),
+            "train_loss": float(np.mean(losses)) if losses else float("nan"),
+            "validation_mae": validation_metrics.get("mae", float("nan")),
+            "validation_rmse": validation_metrics.get("rmse", float("nan")),
+            "validation_bias": validation_metrics.get("bias", float("nan")),
+            "validation_pearson_r": validation_metrics.get("pearson_r", float("nan")),
+            "validation_stage_accuracy": validation_metrics.get(
+                "stage_accuracy", float("nan")
+            ),
+            "validation_stage_macro_f1": validation_metrics.get(
+                "stage_macro_f1", float("nan")
+            ),
+            "learning_rate": float(optimizer.param_groups[0]["lr"]),
+        }
+        history.append(row)
+        validation_mae = row["validation_mae"]
+        if np.isfinite(validation_mae):
+            scheduler.step(validation_mae)
+        if np.isfinite(validation_mae) and validation_mae < (
+            best_validation_mae - training_config.early_stopping_min_delta
+        ):
+            best_validation_mae = validation_mae
+            best_state = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+        if (
+            training_config.early_stopping_patience is not None
+            and epochs_without_improvement >= training_config.early_stopping_patience
+        ):
+            break
+
+    model.load_state_dict(best_state)
+    validation_prediction = predict_model(model, windows.signals[validation_mask], device=device)
+    test_prediction = predict_model(model, windows.signals[test_mask], device=device)
+    validation_metrics = compute_metrics(windows.bis[validation_mask], validation_prediction)
+    test_metrics = compute_metrics(windows.bis[test_mask], test_prediction)
+
+    checkpoint = Path(checkpoint_path) if checkpoint_path is not None else None
+    if checkpoint is not None:
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_payload = {
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
+            "model_state": model.state_dict(),
+            "model_name": SUPPORTED_MODEL_NAME,
+            "effective_training": {
+                "device": str(device),
+                "optimizer": "AdamW",
+                "loss": "SmoothL1Loss",
+                "scheduler": {
+                    "name": "ReduceLROnPlateau",
+                    "mode": "min",
+                    "factor": scheduler.factor,
+                    "patience": scheduler.patience,
+                    "min_lrs": list(scheduler.min_lrs),
+                    "threshold": scheduler.threshold,
+                    "threshold_mode": scheduler.threshold_mode,
+                    "cooldown": scheduler.cooldown,
+                    "eps": scheduler.eps,
+                    "final_learning_rates": [
+                        float(group["lr"]) for group in optimizer.param_groups
+                    ],
+                },
+                "gradient_clip_norm": training_config.gradient_clip_norm,
+                "mixed_precision": use_amp,
+                "amp_dtype": "float16" if use_amp else None,
+                "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+                "deterministic_warn_only": (
+                    torch.is_deterministic_algorithms_warn_only_enabled()
+                ),
+                "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
+                "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
+            },
+            "preprocess_config": asdict(preprocess_config),
+            "training_config": asdict(training_config),
+            "split": asdict(split),
+            "validation_metrics": validation_metrics,
+            "test_metrics": test_metrics,
+            "dataset_summary": dataset_summary,
+            "min_quality": min_quality,
+            "history": history,
+            "environment": environment,
+            "input_files": input_file_manifest,
+            "corpus_manifest": (
+                {
+                    "path": str(corpus_manifest_path),
+                    "sha256": sha256_file(corpus_manifest_path),
+                }
+                if corpus_manifest_path is not None
+                else None
+            ),
+            "split_unit": split_unit,
+            "best_epoch": best_epoch,
+            "stopped_early": len(history) < training_config.epochs,
+            "mixed_precision": use_amp,
+            "split_sizes": split_sizes,
+        }
+        torch.save(checkpoint_payload, checkpoint)
+        checkpoint_sha256 = sha256_file(checkpoint)
+        checkpoint.with_suffix(".json").write_text(
+            json.dumps(
+                {
+                    key: value
+                    for key, value in {
+                        **checkpoint_payload,
+                        "checkpoint_sha256": checkpoint_sha256,
+                    }.items()
+                    if key != "model_state"
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    return TrainingResult(
+        checkpoint_path=checkpoint,
+        split=split,
+        history=history,
+        validation_metrics=validation_metrics,
+        test_metrics=test_metrics,
+        device=device,
+        dataset_summary=dataset_summary,
+        quality_threshold=min_quality,
+        input_files=input_file_manifest,
+    )
+
+
+def load_checkpoint(
+    path: str | Path, *, device: str = "cpu"
+) -> tuple[nn.Module, PreprocessConfig, dict]:
+    """Load a baseline checkpoint using only PyTorch's restricted unpickler.
+
+    Returns ``(model, preprocess_config, payload)``. Unversioned baseline
+    dictionaries remain supported; explicit schema versions must equal 1.
+    Missing model names, other architectures, malformed inference settings and
+    incompatible state dictionaries raise ValueError. Unsupported pickle globals
+    also raise ValueError: there is no unsafe retry. The sole application-added
+    global is TorchVersion, scoped to the load for historical environment metadata.
+    Other unsupported globals (including NumPy objects) remain rejected and need
+    separate review/migration; this API never rewrites artifacts or invents schema.
+
+    A sidecar checksum detects corruption, not authenticity. Restricted loading
+    does not make arbitrary files trusted or prevent resource exhaustion; use
+    artifacts from a trusted source and a maintained PyTorch installation.
+    PyTorch's safe-global registry is process-wide: callers must not concurrently
+    mutate it or register arbitrary globals in this trusted inference process.
+    """
+
+    path = Path(path)
+    metadata_path = path.with_suffix(".json")
+    sidecar: dict[str, object] = {}
+    if metadata_path.exists():
+        sidecar = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(sidecar, dict):
+            raise ValueError("O manifesto do checkpoint deve ser um objeto JSON")
+        expected_sha256 = sidecar.get("checkpoint_sha256")
+        if "checkpoint_sha256" in sidecar and (
+            not isinstance(expected_sha256, str)
+            or len(expected_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in expected_sha256)
+        ):
+            raise ValueError("SHA-256 do manifesto inválido")
+        if expected_sha256:
+            actual_sha256 = sha256_file(path)
+            if actual_sha256 != expected_sha256:
+                raise ValueError(
+                    "SHA-256 do checkpoint não coincide com o manifesto: "
+                    f"esperado {expected_sha256}, obtido {actual_sha256}"
+                )
+    try:
+        # Reviewed legacy exception: the original brainsniffer_cnn.pt contains
+        # only torch.torch_version.TorchVersion beyond PyTorch's allowed globals,
+        # at environment['torch'] (GLOBAL offset 6166, NEWOBJ of a string).
+        # TorchVersion inherits str.__new__/__init__, has empty __slots__, and
+        # no __setstate__; added methods only compare versions. Reconstruction
+        # therefore does not import/execute checkpoint-selected application code.
+        # Keep this explicit singleton, never derive an allowlist from the file.
+        # Preserve an existing registration: safe_globals removes its entries
+        # on exit even if a caller had registered them before entering.
+        additions = [] if TorchVersion in torch.serialization.get_safe_globals() else [TorchVersion]
+        with torch.serialization.safe_globals(additions):
+            # Validate on CPU before allocating accelerator memory; no retry.
+            payload = torch.load(path, map_location="cpu", weights_only=True)
+    except (pickle.UnpicklingError, TypeError, RuntimeError, EOFError) as exc:
+        raise ValueError(
+            "Checkpoint rejeitado pelo loader restrito (weights_only=True); "
+            "formato incompatível ou globals não permitidos. Sem fallback inseguro."
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("O checkpoint deve ser um dicionário")
+    if "schema_version" in payload and (
+        type(payload["schema_version"]) is not int
+        or payload["schema_version"] != CHECKPOINT_SCHEMA_VERSION
+    ):
+        raise ValueError("schema_version do checkpoint não suportada")
+    if payload.get("model_name") != SUPPORTED_MODEL_NAME:
+        raise ValueError("model_name não suportado; esperado Conv1DDepthEstimator")
+    for key in ("schema_version", "model_name", "preprocess_config"):
+        if key in sidecar and sidecar[key] != payload.get(key):
+            raise ValueError(f"Manifesto e checkpoint divergem em {key}")
+    state = payload.get("model_state")
+    if not isinstance(state, dict) or not state or any(
+        not isinstance(key, str) or type(value) is not torch.Tensor
+        for key, value in state.items()
+    ):
+        raise ValueError("model_state deve mapear nomes para tensores")
+    config = payload.get("preprocess_config")
+    if not isinstance(config, dict):
+        raise ValueError("preprocess_config deve ser um dicionário")
+    try:
+        preprocess = PreprocessConfig(**config)
+    except TypeError as exc:
+        raise ValueError("preprocess_config contém campos inválidos") from exc
+    for key, value in asdict(preprocess).items():
+        if key == "causal":
+            valid = type(value) is bool
+        elif key == "notch_hz" and value is None:
+            valid = True
+        else:
+            valid = type(value) in (int, float) and math.isfinite(value)
+        if not valid:
+            raise ValueError(f"preprocess_config inválida: {key}")
+    if (
+        type(preprocess.sampling_rate) is not int
+        or preprocess.sampling_rate <= 0
+        or type(preprocess.filter_order) is not int
+        or preprocess.filter_order <= 0
+        or preprocess.window_seconds <= 0
+        or preprocess.window_samples < 8
+        or not 0 < preprocess.lowcut_hz < preprocess.highcut_hz < preprocess.sampling_rate / 2
+        or preprocess.notch_quality <= 0
+        or preprocess.amplitude_scale_uv <= 0
+        or preprocess.clip_uv <= 0
+        or (preprocess.notch_hz is not None and preprocess.notch_hz <= 0)
+    ):
+        raise ValueError("preprocess_config fora dos limites suportados")
+    model = Conv1DDepthEstimator()
+    expected_state = model.state_dict()
+    if state.keys() != expected_state.keys() or any(
+        state[key].shape != expected.shape
+        or state[key].dtype != expected.dtype
+        or state[key].layout != torch.strided
+        or not bool(torch.isfinite(state[key]).all())
+        for key, expected in expected_state.items()
+    ):
+        raise ValueError("model_state incompatível com a CNN baseline ou não finito")
+    model.load_state_dict(state, strict=True)
+    model.to(device).eval()
+    for key in ("checkpoint_sha256", "input_files"):
+        if key in sidecar:
+            payload[key] = sidecar[key]
+    return model, preprocess, payload
