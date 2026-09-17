@@ -135,6 +135,17 @@ MIXED_FIGSHARE_REPORT = _read_report("mixed_fixed_figshare_holdout.json")
 MIXED_EXTERNAL_REPORT = _read_report("mixed_vitaldb_external.json")
 HOLDOUT_METRICS = HOLDOUT_REPORT.get("recomputed_test_metrics", {})
 EXTERNAL_METRICS = EXTERNAL_REPORT.get("metrics", {})
+ZONE_FIGSHARE_ACTIVE = _read_report("zone_figshare_active.json")
+ZONE_FIGSHARE_MIXED = _read_report("zone_figshare_mixed.json")
+ZONE_VITALDB_ACTIVE = _read_report("zone_vitaldb_active.json")
+ZONE_VITALDB_MIXED = _read_report("zone_vitaldb_mixed.json")
+ZONE_ORDER = ("deep", "general", "light", "awake")
+ZONE_PT = {
+    "deep": "Profunda 0-40",
+    "general": "Geral 40-60",
+    "light": "Leve 60-80",
+    "awake": "Acordado 80-100",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -1521,6 +1532,63 @@ def _tab_intro(kicker: str, title: str, lead: str) -> html.Div:
     return html.Div([html.Div(kicker, className="section-kicker"), html.H2(title, className="section-title"), html.P(lead, className="section-lead")], className="section-intro")
 
 
+def _zone_report_pair(dataset: str) -> tuple[dict[str, object], dict[str, object]]:
+    if dataset == "figshare":
+        return ZONE_FIGSHARE_ACTIVE, ZONE_FIGSHARE_MIXED
+    return ZONE_VITALDB_ACTIVE, ZONE_VITALDB_MIXED
+
+
+def _zone_accuracy_figure() -> go.Figure:
+    panels = (
+        ("Figshare · benchmark histórico", "figshare"),
+        ("VitalDB · holdout histórico", "vitaldb"),
+    )
+    have = False
+    for _, key in panels:
+        active, mixed = _zone_report_pair(key)
+        if isinstance(active.get("by_zone"), dict) and isinstance(mixed.get("by_zone"), dict):
+            have = True
+    if not have:
+        return _empty_figure("MAE por zona BIS", "Relatórios por zona indisponíveis", height=400)
+    figure = make_subplots(rows=1, cols=2, subplot_titles=[t for t, _ in panels], horizontal_spacing=0.14)
+    for col, (_, key) in enumerate(panels, start=1):
+        active, mixed = _zone_report_pair(key)
+        zones_active = active.get("by_zone", {})
+        zones_mixed = mixed.get("by_zone", {})
+        labels = [ZONE_PT[z] for z in ZONE_ORDER]
+        active_mae = [_finite_number(zones_active.get(z, {}).get("mae")) if isinstance(zones_active.get(z), dict) else float("nan") for z in ZONE_ORDER]
+        mixed_mae = [_finite_number(zones_mixed.get(z, {}).get("mae")) if isinstance(zones_mixed.get(z), dict) else float("nan") for z in ZONE_ORDER]
+        active_n = [zones_active.get(z, {}).get("n") if isinstance(zones_active.get(z), dict) else "—" for z in ZONE_ORDER]
+        figure.add_trace(go.Bar(name=ACTIVE_MODEL_LABEL, x=labels, y=active_mae, marker_color=COLORS["navy"], legendgroup="active", showlegend=col == 1, customdata=[[n] for n in active_n], hovertemplate="%{x}<br>ativo: %{y:.2f} pontos BIS<br>n=%{customdata[0]}<extra></extra>"), row=1, col=col)
+        figure.add_trace(go.Bar(name=MIXED_MODEL_LABEL, x=labels, y=mixed_mae, marker_color=COLORS["teal"], legendgroup="mixed", showlegend=col == 1, customdata=[[n] for n in active_n], hovertemplate="%{x}<br>misto: %{y:.2f} pontos BIS<br>n=%{customdata[0]}<extra></extra>"), row=1, col=col)
+        figure.update_yaxes(title="MAE (pontos BIS)", rangemode="tozero", gridcolor=COLORS["line"], row=1, col=col)
+        figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=col)
+    iso_active = ZONE_VITALDB_ACTIVE.get("isoelectric_subset_lt20", {})
+    iso_mixed = ZONE_VITALDB_MIXED.get("isoelectric_subset_lt20", {})
+    if isinstance(iso_active, dict) and isinstance(iso_mixed, dict) and iso_active.get("n"):
+        figure.add_annotation(xref="paper", yref="paper", x=0.99, y=0.98, showarrow=False, align="right", bgcolor="white", bordercolor=COLORS["line"], font={"size": 11}, text=f"Subset isoelétrico BIS&lt;20 no VitalDB (n={iso_active.get('n'):,}): MAE ativo {_finite_number(iso_active.get('mae')):.1f} vs misto {_finite_number(iso_mixed.get('mae')):.1f}")
+    figure.update_layout(**_figure_layout("MAE por zona BIS verdadeira · ativo vs misto", height=430), barmode="group")
+    return figure
+
+
+def _zone_table_rows() -> list[list[str]]:
+    rows: list[list[str]] = []
+    for dataset_label, key in (("Figshare · ativo", "figshare_active"), ("Figshare · misto", "figshare_mixed"), ("VitalDB · ativo", "vitaldb_active"), ("VitalDB · misto", "vitaldb_mixed")):
+        report = {"figshare_active": ZONE_FIGSHARE_ACTIVE, "figshare_mixed": ZONE_FIGSHARE_MIXED, "vitaldb_active": ZONE_VITALDB_ACTIVE, "vitaldb_mixed": ZONE_VITALDB_MIXED}[key]
+        zones = report.get("by_zone", {})
+        if not isinstance(zones, dict):
+            continue
+        for zone in ZONE_ORDER:
+            item = zones.get(zone, {})
+            if not isinstance(item, dict):
+                continue
+            rows.append([dataset_label, ZONE_PT[zone], f"{item.get('n', '—'):,}" if isinstance(item.get("n"), int) else str(item.get("n", "—")), _format_number(_finite_number(item.get("mae")), 2), _format_number(_finite_number(item.get("bias")), 2), _format_number(_finite_number(item.get("recall")), 3)])
+        iso = report.get("isoelectric_subset_lt20", {})
+        if isinstance(iso, dict) and isinstance(iso.get("n"), int) and iso.get("n"):
+            rows.append([dataset_label, "Subset BIS<20", f"{iso.get('n'):,}", _format_number(_finite_number(iso.get("mae")), 2), _format_number(_finite_number(iso.get("bias")), 2), "—"])
+    return rows
+
+
 def _evidence_status() -> html.Div:
     missing = []
     if not HOLDOUT_METRICS:
@@ -2014,6 +2082,20 @@ def _build_statistics_tab() -> html.Div:
             _chart(
                 _bootstrap_figure(),
                 "Checkpoint ativo Figshare-only. Intervalos de 95% por reamostragem de casos, ainda ponderados pelo número de janelas; expressam variação amostral exploratória, não incerteza clínica individual.",
+            ),
+            _chart(
+                _zone_accuracy_figure(),
+                "MAE por zona BIS verdadeira nos mesmos benchmarks históricos do artigo (Figshare 5 casos/5.523 janelas; VitalDB 15/38.730). O ativo viu só Figshare; o misto já viu outros participantes VitalDB. Pearson dentro de faixa estreita é instável; a leitura usa MAE/recall. Subset BIS<20 é exploratório dentro da zona profunda.",
+            ),
+            html.Div(
+                [
+                    html.H3("Precisão por zona BIS verdadeira"),
+                    _table(
+                        ["Benchmark", "Zona (BIS verdadeiro)", "Janelas", "MAE", "Bias", "Recall"],
+                        _zone_table_rows(),
+                    ),
+                ],
+                className="table-card",
             ),
             html.Div(
                 [

@@ -1,0 +1,231 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models\\brainsniffer_cnn.pt",
+  "checkpoint_sha256": "fde8e45fff2fa5414944686fd086fc3dd42248f247c7fb4ea1e31aa00618ee8c",
+  "mode": "external",
+  "cases": "external",
+  "files": [
+    "data\\vitaldb\\vitaldb_case1.npz",
+    "data\\vitaldb\\vitaldb_case10.npz",
+    "data\\vitaldb\\vitaldb_case12.npz",
+    "data\\vitaldb\\vitaldb_case13.npz",
+    "data\\vitaldb\\vitaldb_case14.npz",
+    "data\\vitaldb\\vitaldb_case16.npz",
+    "data\\vitaldb\\vitaldb_case17.npz",
+    "data\\vitaldb\\vitaldb_case2.npz",
+    "data\\vitaldb\\vitaldb_case3.npz",
+    "data\\vitaldb\\vitaldb_case4.npz",
+    "data\\vitaldb\\vitaldb_case5.npz",
+    "data\\vitaldb\\vitaldb_case6.npz",
+    "data\\vitaldb\\vitaldb_case7.npz",
+    "data\\vitaldb\\vitaldb_case8.npz",
+    "data\\vitaldb\\vitaldb_case9.npz"
+  ],
+  "input_files": [
+    {
+      "path": "data\\vitaldb\\vitaldb_case1.npz",
+      "size_bytes": 2846245,
+      "sha256": "d7deabed88cf2fcdb92b07828b0e6424dfc604c1d2e67d057e2d94d06fc6e351"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case10.npz",
+      "size_bytes": 5224987,
+      "sha256": "522d599996806043cb4397582f057d1fe000c36831a7799e9ed1fd77d39278df"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case12.npz",
+      "size_bytes": 7542406,
+      "sha256": "c0144924216772e77f38bb364bd848ba5c4f9e44c30c3349a56df92dd0ed8958"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case13.npz",
+      "size_bytes": 2595201,
+      "sha256": "9cdd7cfd1daaaa4ed698cce686a79b73e2bb91d09c55c11839baa50bd4219c33"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case14.npz",
+      "size_bytes": 1014678,
+      "sha256": "140a288d153d320f7a14310e193176176746de25e04673e3589433f78639a741"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case16.npz",
+      "size_bytes": 3353203,
+      "sha256": "d50b021c41554c844bb0917912928ff17dff8f55917fd12436d1dd263e51edb5"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case17.npz",
+      "size_bytes": 5007601,
+      "sha256": "2187ba516a6c4cb36d5f2317e522dcaab027f8964e27dd3d79b5da07bd27bd23"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case2.npz",
+      "size_bytes": 3872841,
+      "sha256": "db934a20f45fc2aacea7d4e63aef08a6ad215d44644a696358524185b86003d9"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case3.npz",
+      "size_bytes": 993903,
+      "sha256": "de08d7657802d0a292c1a4db47c6093e31a260b159fa6408a8874b34ff7cd592"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case4.npz",
+      "size_bytes": 5084242,
+      "sha256": "be6d41513a2aa8a4c7b31f18c0f7e1e6330981c3978264c521c8ca9e29bdea51"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case5.npz",
+      "size_bytes": 5034963,
+      "sha256": "abd4ce5ec928c66b6c9116b2e051557d73b3d5d29837afe86d08717786a6632f"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case6.npz",
+      "size_bytes": 913396,
+      "sha256": "fda94791d476b812a81a35e51795e1e56bec569bccffe5f9af8f80d9af072633"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case7.npz",
+      "size_bytes": 1820249,
+      "sha256": "9c4af0cc5f0ca0f1fa62de2450e52c09a324317d2ebb8eedba17c1d6cd0c34b7"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case8.npz",
+      "size_bytes": 1464710,
+      "sha256": "ae84855735e9af405db649b4a5165edbf5e44ab2f48fbf835059f19c64c81255"
+    },
+    {
+      "path": "data\\vitaldb\\vitaldb_case9.npz",
+      "size_bytes": 1061909,
+      "sha256": "83e06e78a5a7177f9e50095e255ebc94b12a0b99b64f7f919a7ff8afd33b76b3"
+    }
+  ],
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "min_quality": 0.2,
+  "n_windows": 38730,
+  "overall": {
+    "n": 38730.0,
+    "mae": 12.432227095011251,
+    "rmse": 18.800117420377017,
+    "bias": 1.4032542808585902,
+    "pearson_r": 0.024117122210292205,
+    "stage_accuracy": 0.41959721146398143,
+    "stage_macro_f1": 0.3979746951886369
+  },
+  "by_zone": {
+    "deep": {
+      "n": 14111,
+      "share": 0.3643428866511748,
+      "mae": 17.94888658897298,
+      "rmse": 27.471817607291346,
+      "bias": 17.34024586994181,
+      "pearson_r": -0.7215972249642137,
+      "recall": 0.4520586776273829
+    },
+    "general": {
+      "n": 21580,
+      "share": 0.5571908081590499,
+      "mae": 8.416363668662735,
+      "rmse": 9.694603357277115,
+      "bias": -6.776384543223553,
+      "pearson_r": 0.24216493040825585,
+      "recall": 0.42085264133456907
+    },
+    "light": {
+      "n": 2214,
+      "share": 0.05716498838109992,
+      "mae": 15.940101591659863,
+      "rmse": 18.265800547890702,
+      "bias": -15.22167894575331,
+      "pearson_r": 0.46615926711368083,
+      "recall": 0.1897018970189702
+    },
+    "awake": {
+      "n": 825,
+      "share": 0.021301316808675447,
+      "mae": 13.70533798680161,
+      "rmse": 18.1721876388572,
+      "bias": -12.61211581143466,
+      "pearson_r": 0.35954281319922937,
+      "recall": 0.4484848484848485
+    }
+  },
+  "isoelectric_subset_lt20": {
+    "n": 2301,
+    "share": 0.05941130906274206,
+    "mae": 60.72532127443369,
+    "rmse": 61.79005550787769,
+    "bias": 60.72532127443369,
+    "pearson_r": -0.4272785159977531
+  },
+  "confusion": {
+    "order": [
+      "deep",
+      "general",
+      "light",
+      "awake"
+    ],
+    "counts": [
+      [
+        6379,
+        5803,
+        1898,
+        31
+      ],
+      [
+        12214,
+        9082,
+        265,
+        19
+      ],
+      [
+        169,
+        1558,
+        420,
+        67
+      ],
+      [
+        6,
+        108,
+        341,
+        370
+      ]
+    ],
+    "recall": {
+      "deep": 0.4520586776273829,
+      "general": 0.42085264133456907,
+      "light": 0.1897018970189702,
+      "awake": 0.4484848484848485
+    }
+  },
+  "zone_ranges": {
+    "deep": [
+      0,
+      40
+    ],
+    "general": [
+      40,
+      60
+    ],
+    "light": [
+      60,
+      80
+    ],
+    "awake": [
+      80,
+      100
+    ]
+  },
+  "retrained": false,
+  "raw_eeg_in_report": false
+}

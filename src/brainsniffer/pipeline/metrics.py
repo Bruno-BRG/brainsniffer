@@ -10,11 +10,123 @@ from ..data.preprocess import bis_stage
 # Match bis_stage's valid research taxonomy; never infer labels from a sample.
 STAGE_LABELS = ("deep", "general", "light", "awake")
 
+# Zone stratification for BIS-reference reporting.
+# Research bands follow bis_stage: deep [0,40), general [40,60),
+# light [60,80), awake [80,100]. Clinical shorthand groups them as
+# acordado (awake), transicional/sedacao leve (light),
+# geral adequada (general) e profunda (deep). Isoelectric risk is
+# reported as an exploratory BIS<20 subset of deep (near burst
+# suppression/flat EEG), not a fifth mutually exclusive class.
+ZONE_LABELS = ("deep", "general", "light", "awake")
+ZONE_RANGES = {
+    "deep": (0.0, 40.0),
+    "general": (40.0, 60.0),
+    "light": (60.0, 80.0),
+    "awake": (80.0, 100.0),
+}
+ZONE_CLINICAL_PT = {
+    "deep": "profunda (0-40)",
+    "general": "geral adequada (40-60)",
+    "light": "leve/transicional (60-80)",
+    "awake": "acordado (80-100)",
+}
+ISOELECTRIC_THRESHOLD = 20.0
+
 
 def _correlation(left: np.ndarray, right: np.ndarray) -> float:
     if left.size < 2 or np.std(left) == 0 or np.std(right) == 0:
         return float("nan")
     return float(np.corrcoef(left, right)[0, 1])
+
+
+def confusion_matrix_by_stage(
+    target: np.ndarray, prediction: np.ndarray
+) -> dict[str, object]:
+    """Count true-vs-predicted research bands in fixed STAGE_LABELS order."""
+    target = np.asarray(target, dtype=np.float64).reshape(-1)
+    prediction = np.asarray(prediction, dtype=np.float64).reshape(-1)
+    valid = np.isfinite(target) & np.isfinite(prediction)
+    target = target[valid]
+    prediction = prediction[valid]
+    target_stage = [bis_stage(v) for v in target]
+    prediction_stage = [bis_stage(v) for v in prediction]
+    index = {label: i for i, label in enumerate(STAGE_LABELS)}
+    counts = [[0 for _ in STAGE_LABELS] for _ in STAGE_LABELS]
+    for t, p in zip(target_stage, prediction_stage):
+        if t in index and p in index:
+            counts[index[t]][index[p]] += 1
+    row_totals = [sum(row) for row in counts]
+    recall: dict[str, float | None] = {}
+    for i, label in enumerate(STAGE_LABELS):
+        total = row_totals[i]
+        recall[label] = (counts[i][i] / total) if total else None
+    return {"order": list(STAGE_LABELS), "counts": counts, "recall": recall}
+
+
+def compute_zone_metrics(
+    target: np.ndarray, prediction: np.ndarray
+) -> dict[str, object]:
+    """Stratify continuous metrics by true BIS research band.
+
+    Pearson inside a narrow band is unstable (restricted range) and is
+    reported for completeness only; MAE/RMSE/bias and recall carry the
+    zone reading. Isoelectric BIS<20 is an exploratory subset of deep.
+    """
+    target = np.asarray(target, dtype=np.float64).reshape(-1)
+    prediction = np.asarray(prediction, dtype=np.float64).reshape(-1)
+    valid = np.isfinite(target) & np.isfinite(prediction)
+    target = target[valid]
+    prediction = prediction[valid]
+    total = int(target.size)
+    target_stage = np.asarray([bis_stage(v) for v in target])
+    zones: dict[str, object] = {}
+    for label in ZONE_LABELS:
+        mask = target_stage == label
+        n = int(mask.sum())
+        if n == 0:
+            zones[label] = {
+                "n": 0,
+                "share": 0.0,
+                "mae": None,
+                "rmse": None,
+                "bias": None,
+                "pearson_r": None,
+                "recall": None,
+            }
+            continue
+        t = target[mask]
+        p = prediction[mask]
+        pred_stage = np.asarray([bis_stage(v) for v in p])
+        zones[label] = {
+            "n": n,
+            "share": (n / total) if total else 0.0,
+            "mae": float(np.mean(np.abs(t - p))),
+            "rmse": float(np.sqrt(np.mean((t - p) ** 2))),
+            "bias": float(np.mean(p - t)),
+            "pearson_r": _correlation(t, p),
+            "recall": float((pred_stage == label).mean()),
+        }
+    deep_mask = target < ISOELECTRIC_THRESHOLD
+    iso_n = int(deep_mask.sum())
+    if iso_n:
+        t = target[deep_mask]
+        p = prediction[deep_mask]
+        isoelectric = {
+            "n": iso_n,
+            "share": (iso_n / total) if total else 0.0,
+            "mae": float(np.mean(np.abs(t - p))),
+            "rmse": float(np.sqrt(np.mean((t - p) ** 2))),
+            "bias": float(np.mean(p - t)),
+            "pearson_r": _correlation(t, p),
+        }
+    else:
+        isoelectric = {"n": 0, "share": 0.0, "mae": None, "rmse": None, "bias": None, "pearson_r": None}
+    return {
+        "zones": zones,
+        "isoelectric_subset_lt20": isoelectric,
+        "confusion": confusion_matrix_by_stage(target, prediction),
+        "n": total,
+    }
 
 
 def compute_metrics(target: np.ndarray, prediction: np.ndarray) -> dict[str, float]:

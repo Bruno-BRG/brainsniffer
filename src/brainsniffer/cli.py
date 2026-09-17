@@ -45,7 +45,7 @@ from .pipeline.baseline import (
 )
 from .pipeline.benchmark import benchmark_latency
 from .pipeline.intake import validate_intake_metadata
-from .pipeline.metrics import bootstrap_case_metrics, compute_metrics
+from .pipeline.metrics import bootstrap_case_metrics, compute_metrics, compute_zone_metrics
 from .pipeline.realtime import replay_case
 from .pipeline.stream_audit import MICROVOLT_ALIASES, StreamAudit
 from .pipeline.streaming import StreamingResampler
@@ -696,6 +696,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="salvar o relatório JSON completo da avaliação externa",
     )
 
+    zones = subparsers.add_parser(
+        "evaluate-zones",
+        help="recalcular métricas estratificadas por zona BIS sem retreinar",
+    )
+    zones.add_argument("--checkpoint", type=Path, default=default_model_path())
+    zones.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="diretório Figshare com case*.mat; usa split de teste do checkpoint",
+    )
+    zones.add_argument(
+        "--case",
+        type=Path,
+        action="append",
+        default=None,
+        help="arquivo externo .npz; repita para vários casos (modo externo)",
+    )
+    zones.add_argument(
+        "--external-dir",
+        type=Path,
+        default=None,
+        help="diretório com vitaldb_case*.npz (modo externo)",
+    )
+    zones.add_argument(
+        "--min-quality",
+        type=float,
+        default=None,
+        help="sobrescrever o limiar salvo no checkpoint",
+    )
+    zones.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="salvar o relatório JSON por zona",
+    )
+
     audit = subparsers.add_parser(
         "audit-json", help="fazer preflight de um stream JSONL sem carregar um modelo"
     )
@@ -1188,6 +1225,95 @@ def main(argv: list[str] | None = None) -> int:
             "case_bootstrap": case_bootstrap,
             "bootstrap_samples": args.bootstrap_samples,
             "bootstrap_seed": args.bootstrap_seed,
+        }
+        if args.report is not None:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(
+                json.dumps(report_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        print(json.dumps(report_payload, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "evaluate-zones":
+        model, preprocess, payload = load_checkpoint(args.checkpoint)
+        min_quality = (
+            float(args.min_quality)
+            if args.min_quality is not None
+            else float(payload.get("min_quality", DEFAULT_MIN_SIGNAL_QUALITY))
+        )
+        external_cases: list[Path] = []
+        if args.case:
+            external_cases = list(args.case)
+        elif args.external_dir is not None:
+            external_cases = sorted(args.external_dir.glob("vitaldb_case*.npz"))
+        if external_cases:
+            missing = [str(p) for p in external_cases if not p.exists()]
+            if missing:
+                raise SystemExit(f"Arquivos externos ausentes: {', '.join(missing)}")
+            windows = load_windows(external_cases, preprocess, min_quality=min_quality)
+            mode = "external"
+            files = [str(p) for p in external_cases]
+            input_files = build_file_manifest(external_cases)
+            case_label = "external"
+        else:
+            data_dir = args.data_dir if args.data_dir is not None else default_data_dir()
+            paths = sorted(data_dir.glob("case*.mat"))
+            if not paths:
+                raise SystemExit(f"Nenhum caso encontrado em {data_dir}.")
+            verify_file_manifest(payload.get("input_files"))
+            windows = load_windows(paths, preprocess, min_quality=min_quality)
+            saved_split = payload.get("split", {})
+            test_cases = tuple(str(c) for c in saved_split.get("test_cases", ()))
+            if not test_cases:
+                raise SystemExit("O checkpoint não contém casos de teste agrupados")
+            split_unit = str(payload.get("split_unit", "case"))
+            split_ids = (
+                windows.group_ids.astype(str)
+                if split_unit == "group" and windows.group_ids is not None
+                else windows.case_ids.astype(str)
+            )
+            mask = np.isin(split_ids, np.asarray(test_cases, dtype=str))
+            if not mask.any():
+                raise SystemExit("Nenhuma janela dos casos de teste está disponível localmente")
+            windows = WindowedEEG(
+                signals=windows.signals[mask],
+                bis=windows.bis[mask],
+                case_ids=windows.case_ids[mask],
+                start_seconds=windows.start_seconds[mask],
+                quality=windows.quality[mask],
+                group_ids=windows.group_ids[mask] if windows.group_ids is not None else None,
+                source_datasets=windows.source_datasets[mask]
+                if windows.source_datasets is not None
+                else None,
+            )
+            mode = "holdout"
+            files = [str(p) for p in paths if p.stem in set(test_cases)]
+            input_files = build_file_manifest([Path(f) for f in files])
+            case_label = ",".join(test_cases)
+        if not windows.signals.shape[0]:
+            raise SystemExit("Nenhuma janela válida para análise por zona")
+        prediction = predict_model(model, windows.signals, device="cpu")
+        zone_report = compute_zone_metrics(windows.bis, prediction)
+        overall = compute_metrics(windows.bis, prediction)
+        report_payload = {
+            "scope": "research_only",
+            "checkpoint": str(args.checkpoint),
+            "checkpoint_sha256": _checkpoint_sha256(args.checkpoint),
+            "mode": mode,
+            "cases": case_label,
+            "files": files,
+            "input_files": input_files,
+            "preprocess_config": asdict(preprocess),
+            "min_quality": min_quality,
+            "n_windows": int(windows.signals.shape[0]),
+            "overall": overall,
+            "by_zone": zone_report["zones"],
+            "isoelectric_subset_lt20": zone_report["isoelectric_subset_lt20"],
+            "confusion": zone_report["confusion"],
+            "zone_ranges": {"deep": [0, 40], "general": [40, 60], "light": [60, 80], "awake": [80, 100]},
+            "retrained": False,
+            "raw_eeg_in_report": False,
         }
         if args.report is not None:
             args.report.parent.mkdir(parents=True, exist_ok=True)
