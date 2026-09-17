@@ -1,12 +1,15 @@
 # Mapa das figuras científicas
 
-As quatro figuras são geradas por `docs/generate_figures.py` a partir de uma
-lista explícita de snapshots JSON rastreados pelo Git. A geração valida escopo,
+As seis figuras são geradas por `docs/generate_figures.py` a partir de listas
+explícitas de snapshots JSON rastreados pelo Git. A geração valida escopo,
 holdouts, contagens de janelas, pré-processamento e parâmetros de bootstrap
 antes de escrever os PNGs e PDFs vetoriais. O fluxograma também lê os dois
 JSON de checkpoints explicitamente listados em `MODEL_FILES` e confere hashes,
-contagens e separação do holdout Figshare no desenvolvimento fixo. Arquivos JSON locais fora dessa lista não entram nas
-figuras.
+contagens e separação do holdout Figshare no desenvolvimento fixo. A figura por
+zona valida ainda os quatro relatórios `zone_*.json` contra os agregados
+históricos (mesmo $n$, MAE/RMSE/bias/Pearson dentro de $10^{-4}$, soma das zonas
+e matriz de confusão conferindo). Arquivos JSON locais fora dessas listas não
+entram nas figuras.
 
 ## Contrato visual comum
 
@@ -86,9 +89,34 @@ figuras.
   `reports/vitaldb_external_validation.json` e
   `reports/mixed_vitaldb_external.json`.
 
+## `zone_accuracy.png`
+
+- Pergunta: o erro se distribui de forma desigual entre zonas BIS (acordado,
+  leve, geral adequada, profunda) e no subset isoelétrico BIS<20?
+- Takeaway: no VitalDB, o ativo colapsa na profunda (MAE 17,95) e no subset
+  BIS<20 (MAE 60,73); o misto reduz para 10,03 e 12,15, mas leve/acordado
+  seguem difíceis. No Figshare, o ganho do misto concentra-se no acordado
+  (13,73 para 9,37, recall 0,517 para 0,714); não há BIS<20 no holdout.
+- Grão e unidades: estratificação pelo BIS verdadeiro nas faixas internas
+  [0,40)/[40,60)/[60,80)/[80,100]; MAE em pontos BIS; rótulos $n$ por zona;
+  subset BIS<20 dentro da profunda, não classe adicional.
+- Fontes: `reports/zone_figshare_active.json`,
+  `reports/zone_figshare_mixed.json`,
+  `reports/zone_vitaldb_active.json` e
+  `reports/zone_vitaldb_mixed.json`, auditados contra os quatro agregados
+  históricos.
+
+## `bis_trajectory.png`
+
+- Pergunta: como BIS e CNN evoluem ao longo de uma gravação completa?
+- Takeaway: exemplo individual do Figshare case19 (fixado antes da inferência),
+  sem alegação de generalização; associação alta convive com viés sistemático.
+- Fonte: auditoria `tmp/pdfs/trajectory-audit/case19.json` (inferência
+  explícita via `--infer-trajectory`; execução padrão não infere).
+
 ## Inventário auditado
 
-Além dos seis relatórios quantitativos usados diretamente, os dois snapshots
+Além dos dez relatórios quantitativos usados diretamente, os dois snapshots
 LSL sintéticos foram auditados apenas para confirmar as barreiras de uso
 registradas nas execuções históricas. LSL, seu comando, dependências e publisher
 foram removidos do projeto. Os snapshots permanecem inalterados para auditoria
@@ -106,3 +134,7 @@ tratados como evidência de desempenho científico. A lista completa é:
 6. `reports/mixed_vitaldb_external.json`
 7. `reports/offset_sensitivity.json`
 8. `reports/vitaldb_external_validation.json`
+9. `reports/zone_figshare_active.json`
+10. `reports/zone_figshare_mixed.json`
+11. `reports/zone_vitaldb_active.json`
+12. `reports/zone_vitaldb_mixed.json`

@@ -33,6 +33,20 @@ REPORT_FILES = (
     "vitaldb_external_validation.json",
 )
 
+ZONE_FILES = (
+    "zone_figshare_active.json",
+    "zone_figshare_mixed.json",
+    "zone_vitaldb_active.json",
+    "zone_vitaldb_mixed.json",
+)
+ZONE_ORDER = ("deep", "general", "light", "awake")
+ZONE_PT = {
+    "deep": "profunda\n0-40",
+    "general": "geral\n40-60",
+    "light": "leve\n60-80",
+    "awake": "acordado\n80-100",
+}
+
 MODEL_FILES = ("brainsniffer_cnn.json", "brainsniffer_corpus_fixed.json")
 
 
@@ -58,6 +72,52 @@ def load_reports() -> dict[str, dict[str, Any]]:
         ensure(isinstance(payload, dict), f"{name} must contain a JSON object")
         loaded[name] = payload
     return loaded
+
+
+def load_zone_reports() -> dict[str, dict[str, Any]]:
+    loaded: dict[str, dict[str, Any]] = {}
+    for name in ZONE_FILES:
+        path = REPORTS / name
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        ensure(isinstance(payload, dict), f"{name} must contain a JSON object")
+        loaded[name] = payload
+    return loaded
+
+
+def audit_zone_reports(
+    reports: dict[str, dict[str, Any]], zones: dict[str, dict[str, Any]]
+) -> None:
+    """Check zone snapshots against the audited historical aggregates."""
+    pairs = (
+        ("figshare_holdout_evaluation.json", "zone_figshare_active.json"),
+        ("mixed_fixed_figshare_holdout.json", "zone_figshare_mixed.json"),
+        ("vitaldb_external_validation.json", "zone_vitaldb_active.json"),
+        ("mixed_vitaldb_external.json", "zone_vitaldb_mixed.json"),
+    )
+    for hist_name, zone_name in pairs:
+        hist = reports[hist_name]
+        zone = zones[zone_name]
+        ensure(zone.get("scope") == "research_only", f"unsafe scope in {zone_name}")
+        ensure(zone.get("retrained") is False, f"retrain flag in {zone_name}")
+        hist_metrics = metrics(hist)
+        overall = zone.get("overall", {})
+        hist_n = float(hist_metrics.get("n", 0))
+        ensure(float(zone.get("n_windows", 0)) == hist_n, f"n mismatch in {zone_name}")
+        ensure(float(overall.get("n", 0)) == hist_n, f"overall n mismatch in {zone_name}")
+        for key in ("mae", "rmse", "bias", "pearson_r"):
+            a = float(hist_metrics[key])
+            b = float(overall[key])
+            ensure(abs(a - b) < 1e-4, f"{key} drift in {zone_name}: {a} vs {b}")
+        by_zone = zone.get("by_zone", {})
+        ensure(set(by_zone) == set(ZONE_ORDER), f"zone keys differ in {zone_name}")
+        total = sum(int(by_zone[z]["n"]) for z in ZONE_ORDER)
+        ensure(total == int(hist_n), f"zone n sum differs in {zone_name}")
+        conf = zone.get("confusion", {})
+        ensure(conf.get("order") == list(ZONE_ORDER), f"confusion order in {zone_name}")
+        counts = conf.get("counts", [])
+        ensure(len(counts) == 4 and all(len(r) == 4 for r in counts), f"confusion shape {zone_name}")
+        flat = sum(sum(r) for r in counts)
+        ensure(flat == int(hist_n), f"confusion sum differs in {zone_name}")
 
 
 def audit_reports(reports: dict[str, dict[str, Any]]) -> None:
@@ -524,6 +584,58 @@ def figure_trajectory():
                                       "tmp/pdfs/trajectory-audit/case19.json"])
 
 
+def figure_zones(zones: dict[str, dict[str, Any]]) -> None:
+    """MAE por zona BIS verdadeira, ativo vs misto, nos dois benchmarks."""
+    fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 3.4), layout="constrained", sharey=True)
+    panels = (
+        ("Figshare · 5 casos / 5.523 janelas", "zone_figshare_active.json", "zone_figshare_mixed.json", False),
+        ("VitalDB · 15 casos / 38.730 janelas", "zone_vitaldb_active.json", "zone_vitaldb_mixed.json", True),
+    )
+    x = list(range(len(ZONE_ORDER)))
+    width = 0.36
+    for ax, (title, active_name, mixed_name, show_iso) in zip(axes, panels, strict=True):
+        active = zones[active_name]["by_zone"]
+        mixed = zones[mixed_name]["by_zone"]
+        active_mae = [float(active[z]["mae"]) for z in ZONE_ORDER]
+        mixed_mae = [float(mixed[z]["mae"]) for z in ZONE_ORDER]
+        active_n = [int(active[z]["n"]) for z in ZONE_ORDER]
+        mixed_n = [int(mixed[z]["n"]) for z in ZONE_ORDER]
+        ensure(active_n == mixed_n, f"zone n differs: {active_name} vs {mixed_name}")
+        ax.bar([i - width / 2 for i in x], active_mae, width, label=LABELS[0], color=COLORS[0])
+        ax.bar([i + width / 2 for i in x], mixed_mae, width, label=LABELS[1], color="white",
+               edgecolor=COLORS[1], linewidth=1.2, hatch="//")
+        for i, n in enumerate(active_n):
+            top = max(active_mae[i], mixed_mae[i])
+            ax.text(i, top + 0.55, f"n={n}", ha="center", va="bottom", fontsize=7, color=".3")
+        if show_iso:
+            iso_active = zones[active_name]["isoelectric_subset_lt20"]
+            iso_mixed = zones[mixed_name]["isoelectric_subset_lt20"]
+            ensure(int(iso_active["n"]) == int(iso_mixed["n"]), "iso n differs")
+            ax.text(
+                0.98, 0.96,
+                f"Subset isoelétrico BIS<20 (n={int(iso_active['n'])}): "
+                f"MAE ativo {float(iso_active['mae']):.1f} vs misto {float(iso_mixed['mae']):.1f}",
+                transform=ax.transAxes, ha="right", va="top", fontsize=7,
+                bbox={"facecolor": "white", "edgecolor": ".7", "boxstyle": "round,pad=0.3"},
+            )
+        else:
+            ax.text(
+                0.98, 0.96, "BIS<20 ausente no holdout Figshare (n=0)",
+                transform=ax.transAxes, ha="right", va="top", fontsize=7,
+                bbox={"facecolor": "white", "edgecolor": ".7", "boxstyle": "round,pad=0.3"},
+            )
+        ax.set(
+            xticks=x,
+            xticklabels=[ZONE_PT[z] for z in ZONE_ORDER],
+            title=title,
+            ylim=(0, 22),
+        )
+        ax.grid(axis="y", color=".9", linewidth=0.5)
+    axes[0].set_ylabel("MAE (pontos BIS · menor é melhor)")
+    axes[1].legend(frameon=False, loc="lower right")
+    save_figure(fig, "zone_accuracy", [f"reports/{n}" for n in ZONE_FILES])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--infer-trajectory", action="store_true",
@@ -533,15 +645,18 @@ def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     reports = load_reports()
     audit_reports(reports)
+    zones = load_zone_reports()
+    audit_zone_reports(reports, zones)
     figure_pipeline(reports)
     figure_comparison(reports)
     figure_offset(reports)
     figure_bootstrap(reports)
+    figure_zones(zones)
     if args.infer_trajectory:
         infer_trajectory()
     if args.infer_trajectory or args.trajectory:
         figure_trajectory()
-    print(f"audited {len(reports)} report snapshots; generated historical figures")
+    print(f"audited {len(reports)} report snapshots + {len(zones)} zone snapshots; generated historical figures")
 
 
 if __name__ == "__main__":
