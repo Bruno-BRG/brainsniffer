@@ -167,7 +167,8 @@ def test_stream_audit_accepts_documented_microvolt_aliases(unit):
 @pytest.mark.parametrize("unit", ["V", "mV", "nV", "unknown", 1])
 def test_stream_audit_rejects_explicit_incompatible_units(required, unit):
     audit = StreamAudit(require_metadata=required)
-    audit.set_metadata({"unit": unit, "channel_name": "Fpz", "reference": "ref", "montage": "unknown"})
+    audit.set_metadata({"unit": unit, "channel_name": "Fpz", "reference": "ref",
+                        "montage": "unknown"})
     audit.push([0., 1.], source_rate=100)
     report = audit.report()
     assert not report.ok

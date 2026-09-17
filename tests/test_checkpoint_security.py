@@ -217,7 +217,8 @@ def test_future_writer_metadata_static_without_training():
                               for target in node.targets))
     fields = {key.value: value for key, value in zip(assignment.value.keys,
                                                    assignment.value.values)}
-    assert {"schema_version", "best_epoch", "training_config", "effective_training"} <= fields.keys()
+    expected = {"schema_version", "best_epoch", "training_config", "effective_training"}
+    assert expected <= fields.keys()
     controls = {key.value for key in fields["effective_training"].keys}
     assert {"scheduler", "gradient_clip_norm", "mixed_precision", "amp_dtype",
             "deterministic_algorithms", "deterministic_warn_only"} <= controls
