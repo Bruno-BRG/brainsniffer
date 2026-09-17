@@ -1,0 +1,171 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models\\brainsniffer_corpus_fixed.pt",
+  "checkpoint_sha256": "9fbfc4e88a629d93f615593ca361bcf441fe21a32bfb1abdd626d8bc93c6023b",
+  "mode": "external",
+  "cases": "external",
+  "files": [
+    "data\\raw\\case19.mat",
+    "data\\raw\\case3.mat",
+    "data\\raw\\case4.mat",
+    "data\\raw\\case5.mat",
+    "data\\raw\\case9.mat"
+  ],
+  "input_files": [
+    {
+      "path": "data\\raw\\case19.mat",
+      "size_bytes": 786271,
+      "sha256": "8d681e6704227659bf008554e9a9fd649adc2380528e7d82820fce168c721ad1"
+    },
+    {
+      "path": "data\\raw\\case3.mat",
+      "size_bytes": 2050259,
+      "sha256": "83e086d5aab4f2e91be004aa19c144922b32bef546e0aa7367923c33b59bc990"
+    },
+    {
+      "path": "data\\raw\\case4.mat",
+      "size_bytes": 671014,
+      "sha256": "71d72ee18301995a83506fa0173a102d3d176789f22cbdee70e5598af5e4c45c"
+    },
+    {
+      "path": "data\\raw\\case5.mat",
+      "size_bytes": 466317,
+      "sha256": "596694eb9d197ee1910cc63eb85fa3dee2b6053caeb6efe68cdde01228d9b4de"
+    },
+    {
+      "path": "data\\raw\\case9.mat",
+      "size_bytes": 1119914,
+      "sha256": "d64d03c87ca1232a51f89a676070a6e7c8c97e090cd99d44cf3463b611dfb8fc"
+    }
+  ],
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "min_quality": 0.2,
+  "n_windows": 5523,
+  "overall": {
+    "n": 5523.0,
+    "mae": 6.688461574635254,
+    "rmse": 10.674183092560499,
+    "bias": 2.1244226371423935,
+    "pearson_r": 0.8180785672721617,
+    "stage_accuracy": 0.590077856237552,
+    "stage_macro_f1": 0.5744870753057396
+  },
+  "by_zone": {
+    "deep": {
+      "n": 1773,
+      "share": 0.32102118413905484,
+      "mae": 6.24307225265546,
+      "rmse": 8.525987634397792,
+      "bias": 5.824660879437425,
+      "pearson_r": -0.18243320596732984,
+      "recall": 0.5634517766497462
+    },
+    "general": {
+      "n": 2584,
+      "share": 0.46786166938258195,
+      "mae": 5.312426819520838,
+      "rmse": 10.005924797186088,
+      "bias": 1.349664710254492,
+      "pearson_r": 0.38784670600478993,
+      "recall": 0.6311919504643962
+    },
+    "light": {
+      "n": 592,
+      "share": 0.10718812239724787,
+      "mae": 11.424802081004993,
+      "rmse": 14.6182721099059,
+      "bias": 1.9167597261635032,
+      "pearson_r": 0.3620185261928232,
+      "recall": 0.36993243243243246
+    },
+    "awake": {
+      "n": 574,
+      "share": 0.10392902408111533,
+      "mae": 9.373889266821566,
+      "rmse": 14.165755469756506,
+      "bias": -5.6031234904033385,
+      "pearson_r": 0.48057337749149,
+      "recall": 0.7142857142857143
+    }
+  },
+  "isoelectric_subset_lt20": {
+    "n": 0,
+    "share": 0.0,
+    "mae": null,
+    "rmse": null,
+    "bias": null,
+    "pearson_r": null
+  },
+  "confusion": {
+    "order": [
+      "deep",
+      "general",
+      "light",
+      "awake"
+    ],
+    "counts": [
+      [
+        999,
+        765,
+        9,
+        0
+      ],
+      [
+        843,
+        1631,
+        41,
+        69
+      ],
+      [
+        2,
+        204,
+        219,
+        167
+      ],
+      [
+        2,
+        51,
+        111,
+        410
+      ]
+    ],
+    "recall": {
+      "deep": 0.5634517766497462,
+      "general": 0.6311919504643962,
+      "light": 0.36993243243243246,
+      "awake": 0.7142857142857143
+    }
+  },
+  "zone_ranges": {
+    "deep": [
+      0,
+      40
+    ],
+    "general": [
+      40,
+      60
+    ],
+    "light": [
+      60,
+      80
+    ],
+    "awake": [
+      80,
+      100
+    ]
+  },
+  "retrained": false,
+  "raw_eeg_in_report": false
+}
