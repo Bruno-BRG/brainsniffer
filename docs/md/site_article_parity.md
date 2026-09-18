@@ -1,33 +1,51 @@
 # Paridade site (Dash) x artigo (LaTeX/SBC)
 
-Regra do projeto: tudo que esta no site tem que estar no artigo e vice-versa.
-Grafico no site sem correspondente no artigo (ou o inverso) e pendencia, nao decisao.
+Regra: toda figura do artigo aparece no site e todo painel analítico do site
+aparece no artigo. Pendência, não decisão.
 
-## Correspondencia verificada (2026-09-17)
+## Correspondência verificada (2026-09-18)
 
-| Site (Dash) | Artigo (.tex) | Status |
+| Artigo | Site | Status |
 |---|---|---|
-| Visao geral: cards MAE/RMSE/Pearson | Resumo + Tab. benchmarks | OK |
-| Trajetoria completa case19 | Fig. bis_trajectory.pdf | OK |
-| Replay causal | Secao Replay retrospectivo | OK |
-| Modelo: arquitetura + historico | Tab. config + Secao Modelos | OK |
-| Corpus: composicao, qualidade, ativo x misto | Fig. pipeline.pdf + Tab. modelos | OK |
-| Resultados: erros, associacao, bootstrap, offset | Fig. comparison/bootstrap/offset | OK |
-| Resultados: MAE por zona + tabela (NOVO) | Fig. zone_accuracy + Tab. zonas (NOVO) | OK |
-| Metodo e limitacoes | Materiais e metodos + Discussao | OK |
+| Fig. 1 `pipeline.pdf` | galeria "Figuras do artigo" e aba Corpus | OK |
+| Fig. 2 `bis_trajectory.pdf` | aba Trajetória completa e galeria | OK |
+| Fig. 3 `comparison.pdf` | aba Resultados (erros, associação, por caso) e galeria | OK |
+| Fig. 4 `pk_prediction.pdf` | Resultados: gráfico Pk, tabela e galeria | OK |
+| Fig. 5 `bootstrap_intervals.pdf` | Resultados: incerteza por caso e galeria | OK |
+| Fig. 6 `offset_sensitivity.pdf` | Resultados: sensibilidade ao offset e galeria | OK |
+| Fig. 7 `support_panels.pdf` | Corpus (a, b) e Modelo (c, d) e galeria | OK |
+| Tabela de Pk | Resultados: tabela de Pk | OK |
 
-## Pendencias conhecidas
+A galeria fica na aba Método e limites, na rota `/figures/<nome>`, com lista
+explícita em `ARTICLE_FIGURES`. A análise por zona (tabela e figura) foi
+removida dos dois lados quando o Pk entrou.
 
-- Site-only: curva de aprendizagem teorica, historico por epoca detalhado,
-  mapa finitude x janelas caso a caso, MAE por caso VitalDB em barras.
-  Plano: compilar no artigo ou marcar como apoio interativo sem numeros divergentes.
-- Artigo-only: fluxograma pipeline.pdf nao exibido no site.
-  Plano: exibir os PDFs do artigo no site.
-- Slides: ainda nao versionados. Cada grafico deve apontar para a mesma figura/tabela.
+## Painéis interativos sem figura estática própria
+
+Estes painéis leem os mesmos JSON do artigo e renderizam números que já estão
+no texto; a forma é interativa, o conteúdo é o mesmo.
+
+- Replay causal (EEG/BIS, qualidade, gate de emissão): protocolo descrito no
+  artigo; a figura estática correspondente é a Fig. 2.
+- Erros contínuos e associação/classificação por conjunto: mesmos números das
+  tabelas de benchmark.
+- Comparação ativa x misto e MAE por caso no VitalDB: mesmos números da Fig. 3.
+- Curva de aprendizagem: a mesma projeção do painel (d) da Fig. 7, calculada em
+  `brainsniffer.pipeline.planning` e importada pelos dois lados.
+
+## Citação
+
+O método Pk é citado no artigo como `smith1996`: Smith, W. D., Dutton, R. C. e
+Smith, N. T. (1996), Anesthesiology 84(1):38-51, DOI
+10.1097/00000542-199601000-00005, PMID 8572353. A escala observada usada aqui é
+o BIS de referência do monitor, não o desfecho de resposta ao estímulo do
+artigo original, e isso está declarado no texto e nas legendas.
 
 ## Como manter
 
-1. Novo grafico no site -> gerar via generate_figures.py, incluir em figures/,
-   citar no .tex e registrar aqui.
-2. Nova tabela no artigo -> exibir os mesmos numeros no Dash dos mesmos JSON.
-3. Auditoria: generate_figures.py confere n, metricas, splits e hashes.
+1. Novo gráfico no site: gerar também via `docs/generate_figures.py`, incluir em
+   `docs/figures/`, citar no `.tex` e registrar aqui.
+2. Nova figura no artigo: entra na galeria do site adicionando o nome em
+   `ARTICLE_FIGURES`, sem recálculo à mão.
+3. Auditoria: `generate_figures.py` confere n, métricas, Pk dentro do IC e
+   semente; o Dash lê os mesmos JSON no startup.

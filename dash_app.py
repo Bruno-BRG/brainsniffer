@@ -23,13 +23,22 @@ import numpy as np
 import plotly.graph_objects as go
 import torch
 from dash import Dash, Input, Output, State, dcc, html, no_update
-from flask import Response
+from flask import Response, send_file
 from plotly.subplots import make_subplots
 
 from brainsniffer.config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig
 from brainsniffer.data.mat_reader import EEGCase, load_case
 from brainsniffer.data.preprocess import StreamingPreprocessor, bis_stage, signal_quality
 from brainsniffer.models.cnn import parameter_count
+from brainsniffer.pipeline.planning import (
+    LEARNING_CURVE_CUTOFF_CASES,
+    LEARNING_CURVE_KEY_COUNTS,
+    LEARNING_CURVE_MAX_CASES,
+    LEARNING_CURVE_STRONG_RETURN_CASES,
+)
+from brainsniffer.pipeline.planning import (
+    theoretical_training_mae as _theoretical_training_mae,
+)
 from brainsniffer.pipeline.realtime import RealtimePrediction
 from brainsniffer.pipeline.training import load_checkpoint
 
@@ -38,15 +47,19 @@ DATA_DIR = Path(os.getenv("BRAINSNIFFER_DATA_DIR", APP_ROOT / "data/raw"))
 VITAL_DIR = Path(os.getenv("BRAINSNIFFER_VITAL_DIR", APP_ROOT / "data/vitaldb"))
 MODEL_PATH = Path(os.getenv("BRAINSNIFFER_CHECKPOINT", APP_ROOT / "models/brainsniffer_cnn.pt"))
 REPORTS_DIR = APP_ROOT / "reports"
+FIGURES_DIR = APP_ROOT / "docs/figures"
+ARTICLE_FIGURES = (
+    ("pipeline.png", "Figura 1 · Fluxo retrospectivo auditável do BrainSniffer"),
+    ("bis_trajectory.png", "Figura 2 · Trajetória offline do case19"),
+    ("comparison.png", "Figura 3 · Comparação dos checkpoints nos benchmarks"),
+    ("pk_prediction.png", "Figura 4 · Probabilidade de predição Pk"),
+    ("bootstrap_intervals.png", "Figura 5 · Bootstrap agrupado por caso"),
+    ("offset_sensitivity.png", "Figura 6 · Sensibilidade ao offset do rótulo"),
+    ("support_panels.png", "Figura 7 · Painéis de apoio do console"),
+)
+ARTICLE_FIGURE_FILES = tuple(name for name, _ in ARTICLE_FIGURES)
 REPLAY_EEG_POINTS = 9000
 REPLAY_INTERVAL_MS = 120
-LEARNING_CURVE_KEY_COUNTS = (13, 20, 30, 40, 50, 60, 80, 100, 150, 250, 500, 1000)
-LEARNING_CURVE_MAX_CASES = 1000
-LEARNING_CURVE_STRONG_RETURN_CASES = 80
-LEARNING_CURVE_CUTOFF_CASES = 100
-LEARNING_CURVE_STRONG_GAIN = 0.15
-LEARNING_CURVE_CUTOFF_GAIN = 0.18
-LEARNING_CURVE_TAIL_GAIN = 0.015
 
 COLORS = {
     "navy": "#102A43",
@@ -135,17 +148,10 @@ MIXED_FIGSHARE_REPORT = _read_report("mixed_fixed_figshare_holdout.json")
 MIXED_EXTERNAL_REPORT = _read_report("mixed_vitaldb_external.json")
 HOLDOUT_METRICS = HOLDOUT_REPORT.get("recomputed_test_metrics", {})
 EXTERNAL_METRICS = EXTERNAL_REPORT.get("metrics", {})
-ZONE_FIGSHARE_ACTIVE = _read_report("zone_figshare_active.json")
-ZONE_FIGSHARE_MIXED = _read_report("zone_figshare_mixed.json")
-ZONE_VITALDB_ACTIVE = _read_report("zone_vitaldb_active.json")
-ZONE_VITALDB_MIXED = _read_report("zone_vitaldb_mixed.json")
-ZONE_ORDER = ("deep", "general", "light", "awake")
-ZONE_PT = {
-    "deep": "Profunda 0-40",
-    "general": "Geral 40-60",
-    "light": "Leve 60-80",
-    "awake": "Acordado 80-100",
-}
+PK_FIGSHARE_ACTIVE = _read_report("pk_figshare_active.json")
+PK_FIGSHARE_MIXED = _read_report("pk_figshare_mixed.json")
+PK_VITALDB_ACTIVE = _read_report("pk_vitaldb_active.json")
+PK_VITALDB_MIXED = _read_report("pk_vitaldb_mixed.json")
 
 
 def _sha256(path: Path) -> str:
@@ -1030,51 +1036,6 @@ def _training_case_anchor() -> tuple[int, float] | None:
     return anchor_cases, float(anchor_mae)
 
 
-def _log_progress(value: float, start: float, end: float) -> float:
-    if end <= start:
-        return 1.0
-    return float(np.clip(np.log(value / start) / np.log(end / start), 0.0, 1.0))
-
-
-def _theoretical_training_mae(case_counts: object, *, anchor_cases: int, anchor_mae: float) -> np.ndarray:
-    """Return a transparent diminishing-returns scenario, not measured retrains.
-
-    The scenario encodes the planning hypothesis shown in the UI: most of the
-    relative gain arrives by 80--100 cases, while 100--1,000 adds only 1.5%.
-    It must never be presented as an observed learning curve because only one
-    checkpoint/training run is currently versioned in the project.
-    """
-
-    counts = np.asarray(case_counts, dtype=float)
-    values = np.full(counts.shape, np.nan, dtype=float)
-    finite = np.isfinite(counts) & (counts > 0)
-    if not finite.any() or not np.isfinite(anchor_mae) or anchor_mae <= 0:
-        return values
-
-    anchor = max(float(anchor_cases), 1.0)
-    strong_return = max(float(LEARNING_CURVE_STRONG_RETURN_CASES), anchor + 1.0)
-    cutoff = max(float(LEARNING_CURVE_CUTOFF_CASES), strong_return + 1.0)
-    tail_end = max(float(LEARNING_CURVE_MAX_CASES), cutoff + 1.0)
-    for index in np.flatnonzero(finite):
-        count = counts[index]
-        if count <= anchor:
-            values[index] = anchor_mae
-            continue
-        if count <= strong_return:
-            progress = _log_progress(count, anchor, strong_return)
-            values[index] = anchor_mae * (1.0 - LEARNING_CURVE_STRONG_GAIN * progress)
-            continue
-        if count <= cutoff:
-            progress = _log_progress(count, strong_return, cutoff)
-            gain = LEARNING_CURVE_STRONG_GAIN + (LEARNING_CURVE_CUTOFF_GAIN - LEARNING_CURVE_STRONG_GAIN) * progress
-            values[index] = anchor_mae * (1.0 - gain)
-            continue
-        progress = _log_progress(count, cutoff, tail_end)
-        cutoff_mae = anchor_mae * (1.0 - LEARNING_CURVE_CUTOFF_GAIN)
-        values[index] = cutoff_mae * (1.0 - LEARNING_CURVE_TAIL_GAIN * progress)
-    return values
-
-
 def _training_case_learning_curve_figure() -> go.Figure:
     anchor = _training_case_anchor()
     if anchor is None:
@@ -1532,60 +1493,90 @@ def _tab_intro(kicker: str, title: str, lead: str) -> html.Div:
     return html.Div([html.Div(kicker, className="section-kicker"), html.H2(title, className="section-title"), html.P(lead, className="section-lead")], className="section-intro")
 
 
-def _zone_report_pair(dataset: str) -> tuple[dict[str, object], dict[str, object]]:
+def _pk_report_pair(dataset: str) -> tuple[dict[str, object], dict[str, object]]:
     if dataset == "figshare":
-        return ZONE_FIGSHARE_ACTIVE, ZONE_FIGSHARE_MIXED
-    return ZONE_VITALDB_ACTIVE, ZONE_VITALDB_MIXED
+        return PK_FIGSHARE_ACTIVE, PK_FIGSHARE_MIXED
+    return PK_VITALDB_ACTIVE, PK_VITALDB_MIXED
 
 
-def _zone_accuracy_figure() -> go.Figure:
-    panels = (
-        ("Figshare · benchmark histórico", "figshare"),
-        ("VitalDB · holdout histórico", "vitaldb"),
-    )
-    have = False
-    for _, key in panels:
-        active, mixed = _zone_report_pair(key)
-        if isinstance(active.get("by_zone"), dict) and isinstance(mixed.get("by_zone"), dict):
-            have = True
-    if not have:
-        return _empty_figure("MAE por zona BIS", "Relatórios por zona indisponíveis", height=400)
-    figure = make_subplots(rows=1, cols=2, subplot_titles=[t for t, _ in panels], horizontal_spacing=0.14)
-    for col, (_, key) in enumerate(panels, start=1):
-        active, mixed = _zone_report_pair(key)
-        zones_active = active.get("by_zone", {})
-        zones_mixed = mixed.get("by_zone", {})
-        labels = [ZONE_PT[z] for z in ZONE_ORDER]
-        active_mae = [_finite_number(zones_active.get(z, {}).get("mae")) if isinstance(zones_active.get(z), dict) else float("nan") for z in ZONE_ORDER]
-        mixed_mae = [_finite_number(zones_mixed.get(z, {}).get("mae")) if isinstance(zones_mixed.get(z), dict) else float("nan") for z in ZONE_ORDER]
-        active_n = [zones_active.get(z, {}).get("n") if isinstance(zones_active.get(z), dict) else "—" for z in ZONE_ORDER]
-        figure.add_trace(go.Bar(name=ACTIVE_MODEL_LABEL, x=labels, y=active_mae, marker_color=COLORS["navy"], legendgroup="active", showlegend=col == 1, customdata=[[n] for n in active_n], hovertemplate="%{x}<br>ativo: %{y:.2f} pontos BIS<br>n=%{customdata[0]}<extra></extra>"), row=1, col=col)
-        figure.add_trace(go.Bar(name=MIXED_MODEL_LABEL, x=labels, y=mixed_mae, marker_color=COLORS["teal"], legendgroup="mixed", showlegend=col == 1, customdata=[[n] for n in active_n], hovertemplate="%{x}<br>misto: %{y:.2f} pontos BIS<br>n=%{customdata[0]}<extra></extra>"), row=1, col=col)
-        figure.update_yaxes(title="MAE (pontos BIS)", rangemode="tozero", gridcolor=COLORS["line"], row=1, col=col)
-        figure.update_xaxes(gridcolor=COLORS["line"], row=1, col=col)
-    iso_active = ZONE_VITALDB_ACTIVE.get("isoelectric_subset_lt20", {})
-    iso_mixed = ZONE_VITALDB_MIXED.get("isoelectric_subset_lt20", {})
-    if isinstance(iso_active, dict) and isinstance(iso_mixed, dict) and iso_active.get("n"):
-        figure.add_annotation(xref="paper", yref="paper", x=0.99, y=0.98, showarrow=False, align="right", bgcolor="white", bordercolor=COLORS["line"], font={"size": 11}, text=f"Subset isoelétrico BIS&lt;20 no VitalDB (n={iso_active.get('n'):,}): MAE ativo {_finite_number(iso_active.get('mae')):.1f} vs misto {_finite_number(iso_mixed.get('mae')):.1f}")
-    figure.update_layout(**_figure_layout("MAE por zona BIS verdadeira · ativo vs misto", height=430), barmode="group")
+def _pk_point(report: dict[str, object]) -> tuple[float, float, float]:
+    interval = report.get("pk_bootstrap", {})
+    point = _finite_number(report.get("pk"))
+    low = _finite_number(interval.get("lower_95")) if isinstance(interval, dict) else float("nan")
+    high = _finite_number(interval.get("upper_95")) if isinstance(interval, dict) else float("nan")
+    return point, low, high
+
+
+def _pk_figure() -> go.Figure:
+    panels = ("Figshare · benchmark histórico", "VitalDB · holdout histórico")
+    figure = go.Figure()
+    plotted = False
+    for model, (label, color) in enumerate(((ACTIVE_MODEL_LABEL, COLORS["navy"]), (MIXED_MODEL_LABEL, COLORS["teal"]))):
+        labels: list[str] = []
+        values: list[float] = []
+        upper: list[float] = []
+        lower: list[float] = []
+        for panel_label, key in zip(panels, ("figshare", "vitaldb"), strict=True):
+            active, mixed = _pk_report_pair(key)
+            point, low, high = _pk_point((active, mixed)[model])
+            if not np.isfinite(point):
+                continue
+            labels.append(panel_label)
+            values.append(point)
+            upper.append(max(high - point, 0.0) if np.isfinite(high) else 0.0)
+            lower.append(max(point - low, 0.0) if np.isfinite(low) else 0.0)
+        if not values:
+            continue
+        plotted = True
+        figure.add_trace(
+            go.Bar(
+                name=label,
+                x=values,
+                y=labels,
+                orientation="h",
+                marker_color=color,
+                error_x={"type": "data", "array": upper, "arrayminus": lower},
+                hovertemplate="%{y}<br>" + label + ": %{x:.3f}<extra></extra>",
+            )
+        )
+    if not plotted:
+        return _empty_figure("Pk · probabilidade de predição", "Relatórios de Pk indisponíveis", height=380)
+    figure.add_vline(x=0.5, line={"color": COLORS["muted"], "width": 1, "dash": "dot"}, annotation_text="chance 0,5", annotation_position="top")
+    figure.update_layout(**_figure_layout("Pk · probabilidade de predição (Smith et al. 1996)", height=380), barmode="group")
+    figure.update_xaxes(title="Pk (1 = ordem perfeita · 0,5 = chance)", range=[0.4, 1.0], gridcolor=COLORS["line"])
+    figure.update_yaxes(title="Benchmark", gridcolor=COLORS["line"])
     return figure
 
 
-def _zone_table_rows() -> list[list[str]]:
+def _pk_table_rows() -> list[list[str]]:
     rows: list[list[str]] = []
-    for dataset_label, key in (("Figshare · ativo", "figshare_active"), ("Figshare · misto", "figshare_mixed"), ("VitalDB · ativo", "vitaldb_active"), ("VitalDB · misto", "vitaldb_mixed")):
-        report = {"figshare_active": ZONE_FIGSHARE_ACTIVE, "figshare_mixed": ZONE_FIGSHARE_MIXED, "vitaldb_active": ZONE_VITALDB_ACTIVE, "vitaldb_mixed": ZONE_VITALDB_MIXED}[key]
-        zones = report.get("by_zone", {})
-        if not isinstance(zones, dict):
+    entries = (
+        ("Figshare · ativo", "figshare_active"),
+        ("Figshare · misto", "figshare_mixed"),
+        ("VitalDB · ativo", "vitaldb_active"),
+        ("VitalDB · misto", "vitaldb_mixed"),
+    )
+    for dataset_label, key in entries:
+        report = {
+            "figshare_active": PK_FIGSHARE_ACTIVE,
+            "figshare_mixed": PK_FIGSHARE_MIXED,
+            "vitaldb_active": PK_VITALDB_ACTIVE,
+            "vitaldb_mixed": PK_VITALDB_MIXED,
+        }[key]
+        point, low, high = _pk_point(report)
+        if not np.isfinite(point):
             continue
-        for zone in ZONE_ORDER:
-            item = zones.get(zone, {})
-            if not isinstance(item, dict):
-                continue
-            rows.append([dataset_label, ZONE_PT[zone], f"{item.get('n', '—'):,}" if isinstance(item.get("n"), int) else str(item.get("n", "—")), _format_number(_finite_number(item.get("mae")), 2), _format_number(_finite_number(item.get("bias")), 2), _format_number(_finite_number(item.get("recall")), 3)])
-        iso = report.get("isoelectric_subset_lt20", {})
-        if isinstance(iso, dict) and isinstance(iso.get("n"), int) and iso.get("n"):
-            rows.append([dataset_label, "Subset BIS<20", f"{iso.get('n'):,}", _format_number(_finite_number(iso.get("mae")), 2), _format_number(_finite_number(iso.get("bias")), 2), "—"])
+        report_metrics = report.get("metrics", {})
+        metrics_map = report_metrics if isinstance(report_metrics, dict) else {}
+        windows = report.get("n_windows", "—")
+        rows.append([
+            dataset_label,
+            _format_number(point, 3),
+            f"{_format_number(low, 3)} a {_format_number(high, 3)}",
+            _format_number(_finite_number(metrics_map.get("mae")), 2),
+            _format_number(_finite_number(metrics_map.get("pearson_r")), 3),
+            f"{windows:,}" if isinstance(windows, int) else str(windows),
+        ])
     return rows
 
 
@@ -2084,15 +2075,15 @@ def _build_statistics_tab() -> html.Div:
                 "Checkpoint ativo Figshare-only. Intervalos de 95% por reamostragem de casos, ainda ponderados pelo número de janelas; expressam variação amostral exploratória, não incerteza clínica individual.",
             ),
             _chart(
-                _zone_accuracy_figure(),
-                "MAE por zona BIS verdadeira nos mesmos benchmarks históricos do artigo (Figshare 5 casos/5.523 janelas; VitalDB 15/38.730). O ativo viu só Figshare; o misto já viu outros participantes VitalDB. Pearson dentro de faixa estreita é instável; a leitura usa MAE/recall. Subset BIS<20 é exploratório dentro da zona profunda.",
+                _pk_figure(),
+                "Pk (probabilidade de predição, Smith, Dutton e Smith, Anesthesiology 1996, 84:38-51) nos mesmos benchmarks históricos do artigo (Figshare 5 casos/5.523 janelas; VitalDB 15/38.730). Pk é a associação ordinal reescalada, invariante a escala: 1 é ordem perfeita e 0,5 é chance. As barras são IC 95% por reamostragem de casos. Pk compara a ordem contra o BIS de referência do monitor, não contra um desfecho de resposta ao estímulo.",
             ),
             html.Div(
                 [
-                    html.H3("Precisão por zona BIS verdadeira"),
+                    html.H3("Probabilidade de predição Pk"),
                     _table(
-                        ["Benchmark", "Zona (BIS verdadeiro)", "Janelas", "MAE", "Bias", "Recall"],
-                        _zone_table_rows(),
+                        ["Conjunto", "Pk", "IC 95% por caso", "MAE", "Pearson r", "Janelas"],
+                        _pk_table_rows(),
                     ),
                 ],
                 className="table-card",
@@ -2132,6 +2123,47 @@ def _build_statistics_tab() -> html.Div:
     )
 
 
+def _article_figures_section() -> html.Div:
+    """Every figure of the article, so the site and the text cannot diverge."""
+
+    available = [
+        (name, caption) for name, caption in ARTICLE_FIGURES if (FIGURES_DIR / name).exists()
+    ]
+    if not available:
+        return _status_message(
+            "Figuras do artigo indisponíveis",
+            "Nenhum PNG encontrado em docs/figures; rode docs/generate_figures.py.",
+            tone="warning",
+        )
+    return html.Div(
+        [
+            html.H3("Figuras do artigo"),
+            html.P(
+                "As mesmas figuras do TCC, na numeração do texto. Todo painel do "
+                "console corresponde a uma delas e toda figura do artigo aparece aqui."
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Img(
+                                src=f"/figures/{name}",
+                                alt=caption,
+                                className="article-figure",
+                            ),
+                            html.Div(caption, className="figure-caption"),
+                        ],
+                        className="figure-card",
+                    )
+                    for name, caption in available
+                ],
+                className="figure-grid",
+            ),
+        ],
+        className="table-card",
+    )
+
+
 def _build_method_tab() -> html.Div:
     preprocess = MODEL_METADATA.get("preprocess_config", {})
     dataset = MODEL_METADATA.get("dataset_summary", {})
@@ -2142,7 +2174,7 @@ def _build_method_tab() -> html.Div:
     quality_min = float(np.nanmin(quality_values)) if quality_values else float("nan")
     rows = [["Figshare", len(HOLDOUT_REPORT.get("files", [])), HOLDOUT_REPORT.get("n_test_windows", "—"), "holdout por caso/cirurgia do ativo"], ["VitalDB", len(EXTERNAL_REPORT.get("files", [])), EXTERNAL_REPORT.get("n_windows", "—"), "avaliação cruzada · externa ao desenvolvimento do ativo"], ["Treino", len(split.get("train_cases", [])), dataset.get("n_windows", "—") if isinstance(dataset, dict) else "—", "casos não sobrepostos ao teste"], ["Modelo", MODEL_METADATA.get("checkpoint_sha256", "—"), "—", "hash do checkpoint"]]
     preprocess_rows = [[key, value] for key, value in preprocess.items()]
-    return html.Div([_tab_intro("MÉTODO E COBERTURA", "De onde vieram os números", "Esta aba documenta a proveniência dos dados, a divisão por caso/cirurgia, o pré-processamento e os limites de qualidade do checkpoint ativo Figshare-only. No Figshare, não há identificador que permita afirmar separação por paciente."), html.Div([_card("Arquivos holdout", f"{len(HOLDOUT_REPORT.get('files', []))}", "Figshare · por caso/cirurgia", "blue"), _card("Arquivos VitalDB", f"{len(EXTERNAL_REPORT.get('files', []))}", "cruzada de dataset do ativo", "orange"), _card("Qualidade VitalDB", _format_number(quality_mean, 3), f"mínimo {_format_number(quality_min, 3)}", "teal"), _card("Offset testado", f"{len(_offset_points())}", "pontos exploratórios", "purple")], className="metric-grid"), html.Div([html.H3("Cobertura dos experimentos"), _table(["Fonte", "Casos/arquivos", "Janelas", "Papel"], rows)], className="table-card"), html.Div([html.Div([html.H3("Pré-processamento"), _table(["Parâmetro", "Valor"], preprocess_rows)], className="table-card"), html.Div([html.H3("Limites de leitura"), html.P("O projeto é research-only e não controla anestésicos."), html.P("A qualidade é um gate diagnóstico de 0 a 1, não um SQI clínico."), html.P("O replay revela somente saídas causais e usa dados offline já auditados."), html.Div("A avaliação cruzada VitalDB desta aba pertence ao ativo Figshare-only; a comparação do candidato misto tem outra interpretação e aparece na aba Corpus.", className="callout")], className="explanation-card")], className="table-grid two-col")], className="tab-panel")
+    return html.Div([_tab_intro("MÉTODO E COBERTURA", "De onde vieram os números", "Esta aba documenta a proveniência dos dados, a divisão por caso/cirurgia, o pré-processamento e os limites de qualidade do checkpoint ativo Figshare-only. No Figshare, não há identificador que permita afirmar separação por paciente."), html.Div([_card("Arquivos holdout", f"{len(HOLDOUT_REPORT.get('files', []))}", "Figshare · por caso/cirurgia", "blue"), _card("Arquivos VitalDB", f"{len(EXTERNAL_REPORT.get('files', []))}", "cruzada de dataset do ativo", "orange"), _card("Qualidade VitalDB", _format_number(quality_mean, 3), f"mínimo {_format_number(quality_min, 3)}", "teal"), _card("Offset testado", f"{len(_offset_points())}", "pontos exploratórios", "purple")], className="metric-grid"), html.Div([html.H3("Cobertura dos experimentos"), _table(["Fonte", "Casos/arquivos", "Janelas", "Papel"], rows)], className="table-card"), html.Div([html.Div([html.H3("Pré-processamento"), _table(["Parâmetro", "Valor"], preprocess_rows)], className="table-card"), html.Div([html.H3("Limites de leitura"), html.P("O projeto é research-only e não controla anestésicos."), html.P("A qualidade é um gate diagnóstico de 0 a 1, não um SQI clínico."), html.P("O replay revela somente saídas causais e usa dados offline já auditados."), html.Div("A avaliação cruzada VitalDB desta aba pertence ao ativo Figshare-only; a comparação do candidato misto tem outra interpretação e aparece na aba Corpus.", className="callout")], className="explanation-card")], className="table-grid two-col"), _article_figures_section()], className="tab-panel")
 
 
 def _default_case_state() -> tuple[float, str | None]:
@@ -2311,6 +2343,18 @@ def robots_txt() -> Response:
 @server.get("/llms.txt")
 def llms_txt() -> Response:
     return Response(LLMS_TEXT, content_type="text/markdown; charset=utf-8")
+
+
+@server.get("/figures/<name>")
+def article_figure(name: str) -> Response:
+    """Serve the article figures so the site shows the same panels as the text."""
+
+    if name not in ARTICLE_FIGURE_FILES:
+        return Response("Figura não autorizada\n", status=404, content_type="text/plain; charset=utf-8")
+    path = FIGURES_DIR / name
+    if not path.exists():
+        return Response("Figura indisponível\n", status=404, content_type="text/plain; charset=utf-8")
+    return send_file(path, mimetype="image/png")
 
 
 @app.callback(Output("case-meta", "children"), Output("replay-time", "max"), Output("replay-time", "value"), Input("case-selector", "value"))

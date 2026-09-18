@@ -1,0 +1,77 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models\\brainsniffer_corpus_fixed.pt",
+  "checkpoint_sha256": "9fbfc4e88a629d93f615593ca361bcf441fe21a32bfb1abdd626d8bc93c6023b",
+  "mode": "external",
+  "cases": "external",
+  "files": [
+    "data\\raw\\case19.mat",
+    "data\\raw\\case3.mat",
+    "data\\raw\\case4.mat",
+    "data\\raw\\case5.mat",
+    "data\\raw\\case9.mat"
+  ],
+  "input_files": [
+    {
+      "path": "data\\raw\\case19.mat",
+      "size_bytes": 786271,
+      "sha256": "8d681e6704227659bf008554e9a9fd649adc2380528e7d82820fce168c721ad1"
+    },
+    {
+      "path": "data\\raw\\case3.mat",
+      "size_bytes": 2050259,
+      "sha256": "83e086d5aab4f2e91be004aa19c144922b32bef546e0aa7367923c33b59bc990"
+    },
+    {
+      "path": "data\\raw\\case4.mat",
+      "size_bytes": 671014,
+      "sha256": "71d72ee18301995a83506fa0173a102d3d176789f22cbdee70e5598af5e4c45c"
+    },
+    {
+      "path": "data\\raw\\case5.mat",
+      "size_bytes": 466317,
+      "sha256": "596694eb9d197ee1910cc63eb85fa3dee2b6053caeb6efe68cdde01228d9b4de"
+    },
+    {
+      "path": "data\\raw\\case9.mat",
+      "size_bytes": 1119914,
+      "sha256": "d64d03c87ca1232a51f89a676070a6e7c8c97e090cd99d44cf3463b611dfb8fc"
+    }
+  ],
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 100.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "min_quality": 0.2,
+  "n_windows": 5523,
+  "metrics": {
+    "n": 5523.0,
+    "mae": 6.688461574635254,
+    "rmse": 10.674183092560499,
+    "bias": 2.1244226371423935,
+    "pearson_r": 0.8180785672721617,
+    "stage_accuracy": 0.590077856237552,
+    "stage_macro_f1": 0.5744870753057396
+  },
+  "pk": 0.773953699715207,
+  "pk_bootstrap": {
+    "mean": 0.7756822082044046,
+    "lower_95": 0.6760238567695243,
+    "upper_95": 0.8350497275734382
+  },
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "observed_scale": "reference BIS do monitor, não um desfecho de resposta ao estímulo",
+  "pk_reference": "Smith WD, Dutton RC, Smith NT. Anesthesiology 1996;84(1):38-51",
+  "retrained": false,
+  "raw_eeg_in_report": false
+}
