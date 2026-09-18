@@ -1,14 +1,14 @@
 # Mapa das figuras científicas
 
-As seis figuras são geradas por `docs/generate_figures.py` a partir de listas
+As sete figuras são geradas por `docs/generate_figures.py` a partir de listas
 explícitas de snapshots JSON rastreados pelo Git. A geração valida escopo,
 holdouts, contagens de janelas, pré-processamento e parâmetros de bootstrap
 antes de escrever os PNGs e PDFs vetoriais. O fluxograma também lê os dois
 JSON de checkpoints explicitamente listados em `MODEL_FILES` e confere hashes,
 contagens e separação do holdout Figshare no desenvolvimento fixo. A figura por
-zona valida ainda os quatro relatórios `zone_*.json` contra os agregados
-históricos (mesmo $n$, MAE/RMSE/bias/Pearson dentro de $10^{-4}$, soma das zonas
-e matriz de confusão conferindo). Arquivos JSON locais fora dessas listas não
+de Pk valida ainda os quatro relatórios `pk_*.json` contra os agregados
+históricos (mesmo $n$, MAE/RMSE/bias/Pearson dentro de $10^{-4}$, Pk dentro do
+próprio intervalo e semente fixa). Arquivos JSON locais fora dessas listas não
 entram nas figuras.
 
 ## Contrato visual comum
@@ -89,22 +89,38 @@ entram nas figuras.
   `reports/vitaldb_external_validation.json` e
   `reports/mixed_vitaldb_external.json`.
 
-## `zone_accuracy.png`
+## `pk_prediction.png`
 
-- Pergunta: o erro se distribui de forma desigual entre zonas BIS (acordado,
-  leve, geral adequada, profunda) e no subset isoelétrico BIS<20?
-- Takeaway: no VitalDB, o ativo colapsa na profunda (MAE 17,95) e no subset
-  BIS<20 (MAE 60,73); o misto reduz para 10,03 e 12,15, mas leve/acordado
-  seguem difíceis. No Figshare, o ganho do misto concentra-se no acordado
-  (13,73 para 9,37, recall 0,517 para 0,714); não há BIS<20 no holdout.
-- Grão e unidades: estratificação pelo BIS verdadeiro nas faixas internas
-  [0,40)/[40,60)/[60,80)/[80,100]; MAE em pontos BIS; rótulos $n$ por zona;
-  subset BIS<20 dentro da profunda, não classe adicional.
-- Fontes: `reports/zone_figshare_active.json`,
-  `reports/zone_figshare_mixed.json`,
-  `reports/zone_vitaldb_active.json` e
-  `reports/zone_vitaldb_mixed.json`, auditados contra os quatro agregados
-  históricos.
+- Pergunta: o indicador ordena corretamente a profundidade observada, e quanto
+  disso sobrevive à troca de fonte de dados?
+- Takeaway: no Figshare o ativo fica em Pk 0,773 e o misto em 0,774; no VitalDB
+  o ativo cai para 0,515, praticamente acaso, e o misto chega a 0,672. O misto
+  melhora MAE e Pearson no Figshare sem mover Pk, o que separa ganho de escala
+  de ganho de ordenação.
+- Métrica: probabilidade de predição Pk de Smith, Dutton e Smith
+  (Anesthesiology 1996, 84:38-51), variante reescalada da associação ordinal de
+  Kim; 1 é ordem perfeita e 0,5 é chance. Pares empatados na escala observada
+  são excluídos e pares empatados no indicador contam 0,5.
+- Escala observada: o BIS de referência do monitor, não um desfecho de resposta
+  ao estímulo como no artigo original.
+- Grão e unidades: Figshare com 5 casos/5.523 janelas e VitalDB com 15/38.730;
+  IC 95% por reamostragem de casos (B=1.000, seed 42); Pk sem unidade.
+- Fontes: `reports/pk_figshare_active.json`, `reports/pk_figshare_mixed.json`,
+  `reports/pk_vitaldb_active.json` e `reports/pk_vitaldb_mixed.json`, auditados
+  contra os quatro agregados históricos.
+
+## `support_panels.png`
+
+- Pergunta: quais visões de apoio o console exibe e de onde vem cada uma?
+- Takeaway: composição do corpus, mapa de qualidade, histórico de treino e uma
+  projeção de MAE por casos de treino; as três primeiras são leituras diretas,
+  a quarta é cenário declarado.
+- Painéis: (a) casos por fonte, separando elegíveis, quarentena e benchmark
+  histórico; (b) finitude do EEG contra fração de janelas aceitas, com o gate de
+  90% de amostras finitas; (c) histórico de treino e validação por época;
+  (d) projeção ancorada no MAE 7,03 do holdout, explicitamente não medida.
+- Fontes: `reports/corpus_manifest.json`, `models/brainsniffer_cnn.json` e
+  `reports/figshare_holdout_evaluation.json`.
 
 ## `bis_trajectory.png`
 
@@ -134,7 +150,7 @@ tratados como evidência de desempenho científico. A lista completa é:
 6. `reports/mixed_vitaldb_external.json`
 7. `reports/offset_sensitivity.json`
 8. `reports/vitaldb_external_validation.json`
-9. `reports/zone_figshare_active.json`
-10. `reports/zone_figshare_mixed.json`
-11. `reports/zone_vitaldb_active.json`
-12. `reports/zone_vitaldb_mixed.json`
+9. `reports/pk_figshare_active.json`
+10. `reports/pk_figshare_mixed.json`
+11. `reports/pk_vitaldb_active.json`
+12. `reports/pk_vitaldb_mixed.json`

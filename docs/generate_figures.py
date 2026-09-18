@@ -33,19 +33,16 @@ REPORT_FILES = (
     "vitaldb_external_validation.json",
 )
 
-ZONE_FILES = (
-    "zone_figshare_active.json",
-    "zone_figshare_mixed.json",
-    "zone_vitaldb_active.json",
-    "zone_vitaldb_mixed.json",
+PK_FILES = (
+    "pk_figshare_active.json",
+    "pk_figshare_mixed.json",
+    "pk_vitaldb_active.json",
+    "pk_vitaldb_mixed.json",
 )
-ZONE_ORDER = ("deep", "general", "light", "awake")
-ZONE_PT = {
-    "deep": "profunda\n0-40",
-    "general": "geral\n40-60",
-    "light": "leve\n60-80",
-    "awake": "acordado\n80-100",
-}
+PK_HOLDOUTS = (
+    ("Figshare", "pk_figshare_active.json", "pk_figshare_mixed.json"),
+    ("VitalDB", "pk_vitaldb_active.json", "pk_vitaldb_mixed.json"),
+)
 
 MODEL_FILES = ("brainsniffer_cnn.json", "brainsniffer_corpus_fixed.json")
 
@@ -74,9 +71,9 @@ def load_reports() -> dict[str, dict[str, Any]]:
     return loaded
 
 
-def load_zone_reports() -> dict[str, dict[str, Any]]:
+def load_pk_reports() -> dict[str, dict[str, Any]]:
     loaded: dict[str, dict[str, Any]] = {}
-    for name in ZONE_FILES:
+    for name in PK_FILES:
         path = REPORTS / name
         payload = json.loads(path.read_text(encoding="utf-8"))
         ensure(isinstance(payload, dict), f"{name} must contain a JSON object")
@@ -84,40 +81,42 @@ def load_zone_reports() -> dict[str, dict[str, Any]]:
     return loaded
 
 
-def audit_zone_reports(
-    reports: dict[str, dict[str, Any]], zones: dict[str, dict[str, Any]]
+def audit_pk_reports(
+    reports: dict[str, dict[str, Any]], pk_reports: dict[str, dict[str, Any]]
 ) -> None:
-    """Check zone snapshots against the audited historical aggregates."""
+    """Check Pk snapshots against the audited historical aggregates."""
     pairs = (
-        ("figshare_holdout_evaluation.json", "zone_figshare_active.json"),
-        ("mixed_fixed_figshare_holdout.json", "zone_figshare_mixed.json"),
-        ("vitaldb_external_validation.json", "zone_vitaldb_active.json"),
-        ("mixed_vitaldb_external.json", "zone_vitaldb_mixed.json"),
+        ("figshare_holdout_evaluation.json", "pk_figshare_active.json"),
+        ("mixed_fixed_figshare_holdout.json", "pk_figshare_mixed.json"),
+        ("vitaldb_external_validation.json", "pk_vitaldb_active.json"),
+        ("mixed_vitaldb_external.json", "pk_vitaldb_mixed.json"),
     )
-    for hist_name, zone_name in pairs:
+    for hist_name, pk_name in pairs:
         hist = reports[hist_name]
-        zone = zones[zone_name]
-        ensure(zone.get("scope") == "research_only", f"unsafe scope in {zone_name}")
-        ensure(zone.get("retrained") is False, f"retrain flag in {zone_name}")
+        pk_report = pk_reports[pk_name]
+        ensure(pk_report.get("scope") == "research_only", f"unsafe scope in {pk_name}")
+        ensure(pk_report.get("retrained") is False, f"retrain flag in {pk_name}")
         hist_metrics = metrics(hist)
-        overall = zone.get("overall", {})
+        overall = pk_report.get("metrics", {})
         hist_n = float(hist_metrics.get("n", 0))
-        ensure(float(zone.get("n_windows", 0)) == hist_n, f"n mismatch in {zone_name}")
-        ensure(float(overall.get("n", 0)) == hist_n, f"overall n mismatch in {zone_name}")
+        ensure(float(pk_report.get("n_windows", 0)) == hist_n, f"n mismatch in {pk_name}")
+        ensure(float(overall.get("n", 0)) == hist_n, f"overall n mismatch in {pk_name}")
         for key in ("mae", "rmse", "bias", "pearson_r"):
             a = float(hist_metrics[key])
             b = float(overall[key])
-            ensure(abs(a - b) < 1e-4, f"{key} drift in {zone_name}: {a} vs {b}")
-        by_zone = zone.get("by_zone", {})
-        ensure(set(by_zone) == set(ZONE_ORDER), f"zone keys differ in {zone_name}")
-        total = sum(int(by_zone[z]["n"]) for z in ZONE_ORDER)
-        ensure(total == int(hist_n), f"zone n sum differs in {zone_name}")
-        conf = zone.get("confusion", {})
-        ensure(conf.get("order") == list(ZONE_ORDER), f"confusion order in {zone_name}")
-        counts = conf.get("counts", [])
-        ensure(len(counts) == 4 and all(len(r) == 4 for r in counts), f"confusion shape {zone_name}")
-        flat = sum(sum(r) for r in counts)
-        ensure(flat == int(hist_n), f"confusion sum differs in {zone_name}")
+            ensure(abs(a - b) < 1e-4, f"{key} drift in {pk_name}: {a} vs {b}")
+        pk_value = float(pk_report["pk"])
+        ensure(0.0 <= pk_value <= 1.0, f"Pk outside [0, 1] in {pk_name}")
+        interval = pk_report.get("pk_bootstrap", {})
+        ensure(bool(interval), f"missing Pk bootstrap in {pk_name}")
+        lower = float(interval["lower_95"])
+        upper = float(interval["upper_95"])
+        ensure(lower <= pk_value <= upper, f"Pk outside its interval in {pk_name}")
+        ensure(
+            int(pk_report.get("bootstrap_samples", 0)) == 1000,
+            f"unexpected Pk bootstrap count in {pk_name}",
+        )
+        ensure(int(pk_report.get("bootstrap_seed", -1)) == 42, f"seed drift in {pk_name}")
 
 
 def audit_reports(reports: dict[str, dict[str, Any]]) -> None:
@@ -584,56 +583,179 @@ def figure_trajectory():
                                       "tmp/pdfs/trajectory-audit/case19.json"])
 
 
-def figure_zones(zones: dict[str, dict[str, Any]]) -> None:
-    """MAE por zona BIS verdadeira, ativo vs misto, nos dois benchmarks."""
-    fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 3.4), layout="constrained", sharey=True)
-    panels = (
-        ("Figshare · 5 casos / 5.523 janelas", "zone_figshare_active.json", "zone_figshare_mixed.json", False),
-        ("VitalDB · 15 casos / 38.730 janelas", "zone_vitaldb_active.json", "zone_vitaldb_mixed.json", True),
+def figure_pk(pk_reports: dict[str, dict[str, Any]]) -> None:
+    """Prediction probability Pk with case-cluster intervals, ativo vs misto."""
+    fig, ax = plt.subplots(figsize=(WIDTH, 2.7), layout="constrained")
+    benchmarks = [name for name, _, _ in PK_HOLDOUTS]
+    for model in range(2):
+        values: list[float] = []
+        lowers: list[float] = []
+        uppers: list[float] = []
+        for _, active_name, mixed_name in PK_HOLDOUTS:
+            report = pk_reports[(active_name, mixed_name)[model]]
+            interval = report["pk_bootstrap"]
+            values.append(float(report["pk"]))
+            lowers.append(float(interval["lower_95"]))
+            uppers.append(float(interval["upper_95"]))
+        for row, (value, low, high) in enumerate(
+            zip(values, lowers, uppers, strict=True)
+        ):
+            ensure(0.0 <= low <= value <= high <= 1.0, f"Pk interval outside [0, 1]: {value}")
+            y = row + (model - 0.5) * 0.17
+            ax.hlines(
+                y,
+                low,
+                high,
+                color=COLORS[model],
+                linewidth=1.4,
+                linestyles="solid" if model == 0 else "dashed",
+            )
+            point(ax, value, y, model, label=LABELS[model] if row == 0 else None)
+    ax.axvline(0.5, color=".45", linewidth=0.7, linestyle=":")
+    ax.text(
+        0.505,
+        -0.5,
+        "chance 0,5",
+        fontsize=7,
+        color=".35",
+        ha="left",
+        va="center",
     )
-    x = list(range(len(ZONE_ORDER)))
-    width = 0.36
-    for ax, (title, active_name, mixed_name, show_iso) in zip(axes, panels, strict=True):
-        active = zones[active_name]["by_zone"]
-        mixed = zones[mixed_name]["by_zone"]
-        active_mae = [float(active[z]["mae"]) for z in ZONE_ORDER]
-        mixed_mae = [float(mixed[z]["mae"]) for z in ZONE_ORDER]
-        active_n = [int(active[z]["n"]) for z in ZONE_ORDER]
-        mixed_n = [int(mixed[z]["n"]) for z in ZONE_ORDER]
-        ensure(active_n == mixed_n, f"zone n differs: {active_name} vs {mixed_name}")
-        ax.bar([i - width / 2 for i in x], active_mae, width, label=LABELS[0], color=COLORS[0])
-        ax.bar([i + width / 2 for i in x], mixed_mae, width, label=LABELS[1], color="white",
-               edgecolor=COLORS[1], linewidth=1.2, hatch="//")
-        for i, n in enumerate(active_n):
-            top = max(active_mae[i], mixed_mae[i])
-            ax.text(i, top + 0.55, f"n={n}", ha="center", va="bottom", fontsize=7, color=".3")
-        if show_iso:
-            iso_active = zones[active_name]["isoelectric_subset_lt20"]
-            iso_mixed = zones[mixed_name]["isoelectric_subset_lt20"]
-            ensure(int(iso_active["n"]) == int(iso_mixed["n"]), "iso n differs")
-            ax.text(
-                0.98, 0.96,
-                f"Subset isoelétrico BIS<20 (n={int(iso_active['n'])}): "
-                f"MAE ativo {float(iso_active['mae']):.1f} vs misto {float(iso_mixed['mae']):.1f}",
-                transform=ax.transAxes, ha="right", va="top", fontsize=7,
-                bbox={"facecolor": "white", "edgecolor": ".7", "boxstyle": "round,pad=0.3"},
-            )
-        else:
-            ax.text(
-                0.98, 0.96, "BIS<20 ausente no holdout Figshare (n=0)",
-                transform=ax.transAxes, ha="right", va="top", fontsize=7,
-                bbox={"facecolor": "white", "edgecolor": ".7", "boxstyle": "round,pad=0.3"},
-            )
-        ax.set(
-            xticks=x,
-            xticklabels=[ZONE_PT[z] for z in ZONE_ORDER],
-            title=title,
-            ylim=(0, 22),
-        )
-        ax.grid(axis="y", color=".9", linewidth=0.5)
-    axes[0].set_ylabel("MAE (pontos BIS · menor é melhor)")
-    axes[1].legend(frameon=False, loc="lower right")
-    save_figure(fig, "zone_accuracy", [f"reports/{n}" for n in ZONE_FILES])
+    ax.set(
+        yticks=range(len(benchmarks)),
+        yticklabels=benchmarks,
+        ylim=(len(benchmarks) - 0.55, -0.6),
+        xlim=(0.4, 1.0),
+        xticks=[0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        xlabel="Pk (1 = ordem perfeita · 0,5 = chance)",
+    )
+    ax.grid(axis="x", color=".9", linewidth=0.5)
+    ax.legend(loc="lower right", frameon=False)
+    save_figure(fig, "pk_prediction", [f"reports/{n}" for n in PK_FILES])
+
+
+def figure_support_panels(reports):
+    """Corpus, qualidade, histórico de treino e projeção usados no console."""
+    import numpy as np
+
+    from brainsniffer.pipeline.planning import (
+        LEARNING_CURVE_KEY_COUNTS,
+        LEARNING_CURVE_MAX_CASES,
+        theoretical_training_mae,
+    )
+
+    corpus = reports["corpus_manifest.json"]
+    summary = corpus.get("summary", {})
+    source_summary = summary.get("source_summary", {}) if isinstance(summary, dict) else {}
+    ensure(
+        isinstance(source_summary, dict) and bool(source_summary),
+        "corpus source summary missing",
+    )
+    model = json.loads((ROOT / "models" / MODEL_FILES[0]).read_text())
+    history = model.get("history", [])
+    ensure(isinstance(history, list) and bool(history), "training history missing")
+    holdout_mae = float(metrics(reports["figshare_holdout_evaluation.json"])["mae"])
+    anchor_cases = len(model["split"]["train_cases"])
+    ensure(anchor_cases > 0 and holdout_mae > 0, "planning anchor missing")
+
+    fig, grid = plt.subplots(2, 2, figsize=(WIDTH, 3.2), layout="constrained")
+    names = {"figshare": "Figshare", "vitaldb": "VitalDB"}
+    sources = sorted(source_summary)
+
+    ax = grid[0][0]
+    positions = range(len(sources))
+    eligible = [int(source_summary[name].get("eligible_cases", 0)) for name in sources]
+    quarantined = [int(source_summary[name].get("quarantined_cases", 0)) for name in sources]
+    frozen = [int(source_summary[name].get("frozen_external_cases", 0)) for name in sources]
+    ax.bar(positions, eligible, 0.55, label="Elegíveis", color=COLORS[0])
+    ax.bar(positions, quarantined, 0.55, label="Quarentena", color="#D1495B",
+           bottom=eligible)
+    ax.bar(positions, frozen, 0.55, label="Benchmark histórico", color=COLORS[1],
+           bottom=[a + b for a, b in zip(eligible, quarantined, strict=True)])
+    ax.set(xticks=list(positions), xticklabels=[names.get(s, s) for s in sources],
+           title="(a) Composição do corpus por fonte", ylabel="Casos")
+    ax.legend(frameon=False, fontsize=8)
+
+    ax = grid[0][1]
+    records = [
+        record
+        for record in corpus.get("cases", [])
+        if isinstance(record, dict) and isinstance(record.get("signal"), dict)
+    ]
+    gate = corpus.get("quality_config", {})
+    min_finite = 90.0
+    if isinstance(gate, dict):
+        min_finite = float(gate.get("min_finite_fraction", 0.9)) * 100
+    styles = (
+        ("include", COLORS[0], "o", "Elegível", True),
+        ("quarantine", "#D1495B", "x", "Quarentena", False),
+        ("exclude", ".55", "d", "Excluído", False),
+    )
+    for status, color, marker, label, filled in styles:
+        selected = [record for record in records if record.get("quality_status") == status]
+        if not selected:
+            continue
+        xs = [
+            float(record["signal"].get("finite_fraction", float("nan"))) * 100
+            for record in selected
+        ]
+        ys = [
+            float(record.get("windows", {}).get("accepted_fraction", float("nan"))) * 100
+            for record in selected
+        ]
+        ax.plot(xs, ys, marker=marker, linestyle="none", color=color, markersize=4,
+                label=label, markerfacecolor=color if filled else "none")
+    ax.axvline(min_finite, color=COLORS[1], linewidth=0.9, linestyle="--")
+    ax.set(title="(b) Qualidade: finitude x janelas",
+           xlabel="Amostras EEG finitas (%)", ylabel="Janelas aceitas (%)",
+           xlim=(0, 100.5), ylim=(0, 100.5))
+    ax.legend(frameon=False, fontsize=8, loc="lower left")
+
+    ax = grid[1][0]
+    rows = [row for row in history if isinstance(row, dict)]
+    epochs = [float(row.get("epoch", index + 1)) for index, row in enumerate(rows)]
+    for key, label, marker in (
+        ("train_loss", "Loss treino", "o"),
+        ("validation_mae", "MAE validação", "s"),
+        ("validation_rmse", "RMSE validação", "^"),
+    ):
+        values = [float(row[key]) for row in rows if key in row]
+        if len(values) != len(epochs):
+            continue
+        ax.plot(epochs, values, marker=marker, color=COLORS[0] if marker == "o" else COLORS[1],
+                linewidth=1.1, label=label,
+                linestyle="-" if marker == "o" else ("--" if marker == "s" else ":"))
+    ax.set(title="(c) Histórico de treino e validação",
+           xlabel="Época", ylabel="Loss / pontos BIS")
+    ax.legend(frameon=False, fontsize=8)
+
+    ax = grid[1][1]
+    counts = np.unique(np.concatenate((
+        [float(anchor_cases)],
+        np.geomspace(anchor_cases, LEARNING_CURVE_MAX_CASES, 200),
+    )))
+    projected = theoretical_training_mae(counts, anchor_cases=anchor_cases, anchor_mae=holdout_mae)
+    ax.plot(np.log10(counts), projected, color=COLORS[0], linewidth=1.4, label="Projeção teórica")
+    ax.plot([np.log10(anchor_cases)], [holdout_mae], marker="D", color=COLORS[1],
+            markersize=6, linestyle="none", label="MAE medida hoje")
+    ticks = [count for count in LEARNING_CURVE_KEY_COUNTS if count >= anchor_cases]
+    ax.set(title="(d) Projeção por casos de treino (não medida)",
+           xlabel="Casos de treino (escala log)", ylabel="MAE projetada (pontos BIS)",
+           xticks=[float(np.log10(count)) for count in ticks],
+           xticklabels=[str(count) for count in ticks])
+    ax.legend(frameon=False, fontsize=8)
+
+    for row in grid:
+        for axis in row:
+            axis.grid(color=".9", linewidth=0.5)
+            axis.spines["top"].set_visible(False)
+            axis.spines["right"].set_visible(False)
+    save_figure(
+        fig,
+        "support_panels",
+        ["reports/corpus_manifest.json", f"models/{MODEL_FILES[0]}",
+         "reports/figshare_holdout_evaluation.json"],
+    )
 
 
 def main():
@@ -645,18 +767,22 @@ def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     reports = load_reports()
     audit_reports(reports)
-    zones = load_zone_reports()
-    audit_zone_reports(reports, zones)
+    pk_reports = load_pk_reports()
+    audit_pk_reports(reports, pk_reports)
     figure_pipeline(reports)
     figure_comparison(reports)
     figure_offset(reports)
     figure_bootstrap(reports)
-    figure_zones(zones)
+    figure_pk(pk_reports)
+    figure_support_panels(reports)
     if args.infer_trajectory:
         infer_trajectory()
     if args.infer_trajectory or args.trajectory:
         figure_trajectory()
-    print(f"audited {len(reports)} report snapshots + {len(zones)} zone snapshots; generated historical figures")
+    print(
+        f"audited {len(reports)} report snapshots + {len(pk_reports)} Pk snapshots; "
+        "generated historical figures"
+    )
 
 
 if __name__ == "__main__":

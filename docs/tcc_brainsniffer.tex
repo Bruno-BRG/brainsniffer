@@ -15,6 +15,12 @@
 \usepackage{float}
 \usepackage{placeins}
 
+% Deixa os floats ocuparem mais da página e reduz páginas só com figuras.
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.75}
+
 \sloppy
 
 \DeclareRobustCommand{\artefato}[1]{\url{#1}}
@@ -136,7 +142,7 @@ Foram calculados o erro absoluto médio (Mean Absolute Error, MAE), a raiz do er
 \end{equation}
 O resultado principal agrega todas as janelas aceitas (casos longos pesam mais), em vez de tirar a média por pessoa. O viés é a média de predito menos referência. As faixas são $[0,40)$, $[40,60)$, $[60,80)$ e $[80,100]$, aqui lidas com rótulos curtos apenas para comunicação --- profunda, geral adequada, leve/transicional e acordado --- sem validar limiar clínico. Pearson quantifica associação linear e não acordo; não foram estimados, nesta execução, limites de concordância, coeficiente de concordância ou calibração clínica. As quatro faixas são apenas uma apresentação interna e não constituem classes clínicas independentes \cite{brainsnifferArtefatos,tripodai}.
 
-A análise por zona estratifica essas mesmas faixas pelo BIS verdadeiro: por zona, $n$, MAE, RMSE, viés e recall (fração com faixa predita correta), além da matriz de confusão $4\times4$ em ordem profunda--geral--leve--acordado. Um recorte exploratório BIS$<20$, subset da profunda, sinaliza risco de padrão isoelétrico/supressão de surtos, sem ser quinta classe ou detector validado. O comando \texttt{evaluate-zones} reaproveita janelas e predições dos mesmos benchmarks, sem retreino, nos quatro relatórios \texttt{zone\_*.json} em \artefato{reports/} \cite{brainsnifferArtefatos}.
+A associação ordinal entre estimativa e referência é medida pela probabilidade de predição $P_K$ \cite{smith1996}, variante reescalada da medida $d_{y.x}$ de Kim: a probabilidade de o indicador ordenar corretamente duas profundidades observadas distintas, valendo 1 na ordem perfeita e 0,5 no acaso. Pares empatados na escala observada são excluídos, porque não informam ordenação, e pares empatados no indicador contam 0,5. Por depender só da ordenação, $P_K$ é invariante a reescala afim. O comando \texttt{evaluate-pk} reaproveita janelas e predições dos mesmos benchmarks, sem retreino, em \texttt{pk\_*.json} \cite{brainsnifferArtefatos,smith1996}.
 
 O bootstrap estima a incerteza sorteando casos inteiros com reposição, juntando todas as janelas sorteadas e recalculando a métrica. Assim, respeita melhor a dependência dentro de cada caso do que sortear janelas, mas o resultado continua ponderado pela duração. Foram usadas $B=1.000$ réplicas, seed 42 e percentis 2,5/97,5 para o intervalo de 95\%. Com apenas cinco casos Figshare, o intervalo é exploratório; 1.000 réplicas não equivalem a 1.000 casos \cite{brainsnifferArtefatos,field2007,archer2021}.
 
@@ -207,49 +213,36 @@ No VitalDB, o MAE do candidato caiu em 14 dos 15 casos pareados; no \texttt{vita
 \label{fig:comparison}
 \end{figure}
 
-\subsection{Precisão por zona BIS verdadeira}
+\subsection{Probabilidade de predição $P_K$}
 
-O erro se distribui de forma desigual entre zonas. A Tabela~\ref{tab:zonas} e a Figura~\ref{fig:zones} estratificam pelo BIS verdadeiro nos mesmos benchmarks; BIS$<20$ é subset exploratório da profunda. Fontes: os quatro relatórios \texttt{zone\_*.json} em \artefato{reports/} \cite{brainsnifferArtefatos}.
+A associação ordinal é medida nos dois benchmarks pela probabilidade de predição $P_K$ de Smith, Dutton e Smith \cite{smith1996}, que responde a uma pergunta diferente da de MAE e viés: com que frequência o indicador ordena corretamente duas profundidades observadas distintas? A Tabela~\ref{tab:pk} e a Figura~\ref{fig:pk} trazem os valores e os intervalos por caso. Fontes: os quatro relatórios \texttt{pk\_*.json} em \artefato{reports/} \cite{brainsnifferArtefatos}.
 
 \begin{table}[H]
 \centering
-\setlength{\tabcolsep}{4pt}
-\renewcommand{\arraystretch}{0.92}
-\footnotesize
-\caption{MAE, viés e recall por zona BIS verdadeira (recall = fração com faixa correta). BIS$<20$ é subset da profunda. Mesmos 5 Figshare e 15 VitalDB anteriores.}
-\label{tab:zonas}
-\begin{tabular}{llrrrr}
+\small
+\caption{Probabilidade de predição $P_K$ nos mesmos benchmarks históricos. $P_K=1$ é ordem perfeita e $0{,}5$ é acaso. IC 95\% por reamostragem de casos ($B=1.000$, seed 42). MAE e Pearson repetem as tabelas anteriores.}
+\label{tab:pk}
+\begin{tabular}{llrrrrr}
 \hline
-Conjunto & Zona (BIS) & $n$ & MAE & Viés & Recall\\
+Benchmark & Modelo & Janelas & $P_K$ & IC 95\% & MAE & Pearson\\
 \hline
-Figshare ativo & profunda 0--40 & 1.773 & 5,64 & $+4{,}91$ & 0,587\\
-Figshare ativo & geral 40--60 & 2.584 & 5,53 & $+1{,}02$ & 0,638\\
-Figshare ativo & leve 60--80 & 592 & 11,20 & $+0{,}26$ & 0,414\\
-Figshare ativo & acordado 80--100 & 574 & 13,73 & $-12{,}45$ & 0,517\\
-Figshare misto & profunda 0--40 & 1.773 & 6,24 & $+5{,}82$ & 0,563\\
-Figshare misto & geral 40--60 & 2.584 & 5,31 & $+1{,}35$ & 0,631\\
-Figshare misto & leve 60--80 & 592 & 11,42 & $+1{,}92$ & 0,370\\
-Figshare misto & acordado 80--100 & 574 & 9,37 & $-5{,}60$ & 0,714\\
-VitalDB ativo & profunda 0--40 & 14.111 & 17,95 & $+17{,}34$ & 0,452\\
-VitalDB ativo & geral 40--60 & 21.580 & 8,42 & $-6{,}78$ & 0,421\\
-VitalDB ativo & leve 60--80 & 2.214 & 15,94 & $-15{,}22$ & 0,190\\
-VitalDB ativo & acordado 80--100 & 825 & 13,71 & $-12{,}61$ & 0,448\\
-VitalDB misto & profunda 0--40 & 14.111 & 10,03 & $+8{,}06$ & 0,534\\
-VitalDB misto & geral 40--60 & 21.580 & 6,75 & $-5{,}06$ & 0,645\\
-VitalDB misto & leve 60--80 & 2.214 & 15,54 & $-14{,}91$ & 0,178\\
-VitalDB misto & acordado 80--100 & 825 & 14,05 & $-13{,}11$ & 0,425\\
+Figshare & ativo & 5.523 & 0,773 & 0,679--0,828 & 7,03 & 0,784\\
+Figshare & misto & 5.523 & 0,774 & 0,676--0,835 & 6,69 & 0,818\\
+VitalDB & ativo & 38.730 & 0,515 & 0,434--0,581 & 12,43 & 0,024\\
+VitalDB & misto & 38.730 & 0,672 & 0,591--0,737 & 8,60 & 0,688\\
 \hline
 \end{tabular}
 \end{table}
 
-No Figshare, sem BIS$<20$ ($n=0$), a zona leve é a mais difícil (MAE $\approx 11$, recall $0{,}37$--$0{,}41$); o ganho do misto concentra-se no acordado (MAE 13,73 para 9,37; recall 0,517 para 0,714). No VitalDB, o ativo colapsa nas extremidades: profunda com MAE 17,95 (viés $+17{,}34$) e 12.214 das 21.580 janelas gerais preditas como profundas. No subset BIS$<20$ ($n=2.301$), MAE 60,73 no ativo contra 12,15 no misto; profunda vai a 10,03 e geral a 6,75 (recall 0,645), mas leve (15,54) e acordado (14,05) não melhoram. Pearson intrafaixa não conduz a leitura \cite{brainsnifferArtefatos}.
+No Figshare, o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto melhora MAE (7,03 para 6,69) e Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico, ou seja, o ganho é de escala e não de ordenação. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996,brainsnifferArtefatos}.
 
 \begin{figure}[tbp]
 \centering
-\includegraphics[width=0.9\columnwidth]{figures/zone_accuracy.pdf}
-\caption{MAE por zona BIS verdadeira (Figshare 5/5.523; VitalDB 15/38.730), ativo vs misto. Rótulos $n$ por zona. No VitalDB, o subset BIS$<20$ ($n=2.301$) tem MAE 60,7 no ativo vs 12,2 no misto \cite{brainsnifferArtefatos}.}
-\label{fig:zones}
+\includegraphics[width=0.86\columnwidth]{figures/pk_prediction.pdf}
+\caption{Probabilidade de predição $P_K$ (Figshare 5/5.523; VitalDB 15/38.730), ativo vs misto, com IC 95\% por reamostragem de casos ($B=1.000$, seed 42). A linha pontilhada marca o acaso em 0,5. O indicador é a estimativa da CNN e a escala observada é o BIS de referência do monitor, não um desfecho de resposta ao estímulo \cite{smith1996,brainsnifferArtefatos}.}
+\label{fig:pk}
 \end{figure}
+
 
 \subsection{Bootstrap agrupado e sensibilidade ao offset}
 
@@ -272,6 +265,18 @@ Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,0
 \end{figure}
 
 \FloatBarrier
+\subsection{Painéis de apoio do console interativo}
+
+A Figura~\ref{fig:support} reúne as quatro visões de apoio do console, para que a demonstração e o texto mostrem a mesma informação. As três primeiras vêm de \artefato{reports/corpus\_manifest.json} e \artefato{models/brainsniffer\_cnn.json}; a quarta é projeção declarada, ancorada no MAE 7,03, e não curva medida \cite{brainsnifferArtefatos}.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/support_panels.pdf}
+\caption{Painéis de apoio replicados no console. (a) Casos por fonte, com elegíveis, quarentena e benchmark histórico. (b) Finitude do EEG contra janelas aceitas; a linha tracejada marca o gate de 90\%. (c) Histórico de treino e validação. (d) Projeção de MAE por casos, ancorada no MAE 7,03 medido: cenário de planejamento, não curva medida \cite{brainsnifferArtefatos}.}
+\label{fig:support}
+\end{figure}
+
+
 \section{Discussão e limitações}
 
 A degradação do ativo treinado só no Figshare, quando aplicado ao VitalDB, é evidência interna de sensibilidade à troca de fonte de dados, não prova de qual diferença (equipamento, centro, ganho, montagem, população ou distribuição do BIS) a causou. A redução de erro do candidato misto é compatível com adaptação após incorporar participantes VitalDB ao desenvolvimento; como esse benchmark é da mesma fonte e já havia sido observado, ele deve gerar uma hipótese para uma nova coorte travada, não uma alegação de generalização externa \cite{brainsnifferArtefatos,lee2022,tripodai,imdrfn88}.
@@ -282,7 +287,7 @@ O bootstrap representa somente a variabilidade de reamostrar os casos disponíve
 
 O alvo é a saída BIS, que pode responder a EMG, bloqueio neuromuscular, cetamina e atrasos; portanto, baixo erro contra o monitor não equivale a medir consciência ou efeito farmacológico verdadeiro \cite{schuller2015,hans2005,pilge2006}. De modo semelhante, as faixas e os limiares de qualidade do protótipo são heurísticas internas \cite{brainsnifferArtefatos}. DOSE-I deve permanecer uma tarefa separada para MOAA/S e estado de consciência, sem conversão artificial para BIS \cite{dosei}.
 
-A leitura por zona mostra onde o agregado engana: o MAE global 12,43 do ativo no VitalDB combina zona geral razoável (8,42) com colapso na profunda (17,95) e no subset isoelétrico (60,73). A melhora do misto é desigual --- profunda e geral melhoram, leve e acordado não --- e, como o benchmark é histórico e reutilizado, gera hipótese para coorte travada, não evidência confirmatória \cite{brainsnifferArtefatos,tripodai}.
+A leitura ordinal separa dois diagnósticos que o MAE confunde: no VitalDB o ativo tem $P_K$ 0,515, praticamente acaso, enquanto no Figshare alcança 0,773; o modelo não perdeu apenas calibração, perdeu a capacidade de ordenar profundidade. No Figshare, o misto eleva Pearson sem mover $P_K$, o que distingue ajuste de escala de ganho de ordenação. Como a escala observada aqui é o BIS de referência, e não um desfecho de resposta ao estímulo, esses valores não substituem validação clínica \cite{smith1996,brainsnifferArtefatos}.
 
 Em engenharia, a cadeia registra hashes, partições, pré-processamento, relatórios e replay de arquivos. A trajetória individual torna visíveis erros que os agregados ocultam, mas não substitui a análise entre casos. Investigar o efeito das lacunas e a concordância em dados secundários são extensões metodológicas possíveis, não requisitos adicionais para concluir este TCC retrospectivo \cite{brainsnifferArtefatos,tripodai}.
 
