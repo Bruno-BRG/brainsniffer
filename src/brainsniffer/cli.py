@@ -45,7 +45,12 @@ from .pipeline.baseline import (
 )
 from .pipeline.benchmark import benchmark_latency
 from .pipeline.intake import validate_intake_metadata
-from .pipeline.metrics import bootstrap_case_metrics, compute_metrics, compute_zone_metrics
+from .pipeline.metrics import (
+    bootstrap_case_metrics,
+    bootstrap_case_prediction_probability,
+    compute_metrics,
+    prediction_probability,
+)
 from .pipeline.realtime import replay_case
 from .pipeline.stream_audit import MICROVOLT_ALIASES, StreamAudit
 from .pipeline.streaming import StreamingResampler
@@ -696,41 +701,53 @@ def build_parser() -> argparse.ArgumentParser:
         help="salvar o relatório JSON completo da avaliação externa",
     )
 
-    zones = subparsers.add_parser(
-        "evaluate-zones",
-        help="recalcular métricas estratificadas por zona BIS sem retreinar",
+    pk_eval = subparsers.add_parser(
+        "evaluate-pk",
+        help="calcular a probabilidade de predição Pk sem retreinar",
     )
-    zones.add_argument("--checkpoint", type=Path, default=default_model_path())
-    zones.add_argument(
+    pk_eval.add_argument("--checkpoint", type=Path, default=default_model_path())
+    pk_eval.add_argument(
         "--data-dir",
         type=Path,
         default=None,
         help="diretório Figshare com case*.mat; usa split de teste do checkpoint",
     )
-    zones.add_argument(
+    pk_eval.add_argument(
         "--case",
         type=Path,
         action="append",
         default=None,
         help="arquivo externo .npz; repita para vários casos (modo externo)",
     )
-    zones.add_argument(
+    pk_eval.add_argument(
         "--external-dir",
         type=Path,
         default=None,
         help="diretório com vitaldb_case*.npz (modo externo)",
     )
-    zones.add_argument(
+    pk_eval.add_argument(
         "--min-quality",
         type=float,
         default=None,
         help="sobrescrever o limiar salvo no checkpoint",
     )
-    zones.add_argument(
+    pk_eval.add_argument(
+        "--bootstrap-samples",
+        type=int,
+        default=1000,
+        help="reamostragens por caso para o intervalo exploratório de Pk",
+    )
+    pk_eval.add_argument(
+        "--bootstrap-seed",
+        type=int,
+        default=42,
+        help="semente determinística do bootstrap por caso",
+    )
+    pk_eval.add_argument(
         "--report",
         type=Path,
         default=None,
-        help="salvar o relatório JSON por zona",
+        help="salvar o relatório JSON de Pk",
     )
 
     audit = subparsers.add_parser(
@@ -1235,7 +1252,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report_payload, ensure_ascii=False, indent=2))
         return 0
 
-    if args.command == "evaluate-zones":
+    if args.command == "evaluate-pk":
         model, preprocess, payload = load_checkpoint(args.checkpoint)
         min_quality = (
             float(args.min_quality)
@@ -1292,10 +1309,22 @@ def main(argv: list[str] | None = None) -> int:
             input_files = build_file_manifest([Path(f) for f in files])
             case_label = ",".join(test_cases)
         if not windows.signals.shape[0]:
-            raise SystemExit("Nenhuma janela válida para análise por zona")
+            raise SystemExit("Nenhuma janela válida para o cálculo de Pk")
         prediction = predict_model(model, windows.signals, device="cpu")
-        zone_report = compute_zone_metrics(windows.bis, prediction)
+        case_ids = windows.case_ids.astype(str)
         overall = compute_metrics(windows.bis, prediction)
+        pk = prediction_probability(windows.bis, prediction)
+        pk_bootstrap = (
+            bootstrap_case_prediction_probability(
+                windows.bis,
+                prediction,
+                case_ids,
+                n_bootstrap=args.bootstrap_samples,
+                seed=args.bootstrap_seed,
+            )
+            if np.unique(case_ids).size > 1
+            else {}
+        )
         report_payload = {
             "scope": "research_only",
             "checkpoint": str(args.checkpoint),
@@ -1307,11 +1336,13 @@ def main(argv: list[str] | None = None) -> int:
             "preprocess_config": asdict(preprocess),
             "min_quality": min_quality,
             "n_windows": int(windows.signals.shape[0]),
-            "overall": overall,
-            "by_zone": zone_report["zones"],
-            "isoelectric_subset_lt20": zone_report["isoelectric_subset_lt20"],
-            "confusion": zone_report["confusion"],
-            "zone_ranges": {"deep": [0, 40], "general": [40, 60], "light": [60, 80], "awake": [80, 100]},
+            "metrics": overall,
+            "pk": pk,
+            "pk_bootstrap": pk_bootstrap,
+            "bootstrap_samples": args.bootstrap_samples,
+            "bootstrap_seed": args.bootstrap_seed,
+            "observed_scale": "reference BIS do monitor, não um desfecho de resposta ao estímulo",
+            "pk_reference": "Smith WD, Dutton RC, Smith NT. Anesthesiology 1996;84(1):38-51",
             "retrained": False,
             "raw_eeg_in_report": False,
         }

@@ -74,9 +74,11 @@ if grep -Eqi 'Overfull \\[hv]box|undefined control sequence|citation.+undefined|
   exit 1
 fi
 
+# Limite elevado de 15 para 16 quando o Pk de Smith et al. (1996) e os painéis
+# de apoio entraram no artigo; o corpo de resultados não mudou de escopo.
 page_count="$(pdfinfo "${built_pdf}" | awk '/^Pages:/ {print $2}')"
-if [[ ! "${page_count}" =~ ^[0-9]+$ ]] || (( page_count > 15 )); then
-  echo "erro: PDF tem ${page_count:-contagem-indisponível} páginas; máximo permitido é 15" >&2
+if [[ ! "${page_count}" =~ ^[0-9]+$ ]] || (( page_count > 16 )); then
+  echo "erro: PDF tem ${page_count:-contagem-indisponível} páginas; máximo permitido é 16" >&2
   exit 1
 fi
 

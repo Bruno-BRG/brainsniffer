@@ -1,7 +1,7 @@
 {
   "scope": "research_only",
-  "checkpoint": "models\\brainsniffer_cnn.pt",
-  "checkpoint_sha256": "fde8e45fff2fa5414944686fd086fc3dd42248f247c7fb4ea1e31aa00618ee8c",
+  "checkpoint": "models\\brainsniffer_corpus_fixed.pt",
+  "checkpoint_sha256": "9fbfc4e88a629d93f615593ca361bcf441fe21a32bfb1abdd626d8bc93c6023b",
   "mode": "external",
   "cases": "external",
   "files": [
@@ -113,119 +113,25 @@
   },
   "min_quality": 0.2,
   "n_windows": 38730,
-  "overall": {
+  "metrics": {
     "n": 38730.0,
-    "mae": 12.432227095011251,
-    "rmse": 18.800117420377017,
-    "bias": 1.4032542808585902,
-    "pearson_r": 0.024117122210292205,
-    "stage_accuracy": 0.41959721146398143,
-    "stage_macro_f1": 0.3979746951886369
+    "mae": 8.600334839296993,
+    "rmse": 11.74064803329253,
+    "bias": -1.0121636775646166,
+    "pearson_r": 0.687584175640561,
+    "stage_accuracy": 0.5728117738187452,
+    "stage_macro_f1": 0.48616827523865147
   },
-  "by_zone": {
-    "deep": {
-      "n": 14111,
-      "share": 0.3643428866511748,
-      "mae": 17.94888658897298,
-      "rmse": 27.471817607291346,
-      "bias": 17.34024586994181,
-      "pearson_r": -0.7215972249642137,
-      "recall": 0.4520586776273829
-    },
-    "general": {
-      "n": 21580,
-      "share": 0.5571908081590499,
-      "mae": 8.416363668662735,
-      "rmse": 9.694603357277115,
-      "bias": -6.776384543223553,
-      "pearson_r": 0.24216493040825585,
-      "recall": 0.42085264133456907
-    },
-    "light": {
-      "n": 2214,
-      "share": 0.05716498838109992,
-      "mae": 15.940101591659863,
-      "rmse": 18.265800547890702,
-      "bias": -15.22167894575331,
-      "pearson_r": 0.46615926711368083,
-      "recall": 0.1897018970189702
-    },
-    "awake": {
-      "n": 825,
-      "share": 0.021301316808675447,
-      "mae": 13.70533798680161,
-      "rmse": 18.1721876388572,
-      "bias": -12.61211581143466,
-      "pearson_r": 0.35954281319922937,
-      "recall": 0.4484848484848485
-    }
+  "pk": 0.6721220267965641,
+  "pk_bootstrap": {
+    "mean": 0.6698064799113904,
+    "lower_95": 0.5906628376843186,
+    "upper_95": 0.736521976296392
   },
-  "isoelectric_subset_lt20": {
-    "n": 2301,
-    "share": 0.05941130906274206,
-    "mae": 60.72532127443369,
-    "rmse": 61.79005550787769,
-    "bias": 60.72532127443369,
-    "pearson_r": -0.4272785159977531
-  },
-  "confusion": {
-    "order": [
-      "deep",
-      "general",
-      "light",
-      "awake"
-    ],
-    "counts": [
-      [
-        6379,
-        5803,
-        1898,
-        31
-      ],
-      [
-        12214,
-        9082,
-        265,
-        19
-      ],
-      [
-        169,
-        1558,
-        420,
-        67
-      ],
-      [
-        6,
-        108,
-        341,
-        370
-      ]
-    ],
-    "recall": {
-      "deep": 0.4520586776273829,
-      "general": 0.42085264133456907,
-      "light": 0.1897018970189702,
-      "awake": 0.4484848484848485
-    }
-  },
-  "zone_ranges": {
-    "deep": [
-      0,
-      40
-    ],
-    "general": [
-      40,
-      60
-    ],
-    "light": [
-      60,
-      80
-    ],
-    "awake": [
-      80,
-      100
-    ]
-  },
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "observed_scale": "reference BIS do monitor, não um desfecho de resposta ao estímulo",
+  "pk_reference": "Smith WD, Dutton RC, Smith NT. Anesthesiology 1996;84(1):38-51",
   "retrained": false,
   "raw_eeg_in_report": false
 }

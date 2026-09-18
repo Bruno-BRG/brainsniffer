@@ -1,7 +1,14 @@
+import itertools
+
 import numpy as np
 import pytest
 
-from brainsniffer.pipeline.metrics import bootstrap_case_metrics, compute_metrics
+from brainsniffer.pipeline.metrics import (
+    bootstrap_case_metrics,
+    bootstrap_case_prediction_probability,
+    compute_metrics,
+    prediction_probability,
+)
 
 
 @pytest.mark.parametrize(
@@ -143,3 +150,85 @@ def test_bootstrap_case_metrics_is_reproducible_for_same_seed():
     second = bootstrap_case_metrics(target, prediction, cases, n_bootstrap=100, seed=42)
 
     assert first == second
+
+
+def _brute_force_pk(observed, indicator):
+    concordant = discordant = tied = 0
+    for left, right in itertools.combinations(range(len(observed)), 2):
+        if observed[left] == observed[right]:
+            continue
+        if indicator[left] == indicator[right]:
+            tied += 1
+        elif (observed[left] - observed[right]) * (indicator[left] - indicator[right]) > 0:
+            concordant += 1
+        else:
+            discordant += 1
+    total = concordant + discordant + tied
+    if total == 0:
+        return float('nan')
+    return (concordant + 0.5 * tied) / total
+
+
+@pytest.mark.parametrize('seed', [0, 1, 2])
+def test_prediction_probability_matches_brute_force_with_ties(seed):
+    rng = np.random.default_rng(seed)
+    for _ in range(40):
+        size = int(rng.integers(3, 40))
+        observed = rng.integers(0, 6, size=size).astype(float)
+        if rng.random() < 0.5:
+            indicator = rng.integers(0, 4, size=size).astype(float)
+        else:
+            indicator = observed + rng.normal(0.0, 1.5, size=size)
+        expected = _brute_force_pk(observed, indicator)
+        got = prediction_probability(observed, indicator)
+        if np.isnan(expected):
+            assert np.isnan(got)
+        else:
+            assert got == pytest.approx(expected, abs=1e-9)
+
+
+def test_prediction_probability_bounds_and_direction():
+    observed = np.arange(20.0)
+    assert prediction_probability(observed, observed.copy()) == pytest.approx(1.0)
+    assert prediction_probability(observed, -observed) == pytest.approx(0.0)
+    chance = prediction_probability(observed, np.full(observed.size, 7.0))
+    assert chance == pytest.approx(0.5)
+
+
+def test_prediction_probability_is_invariant_to_affine_rescaling():
+    rng = np.random.default_rng(7)
+    observed = rng.integers(0, 101, size=200).astype(float)
+    indicator = observed + rng.normal(0.0, 12.0, size=observed.size)
+    base = prediction_probability(observed, indicator)
+    rescaled = prediction_probability(observed, indicator * 3.7 - 11.0)
+    assert rescaled == pytest.approx(base, abs=1e-12)
+
+
+def test_prediction_probability_rejects_degenerate_inputs():
+    assert np.isnan(prediction_probability(np.full(6, 42.0), np.arange(6.0)))
+    assert np.isnan(prediction_probability(np.array([1.0]), np.array([1.0])))
+    with pytest.raises(ValueError):
+        prediction_probability(np.arange(4.0), np.arange(3.0))
+
+
+def test_bootstrap_case_prediction_probability_brackets_estimate():
+    rng = np.random.default_rng(11)
+    cases = np.repeat([f'case{index}' for index in range(6)], 30)
+    observed = rng.integers(0, 101, size=cases.size).astype(float)
+    indicator = observed + rng.normal(0.0, 15.0, size=cases.size) + np.repeat(
+        rng.normal(0.0, 6.0, size=6), 30
+    )
+    interval = bootstrap_case_prediction_probability(
+        observed, indicator, cases, n_bootstrap=120, seed=42
+    )
+    point = prediction_probability(observed, indicator)
+    assert interval['lower_95'] <= point <= interval['upper_95']
+    assert 0.0 <= interval['lower_95'] <= interval['upper_95'] <= 1.0
+
+
+def test_bootstrap_case_prediction_probability_requires_two_cases():
+    observed = np.arange(10.0)
+    with pytest.raises(ValueError):
+        bootstrap_case_prediction_probability(
+            observed, observed, np.full(10, 'only'), n_bootstrap=5
+        )
