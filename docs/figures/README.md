@@ -1,6 +1,6 @@
 # Mapa das figuras científicas
 
-As sete figuras são geradas por `docs/generate_figures.py` a partir de listas
+As oito figuras são geradas por `docs/generate_figures.py` a partir de listas
 explícitas de snapshots JSON rastreados pelo Git. A geração valida escopo,
 holdouts, contagens de janelas, pré-processamento e parâmetros de bootstrap
 antes de escrever os PNGs e PDFs vetoriais. O fluxograma também lê os dois
@@ -15,8 +15,10 @@ entram nas figuras.
 
 - Renderizador: Matplotlib (backend Agg), sem desenho direto por Pillow,
   seaborn, cartões, flores, cabeçalhos decorativos ou caixas de conclusão.
-- Superfície: largura física de 16 cm, incluída a `\\columnwidth` no SBC;
-  PNG a 300 dpi e PDF vetorial com fontes TrueType incorporadas.
+- Superfície: largura física de 15 cm (bloco de texto SBC: A4 menos 3 cm de
+  margem de cada lado), igual a `\\columnwidth`, de modo que o TeX insere as
+  figuras sem reescala e os pontos tipográficos não encolhem. PNG a 300 dpi e
+  PDF vetorial com fontes TrueType incorporadas.
 - Tipografia: DejaVu Sans distribuída com Matplotlib, 9–10 pt na escala final.
   Fundo branco, eixos pretos de 0,7 pt e grid cinza claro de 0,5 pt.
 - Paleta: azul `#0072B2`, vermelhão `#D55E00` e neutros; sem gradientes.
@@ -109,17 +111,31 @@ entram nas figuras.
   `reports/pk_vitaldb_active.json` e `reports/pk_vitaldb_mixed.json`, auditados
   contra os quatro agregados históricos.
 
-## `support_panels.png`
+## `corpus_panels.png`
 
-- Pergunta: quais visões de apoio o console exibe e de onde vem cada uma?
-- Takeaway: composição do corpus, mapa de qualidade, histórico de treino e uma
-  projeção de MAE por casos de treino; as três primeiras são leituras diretas,
-  a quarta é cenário declarado.
+- Pergunta: como o corpus se compõe e por que os dois gates de qualidade não são
+  redundantes?
+- Takeaway: os casos se dividem em elegíveis, quarentena e benchmark histórico,
+  e um caso pode ter quase todo o EEG finito e ainda perder janelas por
+  qualidade, ou ser retido antes da contagem por lacuna inválida.
 - Painéis: (a) casos por fonte, separando elegíveis, quarentena e benchmark
-  histórico; (b) finitude do EEG contra fração de janelas aceitas, com o gate de
-  90% de amostras finitas; (c) histórico de treino e validação por época;
-  (d) projeção ancorada no MAE 7,03 do holdout, explicitamente não medida.
-- Fontes: `reports/corpus_manifest.json`, `models/brainsniffer_cnn.json` e
+  histórico, com a soma rotulada por fonte; (b) fração de amostras de EEG
+  finitas contra fração de janelas aceitas, com a linha tracejada no gate de 90%
+  de finitude.
+- Fontes: `reports/corpus_manifest.json`.
+
+## `training_panels.png`
+
+- Pergunta: como o treinamento se comporta e o que uma projeção de casos
+  permitiria planejar?
+- Takeaway: a perda de treino e as métricas de validação medem coisas diferentes
+  (adimensional versus pontos BIS) e o critério de leitura é a validação; a
+  projeção é um cenário ancorado no único valor medido, não uma curva medida.
+- Painéis: (a) histórico de treino e validação por época (perda de treino,
+  adimensional, e MAE/RMSE de validação, em pontos BIS); (b) projeção teórica de
+  MAE por número de casos de treino em escala logarítmica, ancorada em 13 casos e
+  MAE 7,03, explicitamente não medida.
+- Fontes: `models/brainsniffer_cnn.json` e
   `reports/figshare_holdout_evaluation.json`.
 
 ## `bis_trajectory.png`
