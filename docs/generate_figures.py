@@ -219,7 +219,8 @@ def audit_reports(reports: dict[str, dict[str, Any]]) -> None:
         ensure(expected == observed, f"metric n differs from n_windows in {name}")
 
 
-# Physical width matches the SBC text block (16 cm); no downscaling in TeX.
+# Physical width matches the SBC text block exactly (A4 21 cm - 3 cm - 3 cm = 15 cm),
+# so TeX inserts the figures at scale 1 and the point sizes below survive unscaled.
 plt.rcParams.update(
     {
         "font.family": "DejaVu Sans",
@@ -237,7 +238,7 @@ plt.rcParams.update(
         "savefig.facecolor": "white",
     }
 )
-WIDTH = 16 / 2.54
+WIDTH = 15 / 2.54
 COLORS = ("#0072B2", "#D55E00")
 MARKERS = ("o", "s")
 LABELS = ("Ativo", "Misto fixo")
@@ -310,11 +311,14 @@ def figure_comparison(reports):
     active = {r["case_id"]: r for r in reports[HOLDOUTS[2]]["per_case"]}
     mixed = {r["case_id"]: r for r in reports[HOLDOUTS[3]]["per_case"]}
     ids = sorted(active, key=lambda k: mixed[k]["mae"] - active[k]["mae"])
+    handles = []
     for y, key in enumerate(ids):
         vals = [active[key]["mae"], mixed[key]["mae"]]
         ax.plot(vals, [y, y], color=".55", linewidth=0.8)
         for model, val in enumerate(vals):
-            point(ax, val, y, model, label=LABELS[model] if y == 0 else None)
+            drawn = point(ax, val, y, model, label=LABELS[model] if y == 0 else None)
+            if y == 0:
+                handles.extend(drawn)
     ax.set(
         yticks=range(len(ids)),
         yticklabels=[k.removeprefix("vitaldb_") for k in ids],
@@ -325,7 +329,13 @@ def figure_comparison(reports):
         title="(c) VitalDB: 15 casos pareados",
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
-    ax.legend(loc="lower right", frameon=False)
+    fig.legend(
+        handles=handles,
+        labels=list(LABELS),
+        loc="outside lower center",
+        ncol=2,
+        frameon=False,
+    )
     save_figure(fig, "comparison", [f"reports/{n}" for n in HOLDOUTS])
 
 
@@ -585,7 +595,7 @@ def figure_trajectory():
 
 def figure_pk(pk_reports: dict[str, dict[str, Any]]) -> None:
     """Prediction probability Pk with case-cluster intervals, ativo vs misto."""
-    fig, ax = plt.subplots(figsize=(WIDTH, 2.7), layout="constrained")
+    fig, ax = plt.subplots(figsize=(WIDTH, 3.2), layout="constrained")
     benchmarks = [name for name, _, _ in PK_HOLDOUTS]
     for model in range(2):
         values: list[float] = []
@@ -634,16 +644,8 @@ def figure_pk(pk_reports: dict[str, dict[str, Any]]) -> None:
     save_figure(fig, "pk_prediction", [f"reports/{n}" for n in PK_FILES])
 
 
-def figure_support_panels(reports):
-    """Corpus, qualidade, histórico de treino e projeção usados no console."""
-    import numpy as np
-
-    from brainsniffer.pipeline.planning import (
-        LEARNING_CURVE_KEY_COUNTS,
-        LEARNING_CURVE_MAX_CASES,
-        theoretical_training_mae,
-    )
-
+def figure_corpus_panels(reports):
+    """Composição do corpus e mapa de qualidade, em duas colunas legíveis."""
     corpus = reports["corpus_manifest.json"]
     summary = corpus.get("summary", {})
     source_summary = summary.get("source_summary", {}) if isinstance(summary, dict) else {}
@@ -651,32 +653,41 @@ def figure_support_panels(reports):
         isinstance(source_summary, dict) and bool(source_summary),
         "corpus source summary missing",
     )
-    model = json.loads((ROOT / "models" / MODEL_FILES[0]).read_text())
-    history = model.get("history", [])
-    ensure(isinstance(history, list) and bool(history), "training history missing")
-    holdout_mae = float(metrics(reports["figshare_holdout_evaluation.json"])["mae"])
-    anchor_cases = len(model["split"]["train_cases"])
-    ensure(anchor_cases > 0 and holdout_mae > 0, "planning anchor missing")
 
-    fig, grid = plt.subplots(2, 2, figsize=(WIDTH, 3.2), layout="constrained")
+    fig, grid = plt.subplots(1, 2, figsize=(WIDTH, 4.0), layout="constrained")
     names = {"figshare": "Figshare", "vitaldb": "VitalDB"}
     sources = sorted(source_summary)
 
-    ax = grid[0][0]
-    positions = range(len(sources))
+    ax = grid[0]
+    positions = list(range(len(sources)))
     eligible = [int(source_summary[name].get("eligible_cases", 0)) for name in sources]
     quarantined = [int(source_summary[name].get("quarantined_cases", 0)) for name in sources]
     frozen = [int(source_summary[name].get("frozen_external_cases", 0)) for name in sources]
-    ax.bar(positions, eligible, 0.55, label="Elegíveis", color=COLORS[0])
-    ax.bar(positions, quarantined, 0.55, label="Quarentena", color="#D1495B",
-           bottom=eligible)
-    ax.bar(positions, frozen, 0.55, label="Benchmark histórico", color=COLORS[1],
-           bottom=[a + b for a, b in zip(eligible, quarantined, strict=True)])
-    ax.set(xticks=list(positions), xticklabels=[names.get(s, s) for s in sources],
-           title="(a) Composição do corpus por fonte", ylabel="Casos")
-    ax.legend(frameon=False, fontsize=8)
+    ax.bar(positions, eligible, 0.5, label="Elegíveis", color=COLORS[0])
+    ax.bar(positions, quarantined, 0.5, label="Quarentena", color="#D1495B", bottom=eligible)
+    ax.bar(
+        positions,
+        frozen,
+        0.5,
+        label="Benchmark histórico",
+        color=COLORS[1],
+        bottom=[a + b for a, b in zip(eligible, quarantined, strict=True)],
+    )
+    totals = [
+        a + b + c for a, b, c in zip(eligible, quarantined, frozen, strict=True)
+    ]
+    for position, total in enumerate(totals):
+        ax.text(position, total + 1.2, f"{total} casos", ha="center", fontsize=8, color=".3")
+    ax.set(
+        xticks=positions,
+        xticklabels=[names.get(source, source) for source in sources],
+        title="(a) Composição do corpus por fonte",
+        ylabel="Casos",
+        ylim=(0, max(totals) * 1.28),
+    )
+    ax.legend(frameon=False, fontsize=8, loc="upper left", borderaxespad=0.6)
 
-    ax = grid[0][1]
+    ax = grid[1]
     records = [
         record
         for record in corpus.get("cases", [])
@@ -703,62 +714,131 @@ def figure_support_panels(reports):
             float(record.get("windows", {}).get("accepted_fraction", float("nan"))) * 100
             for record in selected
         ]
-        ax.plot(xs, ys, marker=marker, linestyle="none", color=color, markersize=4,
-                label=label, markerfacecolor=color if filled else "none")
+        ax.plot(
+            xs,
+            ys,
+            marker=marker,
+            linestyle="none",
+            color=color,
+            markersize=5,
+            label=label,
+            markerfacecolor=color if filled else "none",
+        )
     ax.axvline(min_finite, color=COLORS[1], linewidth=0.9, linestyle="--")
-    ax.set(title="(b) Qualidade: finitude x janelas",
-           xlabel="Amostras EEG finitas (%)", ylabel="Janelas aceitas (%)",
-           xlim=(0, 100.5), ylim=(0, 100.5))
-    ax.legend(frameon=False, fontsize=8, loc="lower left")
+    ax.text(
+        min_finite - 2,
+        6,
+        f"gate {min_finite:.0f}%",
+        fontsize=8,
+        color=COLORS[1],
+        ha="right",
+        va="bottom",
+    )
+    ax.set(
+        title="(b) Qualidade: finitude x janelas",
+        xlabel="Amostras EEG finitas (%)",
+        ylabel="Janelas aceitas (%)",
+        xlim=(0, 104),
+        ylim=(0, 104),
+    )
+    ax.legend(frameon=False, fontsize=8, loc="lower left", borderaxespad=0.6)
 
-    ax = grid[1][0]
+    for axis in grid:
+        axis.grid(color=".9", linewidth=0.5)
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+    save_figure(fig, "corpus_panels", ["reports/corpus_manifest.json"])
+
+
+def figure_training_panels(reports):
+    """Histórico de treino e a projeção de casos, em duas colunas legíveis."""
+    import numpy as np
+
+    from brainsniffer.pipeline.planning import (
+        LEARNING_CURVE_KEY_COUNTS,
+        LEARNING_CURVE_MAX_CASES,
+        theoretical_training_mae,
+    )
+
+    model = json.loads((ROOT / "models" / MODEL_FILES[0]).read_text())
+    history = model.get("history", [])
+    ensure(isinstance(history, list) and bool(history), "training history missing")
+    holdout_mae = float(metrics(reports["figshare_holdout_evaluation.json"])["mae"])
+    anchor_cases = len(model["split"]["train_cases"])
+    ensure(anchor_cases > 0 and holdout_mae > 0, "planning anchor missing")
+
+    fig, grid = plt.subplots(1, 2, figsize=(WIDTH, 3.8), layout="constrained")
+
+    ax = grid[0]
     rows = [row for row in history if isinstance(row, dict)]
     epochs = [float(row.get("epoch", index + 1)) for index, row in enumerate(rows)]
-    for key, label, marker in (
-        ("train_loss", "Loss treino", "o"),
-        ("validation_mae", "MAE validação", "s"),
-        ("validation_rmse", "RMSE validação", "^"),
+    for key, label, marker, color, style in (
+        ("train_loss", "Loss treino", "o", COLORS[0], "-"),
+        ("validation_mae", "MAE validação", "s", COLORS[1], "--"),
+        ("validation_rmse", "RMSE validação", "^", ".35", ":"),
     ):
         values = [float(row[key]) for row in rows if key in row]
         if len(values) != len(epochs):
             continue
-        ax.plot(epochs, values, marker=marker, color=COLORS[0] if marker == "o" else COLORS[1],
-                linewidth=1.1, label=label,
-                linestyle="-" if marker == "o" else ("--" if marker == "s" else ":"))
-    ax.set(title="(c) Histórico de treino e validação",
-           xlabel="Época", ylabel="Loss / pontos BIS")
-    ax.legend(frameon=False, fontsize=8)
+        ax.plot(
+            epochs,
+            values,
+            marker=marker,
+            color=color,
+            linewidth=1.2,
+            label=label,
+            linestyle=style,
+        )
+    ax.set(
+        title="(a) Histórico de treino e validação",
+        xlabel="Época",
+        ylabel="Loss / pontos BIS",
+        xticks=epochs,
+        ylim=(0, max(float(row.get("validation_rmse", 0)) for row in rows) * 1.25),
+    )
+    ax.legend(frameon=False, fontsize=8, loc="upper right", borderaxespad=0.6)
 
-    ax = grid[1][1]
-    counts = np.unique(np.concatenate((
-        [float(anchor_cases)],
-        np.geomspace(anchor_cases, LEARNING_CURVE_MAX_CASES, 200),
-    )))
+    ax = grid[1]
+    grid_counts = np.geomspace(anchor_cases, LEARNING_CURVE_MAX_CASES, 200)
+    counts = np.unique(np.concatenate(([float(anchor_cases)], grid_counts)))
     projected = theoretical_training_mae(counts, anchor_cases=anchor_cases, anchor_mae=holdout_mae)
-    ax.plot(np.log10(counts), projected, color=COLORS[0], linewidth=1.4, label="Projeção teórica")
-    ax.plot([np.log10(anchor_cases)], [holdout_mae], marker="D", color=COLORS[1],
-            markersize=6, linestyle="none", label="MAE medida hoje")
-    ticks = [count for count in LEARNING_CURVE_KEY_COUNTS if count >= anchor_cases]
-    ax.set(title="(d) Projeção por casos de treino (não medida)",
-           xlabel="Casos de treino (escala log)", ylabel="MAE projetada (pontos BIS)",
-           xticks=[float(np.log10(count)) for count in ticks],
-           xticklabels=[str(count) for count in ticks])
-    ax.legend(frameon=False, fontsize=8)
+    ax.plot(np.log10(counts), projected, color=COLORS[0], linewidth=1.6, label="Projeção teórica")
+    ax.plot(
+        [np.log10(anchor_cases)],
+        [holdout_mae],
+        marker="D",
+        color=COLORS[1],
+        markersize=7,
+        linestyle="none",
+        label=f"Medido hoje ({holdout_mae:.2f})",
+    )
+    spaced = {count for count in LEARNING_CURVE_KEY_COUNTS[::3] if count >= anchor_cases}
+    ticks = sorted(spaced | {LEARNING_CURVE_MAX_CASES})
+    ax.set(
+        title="(b) Projeção por casos (não medida)",
+        xlabel="Casos de treino (escala log)",
+        ylabel="MAE projetada (pontos BIS)",
+        xticks=[float(np.log10(count)) for count in ticks],
+        xticklabels=[str(count) for count in ticks],
+        ylim=(holdout_mae * 0.72, holdout_mae * 1.06),
+    )
+    ax.legend(frameon=False, fontsize=8, loc="lower left", borderaxespad=0.6)
 
-    for row in grid:
-        for axis in row:
-            axis.grid(color=".9", linewidth=0.5)
-            axis.spines["top"].set_visible(False)
-            axis.spines["right"].set_visible(False)
+    for axis in grid:
+        axis.grid(color=".9", linewidth=0.5)
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
     save_figure(
         fig,
-        "support_panels",
-        ["reports/corpus_manifest.json", f"models/{MODEL_FILES[0]}",
-         "reports/figshare_holdout_evaluation.json"],
+        "training_panels",
+        [f"models/{MODEL_FILES[0]}", "reports/figshare_holdout_evaluation.json"],
     )
 
 
 def main():
+
+
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--infer-trajectory", action="store_true",
                         help="CPU inference on full preselected case19; no training/download")
@@ -774,7 +854,8 @@ def main():
     figure_offset(reports)
     figure_bootstrap(reports)
     figure_pk(pk_reports)
-    figure_support_panels(reports)
+    figure_corpus_panels(reports)
+    figure_training_panels(reports)
     if args.infer_trajectory:
         infer_trajectory()
     if args.infer_trajectory or args.trajectory:
