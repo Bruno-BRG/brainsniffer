@@ -21,10 +21,8 @@ entram nas figuras.
   PDF vetorial com fontes TrueType incorporadas.
 - Tipografia: DejaVu Sans distribuída com Matplotlib, 9–10 pt na escala final.
   Fundo branco, eixos pretos de 0,7 pt e grid cinza claro de 0,5 pt.
-- Paleta: azul `#0072B2`, vermelhão `#D55E00` e neutros; sem gradientes.
-- Distinção não cromática: círculo preenchido para o checkpoint ativo,
-  quadrado aberto para o candidato misto; IC misto tracejado. Segmentos cinza
-  unem os pares na comparação. No offset, métricas usam símbolos/linhas distintos.
+- Paleta: preto `#000000`, cinza `#555555` e neutros; sem gradientes e sem depender de cor para distinguir séries.
+- Distinção por formato (leitura em preto e branco): círculo preenchido e linha contínua para o checkpoint ativo, quadrado aberto e linha tracejada para o candidato misto; IC misto tracejado. Segmentos cinza unem os pares na comparação. No offset, métricas usam símbolos/linhas distintos (círculo/linha contínua vs. quadrado/linha tracejada). Na trajetória, BIS de referência em linha contínua e CNN em linha tracejada. Nas barras de corpus, elegíveis em preenchimento sólido, quarentena em hachurado (`///`) e benchmark histórico em quadriculado (`xx`), todos com borda preta.
 - Escalas: MAE parte de zero quando compara magnitudes; Pearson usa o domínio
   completo de -1 a +1; eixos ampliados da análise de offset são declarados.
 - Escopo: resultados exploratórios de pesquisa, sem interpretação como

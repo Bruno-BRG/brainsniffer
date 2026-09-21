@@ -60,7 +60,7 @@ Para reduzir a ambiguidade dos nomes usados no restante do artigo, a Tabela~\ref
 \begin{table}[H]
 \centering
 \small
-\caption{Definição conceitual dos dois checkpoints. O holdout VitalDB do modelo misto é histórico e da mesma fonte já presente no desenvolvimento; portanto, não é validação externa confirmatória.}
+\caption{Definição conceitual dos dois checkpoints.}
 \label{tab:modelos}
 \begin{tabular}{p{0.25\columnwidth}p{0.29\columnwidth}p{0.37\columnwidth}}
 \hline
@@ -72,10 +72,12 @@ Modelo B -- misto & Figshare + parte do VitalDB & Figshare (benchmark histórico
 \end{tabular}
 \end{table}
 
-\begin{figure}[tbp]
+A Figura~\ref{fig:pipeline} resume esse fluxo retrospectivo, da composição do pool à avaliação sem reajuste.
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/pipeline.pdf}
-\caption{Fluxo retrospectivo auditável do BrainSniffer, a partir de arquivos existentes. A separação por grupo impede que janelas do mesmo grupo atravessem partições; no Figshare, o grupo é o caso. O pool elegível de 33 casos não é o corpus fixo de 28 grupos, que exclui os cinco casos históricos e se divide em 16/6/6. As setas finais indicam avaliação, nunca treino. Fontes internas \cite{brainsnifferArtefatos}; o benchmark VitalDB do misto não é confirmatório.}
+\caption{Fluxo retrospectivo auditável do BrainSniffer.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -112,7 +114,7 @@ A rede histórica é a \texttt{Conv1DDepthEstimator}: recebe a janela de 640 amo
 \begin{table}[H]
 \centering
 \footnotesize
-\caption{Configuração histórica: JSON dos checkpoints ativo e misto fixo; arquitetura compatível no código \cite{brainsnifferArtefatos}.}
+\caption{Configuração histórica dos checkpoints.}
 \label{tab:config}
 \begin{tabular}{p{0.28\columnwidth}p{0.63\columnwidth}}
 \hline
@@ -130,7 +132,11 @@ Amplitude e \textit{notch} & \textit{Clip} $\pm100\,\mu V$, escala $50\,\mu V$, 
 
 A arquitetura compacta permite replay em CPU, mas não implica superioridade sobre redes temporais, atenção ou representações tempo-frequência \cite{brainsnifferArtefatos,park2020,shi2023}.
 
-Como controle, o baseline extrai medidas espectrais clássicas (potência por banda, frequência de borda espectral SEF90, entropia espectral, valor eficaz RMS e \textit{line length}) e ajusta uma floresta aleatória (\textit{Random Forest}) nas mesmas janelas e partição do ativo. Detalhes em \artefato{reports/spectral_baseline_holdout.json} \cite{brainsnifferArtefatos}.
+Como controle, o baseline espectral resume cada janela com medidas clássicas interpretáveis e ajusta uma floresta aleatória (\textit{Random Forest}) nas mesmas janelas e na mesma partição do ativo, sem acesso a informação adicional. A ideia é simples: se descritores espectrais com poucos parâmetros já alcançam erro parecido, o ganho da CNN precisa ser justificado; se a CNN supera o controle com folga, há indício de que a representação aprendida captura estrutura além do espectro clássico.
+
+Cada janela de 5~s gera 14 atributos: potências absoluta e relativa em delta, teta, alfa, beta e gama, frequência de borda espectral em 90\% (SEF90), entropia espectral, valor eficaz (RMS) e \textit{line length}. Em leitura fisiológica aproximada, o aprofundamento anestésico tende a deslocar potência para bandas baixas e a reduzir SEF90 e entropia; RMS resume a amplitude e \textit{line length} combina amplitude e irregularidade, sendo sensível a transientes. Todos são calculados na mesma grade de 128~Hz, sem usar o futuro além do pré-processamento já descrito.
+
+A floresta usa \texttt{n\_estimators}=100, \texttt{max\_depth}=12, \texttt{min\_samples\_leaf}=2 e \texttt{random\_state}=42, treinada nas 15.894 janelas de treino e avaliada nas mesmas 5.523 janelas de teste do holdout Figshare de cinco casos. Por usar a partição agrupada por caso, o controle herda a mesma proteção contra vazamento da CNN. Configuração, atributos e métricas estão em \artefato{reports/spectral_baseline_holdout.json} \cite{brainsnifferArtefatos}.
 
 \subsection{Métricas, incerteza e análises exploratórias}
 
@@ -142,7 +148,11 @@ Foram calculados o erro absoluto médio (Mean Absolute Error, MAE), a raiz do er
 \end{equation}
 O resultado principal agrega todas as janelas aceitas (casos longos pesam mais), em vez de tirar a média por pessoa. O viés é a média de predito menos referência. As faixas são $[0,40)$, $[40,60)$, $[60,80)$ e $[80,100]$, aqui lidas com rótulos curtos apenas para comunicação --- profunda, geral adequada, leve/transicional e acordado --- sem validar limiar clínico. Pearson quantifica associação linear e não acordo; não foram estimados, nesta execução, limites de concordância, coeficiente de concordância ou calibração clínica. As quatro faixas são apenas uma apresentação interna e não constituem classes clínicas independentes \cite{brainsnifferArtefatos,tripodai}.
 
-A associação ordinal entre estimativa e referência é medida pela probabilidade de predição $P_K$ \cite{smith1996}, variante reescalada da medida $d_{y.x}$ de Kim: a probabilidade de o indicador ordenar corretamente duas profundidades observadas distintas, valendo 1 na ordem perfeita e 0,5 no acaso. Pares empatados na escala observada são excluídos, porque não informam ordenação, e pares empatados no indicador contam 0,5. Por depender só da ordenação, $P_K$ é invariante a reescala afim. O comando \texttt{evaluate-pk} reaproveita janelas e predições dos mesmos benchmarks, sem retreino, em \texttt{pk\_*.json} \cite{brainsnifferArtefatos,smith1996}.
+A associação ordinal entre estimativa e referência é medida pela probabilidade de predição $P_K$ (na literatura de anestesia, $Pk$), proposta por Smith, Dutton e Smith \cite{smith1996} como variante reescalada da medida $d_{y.x}$ de Kim. A pergunta que ela responde é direta: sorteados dois momentos com profundidades de referência distintas, qual é a chance de o indicador ordená-los na mesma ordem da referência? Vale 1 na ordem perfeita e 0,5 no acaso, como cara-ou-coroa.
+
+Na prática, pares com o mesmo BIS de referência são excluídos, porque não informam ordenação, e pares empatados no indicador contam 0,5. Por depender só da ordem, $P_K$ ignora erro sistemático de escala: um modelo que erra sempre por 10 pontos, mas preserva a ordem, pode ter $P_K$ alto com MAE ruim; outro com MAE menor, mas que embaralha níveis próximos, pode ter $P_K$ baixo. Essa invariância a reescala afim crescente é a utilidade do índice aqui: ele separa ganho de ordenação de mero ajuste de escala, o que MAE, RMSE e Pearson sozinhos confundem.
+
+O comando \texttt{evaluate-pk} reaproveita as janelas e as predições dos mesmos benchmarks, sem retreino, e grava \texttt{pk\_*.json}; os intervalos vêm de reamostragem de casos ($B=1.000$, seed 42), na mesma unidade agrupada do bootstrap \cite{brainsnifferArtefatos,smith1996}.
 
 O bootstrap estima a incerteza sorteando casos inteiros com reposição, juntando todas as janelas sorteadas e recalculando a métrica. Assim, respeita melhor a dependência dentro de cada caso do que sortear janelas, mas o resultado continua ponderado pela duração. Foram usadas $B=1.000$ réplicas, seed 42 e percentis 2,5/97,5 para o intervalo de 95\%. Com apenas cinco casos Figshare, o intervalo é exploratório; 1.000 réplicas não equivalem a 1.000 casos \cite{brainsnifferArtefatos,field2007,archer2021}.
 
@@ -159,11 +169,11 @@ Para visualizar o comportamento temporal, fixou-se antes da inferência o \textt
 
 \subsection{Checkpoint ativo e baseline no Figshare}
 
-No holdout Figshare do checkpoint ativo, cinco casos e 5.523 janelas produziram MAE 7,03, RMSE 11,08, viés 0,79 e Pearson 0,784. A acurácia por faixa foi 0,585 e o macro-F1 0,548. O baseline espectral, na mesma partição, obteve MAE 8,86, RMSE 13,23, Pearson 0,667, acurácia 0,540 e macro-F1 0,480. A diferença sustenta apenas vantagem da CNN nessa partição e execução, não superioridade geral. Fontes internas: \artefato{reports/figshare_holdout_evaluation.json} e \artefato{reports/spectral_baseline_holdout.json} \cite{brainsnifferArtefatos}.
+No holdout Figshare do checkpoint ativo, cinco casos e 5.523 janelas produziram MAE 7,03, RMSE 11,08, viés 0,79 e Pearson 0,784. A acurácia por faixa foi 0,585 e o macro-F1 0,548. O baseline espectral, na mesma partição, obteve MAE 8,86, RMSE 13,23, Pearson 0,667, acurácia 0,540 e macro-F1 0,480. A diferença sustenta apenas vantagem da CNN nessa partição e execução, não superioridade geral. A Tabela~\ref{tab:figshare-baseline} resume o agregado. Fontes internas: \artefato{reports/figshare_holdout_evaluation.json} e \artefato{reports/spectral_baseline_holdout.json} \cite{brainsnifferArtefatos}.
 
 \begin{table}[H]
 \centering
-\caption{Holdout Figshare comum: cinco casos, 5.523 janelas, seed 42; métricas agregadas por janela. Fonte interna \cite{brainsnifferArtefatos}.}
+\caption{Holdout Figshare comum.}
 \label{tab:figshare-baseline}
 \begin{tabular}{lrrrrr}
 \hline
@@ -177,20 +187,20 @@ Baseline espectral & 8,86 & 13,23 & 0,667 & 0,540 & 0,480\\
 
 A Figura~\ref{fig:trajectory} mostra queda inicial e elevação final em ambas as curvas, mas a CNN superestima o patamar intermediário e não reproduz várias oscilações da referência. Nas 850 janelas aceitas, MAE foi 8,72, RMSE 10,21, viés $+4{,}79$ pontos BIS e Pearson 0,910: associação alta não elimina erro sistemático. É um exemplo ilustrativo, não evidência de generalização. A série BIS tem 906 pontos e se estende além do EEG; das 871 janelas completas, 21 foram rejeitadas, e 35 pontos finais não têm janela correspondente. As 56 posições sem previsão permanecem NaN; não havia EEG inválido neste caso. Fonte: auditoria em \artefato{tmp/pdfs/trajectory-audit/case19.json} \cite{brainsnifferArtefatos}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/bis_trajectory.pdf}
-\caption{Trajetória offline do Figshare \texttt{case19}, fixado antes da inferência por consistência da demonstração, não por desempenho. BIS original e CNN ativa bruta (sem EWMA), com erro no painel inferior. Alvo no início da janela (offset 0 s), não no instante de emissão. Lacunas preservadas; a cauda BIS excede o suporte EEG. Fontes: \artefato{data/raw/case19.mat} e auditoria \artefato{tmp/pdfs/trajectory-audit/case19.json}. Exemplo individual \cite{brainsnifferArtefatos}.}
+\caption{Trajetória offline do Figshare case19.}
 \label{fig:trajectory}
 \end{figure}
 
 \subsection{Comparação dos checkpoints nos benchmarks históricos}
 
-O candidato misto apresentou MAE 6,69, RMSE 10,67, viés 2,12, Pearson 0,818 e macro-F1 0,574 no holdout Figshare. Nos 15 participantes e 38.730 janelas do holdout VitalDB histórico, obteve 8,60, 11,74, $-1{,}01$, 0,688 e 0,486. O ativo obteve, respectivamente, 7,03/11,08/0,79/0,784/0,548 no Figshare e 12,43/18,80/1,40/0,024/0,398 no VitalDB. Os valores vêm de \artefato{reports/figshare_holdout_evaluation.json}, \artefato{reports/mixed_fixed_figshare_holdout.json}, \artefato{reports/vitaldb_external_validation.json} e \artefato{reports/mixed_vitaldb_external.json} \cite{brainsnifferArtefatos}.
+O candidato misto apresentou MAE 6,69, RMSE 10,67, viés 2,12, Pearson 0,818 e macro-F1 0,574 no holdout Figshare. Nos 15 participantes e 38.730 janelas do holdout VitalDB histórico, obteve 8,60, 11,74, $-1{,}01$, 0,688 e 0,486. O ativo obteve, respectivamente, 7,03/11,08/0,79/0,784/0,548 no Figshare e 12,43/18,80/1,40/0,024/0,398 no VitalDB. A Tabela~\ref{tab:benchmarks} organiza esses agregados. Os valores vêm de \artefato{reports/figshare_holdout_evaluation.json}, \artefato{reports/mixed_fixed_figshare_holdout.json}, \artefato{reports/vitaldb_external_validation.json} e \artefato{reports/mixed_vitaldb_external.json} \cite{brainsnifferArtefatos}.
 
 \begin{table}[H]
 \centering
-\caption{Comparação retrospectiva nos mesmos benchmarks históricos. ``Visto'' indica fonte vista no desenvolvimento. Fonte interna \cite{brainsnifferArtefatos}.}
+\caption{Comparação retrospectiva nos benchmarks históricos.}
 \label{tab:benchmarks}
 \begin{tabular}{llcrrr}
 \hline
@@ -206,10 +216,10 @@ VitalDB & misto (Figshare+VitalDB) & 15 & 8,60 & 11,74 & 0,688\\
 
 No VitalDB, o MAE do candidato caiu em 14 dos 15 casos pareados; no \texttt{vitaldb\_case16}, subiu cerca de 0,67 ponto BIS. Na Figura~\ref{fig:comparison}c, cada linha é um caso, ordenado pela diferença misto menos ativo, e os dois pontos são os MAE de cada modelo no mesmo caso; uma linha apontando para a esquerda indica que o misto errou menos. A leitura é pareada de propósito: comparar médias agregadas de modelos diferentes poderia esconder que eles acertam os mesmos casos ou que um grupo pequeno de casos longos domina a média. O painel (a) e o (b) mostram os agregados, mas é o painel (c) que revela a heterogeneidade: o ganho não é uniforme, e 14 acertos contra 1 piora convivem com casos em que a margem é pequena. Como os agregados são calculados por janela, casos longos pesam mais do que casos curtos, e a média pode não corresponder à de um caso típico. Essa comparação descreve adaptação após exposição ao VitalDB, não transporte para nova fonte \cite{brainsnifferArtefatos}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/comparison.pdf}
-\caption{Agregados por janela no Figshare (5 casos/5.523 janelas) e VitalDB (15/38.730) e MAE pareado por caso, ordenado pela diferença misto menos ativo. O ativo viu só o Figshare; o misto já viu outros participantes VitalDB. Pontos e linhas vêm dos quatro relatórios citados no texto; 14/15 casos melhoram, mas o caso 16 piora cerca de 0,67 \cite{brainsnifferArtefatos}.}
+\caption{Agregados por janela e MAE pareado por caso.}
 \label{fig:comparison}
 \end{figure}
 
@@ -220,7 +230,7 @@ A associação ordinal é medida nos dois benchmarks pela probabilidade de predi
 \begin{table}[H]
 \centering
 \small
-\caption{Probabilidade de predição $P_K$ nos mesmos benchmarks históricos. $P_K=1$ é ordem perfeita e $0{,}5$ é acaso. IC 95\% por reamostragem de casos ($B=1.000$, seed 42). MAE e Pearson repetem as tabelas anteriores.}
+\caption{Probabilidade de predição $P_K$ nos benchmarks históricos.}
 \label{tab:pk}
 \begin{tabular}{llrrrrr}
 \hline
@@ -234,12 +244,12 @@ VitalDB & misto & 38.730 & 0,672 & 0,591--0,737 & 8,60 & 0,688\\
 \end{tabular}
 \end{table}
 
-No Figshare, o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto melhora MAE (7,03 para 6,69) e Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico, ou seja, o ganho é de escala e não de ordenação. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996,brainsnifferArtefatos}.
+No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto melhora MAE (7,03 para 6,69) e Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico, ou seja, o ganho é de escala e não de ordenação. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996,brainsnifferArtefatos}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.86\columnwidth]{figures/pk_prediction.pdf}
-\caption{Probabilidade de predição $P_K$ (Figshare 5/5.523; VitalDB 15/38.730), ativo vs misto, com IC 95\% por reamostragem de casos ($B=1.000$, seed 42). A linha pontilhada marca o acaso em 0,5. O indicador é a estimativa da CNN e a escala observada é o BIS de referência do monitor, não um desfecho de resposta ao estímulo \cite{smith1996,brainsnifferArtefatos}.}
+\caption{Probabilidade de predição $P_K$, ativo vs.\ misto.}
 \label{fig:pk}
 \end{figure}
 
@@ -248,19 +258,19 @@ No Figshare, o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0
 
 No Figshare, o ativo apresentou MAE observado 7,03 (IC percentil 95\%: 6,38--8,24) e Pearson 0,784 (0,703--0,881); para o misto, os valores foram 6,69 (5,65--8,53) e 0,818 (0,751--0,890). No VitalDB, o ativo apresentou 12,43 (11,05--14,45) e 0,024 ($-0{,}126$--0,193), enquanto o misto apresentou 8,60 (7,57--9,95) e 0,688 (0,606--0,752). Os marcadores da Figura~\ref{fig:bootstrap} são essas métricas observadas; somente as barras representam os intervalos das réplicas. As médias das réplicas bootstrap não substituem esses pontos observados. Os mesmos quatro relatórios registram $B$, seed, unidade e intervalos \cite{brainsnifferArtefatos}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/bootstrap_intervals.pdf}
-\caption{Métricas observadas (marcadores) e intervalos percentis de 95\% (barras) do bootstrap por caso ($B=1.000$, seed 42). Cada caso sorteado contribui com todas as janelas. O $n=5$ do Figshare limita a leitura \cite{brainsnifferArtefatos}.}
+\caption{Bootstrap agrupado por caso.}
 \label{fig:bootstrap}
 \end{figure}
 
-Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,03/0,784 em 0 s e 6,76/0,799 em $+20$ s. Um offset positivo associa a janela EEG a um BIS posterior. A tendência foi observada pós-hoc, sem retreino, e não identifica causalmente atraso do monitor nem autoriza mudar o offset padrão. Fonte interna: \artefato{reports/offset_sensitivity.json} \cite{brainsnifferArtefatos}; contexto sobre atraso de índices processados em \cite{pilge2006}.
+Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,03/0,784 em 0 s e 6,76/0,799 em $+20$ s. Um offset positivo associa a janela EEG a um BIS posterior. A Figura~\ref{fig:offset} mostra essa grade. A tendência foi observada pós-hoc, sem retreino, e não identifica causalmente atraso do monitor nem autoriza mudar o offset padrão. Fonte interna: \artefato{reports/offset_sensitivity.json} \cite{brainsnifferArtefatos}; contexto sobre atraso de índices processados em \cite{pilge2006}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/offset_sensitivity.pdf}
-\caption{Sensibilidade pós-hoc ao alinhamento do rótulo em cinco casos Figshare. O número de janelas varia de 5.503 a 5.525, sem restrição a suporte comum. A linha vertical indica o padrão 0 s. A análise sem retreino gera hipótese e não seleciona atraso. Fonte: \artefato{reports/offset_sensitivity.json} \cite{brainsnifferArtefatos}.}
+\caption{Sensibilidade ao offset do rótulo.}
 \label{fig:offset}
 \end{figure}
 
@@ -271,19 +281,19 @@ As duas figuras seguintes detalham o que as tabelas e os agregados comprimem. A 
 
 A Figura~\ref{fig:corpus}a separa os casos por fonte em três estados mutuamente exclusivos. ``Elegível'' é o caso que passou por todos os gates de qualidade e entrou no pool de desenvolvimento; ``quarentena'' é o caso retido por falha de gate, como o Figshare 24, cuja escala de amplitude é incompatível; ``benchmark histórico'' é o caso reservado para avaliação, que não ajusta nenhum checkpoint. A leitura correta é de composição, não de desempenho: barras maiores não indicam melhor qualidade. A Figura~\ref{fig:corpus}b cruza a fração de amostras de EEG finitas (eixo horizontal) com a fração de janelas aceitas (eixo vertical) e mostra por que os dois gates não são redundantes. Um caso pode ter quase todo o EEG finito e ainda perder janelas por qualidade de sinal insuficiente; outro pode ter lacunas inválidas e ser retido antes da contagem. A linha tracejada marca o gate de 90\% de amostras finitas; pontos à sua esquerda foram retidos independentemente do eixo vertical \cite{brainsnifferArtefatos}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/corpus_panels.pdf}
-\caption{Composição e qualidade do corpus de desenvolvimento. (a) Casos por fonte, separando elegíveis, quarentena e benchmark histórico; a soma rotulada é o total de arquivos da fonte. (b) Fração de amostras de EEG finitas contra fração de janelas aceitas; a linha tracejada marca o gate de 90\% de finitude. Gates e contagens vêm de \artefato{reports/corpus\_manifest.json} \cite{brainsnifferArtefatos}.}
+\caption{Composição e qualidade do corpus.}
 \label{fig:corpus}
 \end{figure}
 
 A Figura~\ref{fig:training}a acompanha a perda de treino e as métricas de validação por época. As duas curvas medem coisas diferentes: a perda de treino é a função otimizada (Smooth L1, adimensional, na escala normalizada) e tende a cair de forma monotônica, enquanto MAE e RMSE de validação são medidas em pontos BIS e podem oscilar por variação de amostragem entre épocas. Por isso, o critério de leitura é a validação, não a perda de treino; separadamente, a validação também serve para detectar sobreajuste, que apareceria como queda da perda de treino com piora simultânea do MAE de validação. Nesta execução as três curvas ficam estáveis após poucas épocas, o que é consistente com o teto fixo de dez épocas adotado no protocolo. A Figura~\ref{fig:training}b projeta o MAE para contagens maiores de casos de treino por uma curva teórica ancorada no único ponto medido (13 casos de treino, MAE 7,03). O eixo horizontal é logarítmico porque o ganho por caso é decrescente; a curva não foi ajustada a dados novos, não substitui o holdout e serve apenas para dimensionar uma coleta futura \cite{brainsnifferArtefatos,archer2021}.
 
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/training_panels.pdf}
-\caption{Apoio de treinamento e planejamento. (a) Histórico de treino e validação do checkpoint ativo por época: perda de treino (adimensional) e MAE/RMSE de validação (pontos BIS). (b) Projeção teórica de MAE por número de casos de treino, em escala logarítmica, ancorada no único valor medido (13 casos, MAE 7,03): cenário de planejamento, não curva medida \cite{brainsnifferArtefatos}.}
+\caption{Treinamento e projeção por casos.}
 \label{fig:training}
 \end{figure}
 
