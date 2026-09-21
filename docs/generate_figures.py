@@ -239,7 +239,7 @@ plt.rcParams.update(
     }
 )
 WIDTH = 15 / 2.54
-COLORS = ("#0072B2", "#D55E00")
+COLORS = ("#000000", "#555555")
 MARKERS = ("o", "s")
 LABELS = ("Ativo", "Misto fixo")
 HOLDOUTS = (
@@ -578,12 +578,12 @@ def figure_trajectory():
     audit = json.loads((TRAJECTORY / "case19.json").read_text())
     fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.5), sharex=True,
                              gridspec_kw={"height_ratios": [2, 1]}, layout="constrained")
-    axes[0].plot(time, reference, color=COLORS[0], label="BIS referência", linewidth=0.9)
-    axes[0].plot(time, raw, color=COLORS[1], label="CNN ativa bruta", linewidth=0.8)
+    axes[0].plot(time, reference, color="black", linestyle="-", label="BIS referência (linha contínua)", linewidth=1.0)
+    axes[0].plot(time, raw, color="black", linestyle="--", dashes=(4, 2), label="CNN ativa bruta (linha tracejada)", linewidth=1.0)
     axes[0].set(ylabel="Índice (pontos BIS)", ylim=(0, 100),
                 title="Figshare case19 · gravação completa · comparação offline")
     axes[0].legend(frameon=False, loc="upper right")
-    axes[1].plot(time, raw - reference, color=COLORS[1], linewidth=0.7)
+    axes[1].plot(time, raw - reference, color="black", linestyle="-", linewidth=0.7)
     axes[1].axhline(0, color=".4", linewidth=0.7)
     axes[1].set(ylabel="Erro (pontos BIS)", xlabel="Tempo da referência desde o início (min)")
     for ax in axes:
@@ -663,14 +663,16 @@ def figure_corpus_panels(reports):
     eligible = [int(source_summary[name].get("eligible_cases", 0)) for name in sources]
     quarantined = [int(source_summary[name].get("quarantined_cases", 0)) for name in sources]
     frozen = [int(source_summary[name].get("frozen_external_cases", 0)) for name in sources]
-    ax.bar(positions, eligible, 0.5, label="Elegíveis", color=COLORS[0])
-    ax.bar(positions, quarantined, 0.5, label="Quarentena", color="#D1495B", bottom=eligible)
+    ax.bar(positions, eligible, 0.5, label="Elegíveis (preenchido)", color="black", edgecolor="black")
+    ax.bar(positions, quarantined, 0.5, label="Quarentena (hachurado)", color="white", edgecolor="black", hatch="///", bottom=eligible)
     ax.bar(
         positions,
         frozen,
         0.5,
-        label="Benchmark histórico",
-        color=COLORS[1],
+        label="Benchmark histórico (quadriculado)",
+        color="#BBBBBB",
+        edgecolor="black",
+        hatch="xx",
         bottom=[a + b for a, b in zip(eligible, quarantined, strict=True)],
     )
     totals = [
@@ -698,9 +700,9 @@ def figure_corpus_panels(reports):
     if isinstance(gate, dict):
         min_finite = float(gate.get("min_finite_fraction", 0.9)) * 100
     styles = (
-        ("include", COLORS[0], "o", "Elegível", True),
-        ("quarantine", "#D1495B", "x", "Quarentena", False),
-        ("exclude", ".55", "d", "Excluído", False),
+        ("include", "black", "o", "Elegível (círculo preenchido)", True),
+        ("quarantine", "black", "x", "Quarentena (x)", False),
+        ("exclude", ".55", "d", "Excluído (losango aberto)", False),
     )
     for status, color, marker, label, filled in styles:
         selected = [record for record in records if record.get("quality_status") == status]
@@ -724,13 +726,13 @@ def figure_corpus_panels(reports):
             label=label,
             markerfacecolor=color if filled else "none",
         )
-    ax.axvline(min_finite, color=COLORS[1], linewidth=0.9, linestyle="--")
+    ax.axvline(min_finite, color="black", linewidth=1.0, linestyle=(0, (4, 2)))
     ax.text(
         min_finite - 2,
         6,
         f"gate {min_finite:.0f}%",
         fontsize=8,
-        color=COLORS[1],
+        color="black",
         ha="right",
         va="bottom",
     )
