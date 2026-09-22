@@ -74,12 +74,11 @@ if grep -Eqi 'Overfull \\[hv]box|undefined control sequence|citation.+undefined|
   exit 1
 fi
 
-# Limite relaxado a pedido do autor: o artigo ganhou o Pk de Smith et al. (1996),
-# os painéis de apoio e figuras maiores para leitura, sem mudar o escopo dos
-# resultados. O limite existe apenas para pegar crescimento descontrolado.
+# Limite a pedido do autor: o artigo precisa fechar em exatamente 17 páginas.
+# O crescimento fora disso é sempre acidente de layout e volta a ser pego aqui.
 page_count="$(pdfinfo "${built_pdf}" | awk '/^Pages:/ {print $2}')"
-if [[ ! "${page_count}" =~ ^[0-9]+$ ]] || (( page_count > 30 )); then
-  echo "erro: PDF tem ${page_count:-contagem-indisponível} páginas; máximo permitido é 30" >&2
+if [[ ! "${page_count}" =~ ^[0-9]+$ || "${page_count}" -ne 17 ]]; then
+  echo "erro: PDF tem ${page_count:-contagem-indisponível} páginas; o alvo é exatamente 17" >&2
   exit 1
 fi
 

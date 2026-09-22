@@ -31,18 +31,24 @@ TECTONIC_BIN=/caminho/para/tectonic scripts/build_tcc_article.sh
 
 O Tectonic resolve o ciclo LaTeX/BibTeX, mantém log e intermediários em
 `tmp/pdfs/tcc-build/`, atualiza `docs/tcc_brainsniffer.pdf`, rejeita referências
-indefinidas ou caixas `Overfull`, exige no máximo 15 páginas e valida a extração
+indefinidas ou caixas `Overfull`, exige **exatamente 17 páginas** e valida a extração
 de texto com Poppler. A cópia para `docs/tcc_brainsniffer.pdf` ocorre somente
 depois desses gates; eles não substituem revisão visual ou científica.
 
 **O PDF não é regenerado automaticamente ao editar fontes/documentação.**
-Nesta rodada, o comando abaixo concluiu com 15 páginas A4, referências resolvidas,
-texto extraível e nenhum `Overfull`; todas as páginas foram renderizadas e
-inspecionadas. Não houve geração de figuras, alteração da bibliografia, treino
-ou teste do sistema. Logs: `tmp/pdfs/build-console.log` e
+Nesta rodada (21 set. 2026), o artigo fechou em **17 páginas A4**, referências
+resolvidas, texto extraível e nenhum `Overfull`; os gates acima passaram. Não houve
+geração de figuras, alteração de métricas, treino ou teste do sistema. Logs:
 `tmp/pdfs/tcc-build/tcc_brainsniffer.log`. Há avisos não bloqueantes de Fontconfig,
 `inputenc` ignorado, bytes antigos em comentários do template e `Underfull`.
 As páginas de figuras têm espaço branco; não foi observado corte ou sobreposição.
+
+No Windows (sem bash/Poppler completos), a compilação equivalente usa
+`tmp/tectonic-install/tectonic.exe` com a flag `-f <caminho absoluto do .fmt do cache>`
+em `%LOCALAPPDATA%\TectonicProject\Tectonic\cache\formats\`: sem ela, a busca do
+formato `latex` colide com o diretório `docs/latex/` e falha com `Access is denied`.
+A contagem de páginas sai do log (`Output written ... (N pages)`) e a extração de
+texto do `pdftotext` do Git for Windows (`C:\Program Files\Git\mingw64\bin`).
 
 ```bash
 TECTONIC_BIN=/home/fryits/.local/bin/tectonic scripts/build_tcc_article.sh
