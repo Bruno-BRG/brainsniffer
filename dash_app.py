@@ -55,7 +55,8 @@ ARTICLE_FIGURES = (
     ("pk_prediction.png", "Figura 4 · Probabilidade de predição Pk"),
     ("bootstrap_intervals.png", "Figura 5 · Bootstrap agrupado por caso"),
     ("offset_sensitivity.png", "Figura 6 · Sensibilidade ao offset do rótulo"),
-    ("support_panels.png", "Figura 7 · Painéis de apoio do console"),
+    ("corpus_panels.png", "Figura 7 · Composição e qualidade do corpus"),
+    ("training_panels.png", "Figura 8 · Treinamento e projeção por casos"),
 )
 ARTICLE_FIGURE_FILES = tuple(name for name, _ in ARTICLE_FIGURES)
 REPLAY_EEG_POINTS = 9000
