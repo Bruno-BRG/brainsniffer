@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,25 @@ PK_HOLDOUTS = (
 )
 
 MODEL_FILES = ("brainsniffer_cnn.json", "brainsniffer_corpus_fixed.json")
+
+CALIBRATION_FILE = "calibration_analysis.json"
+# Ordem de exibição (Figshare em cima, VitalDB embaixo): braço, rótulo, marcador,
+# cor, estilo do IC e preenchimento do marcador. Marcadores separam CNN ativo
+# (círculo), CNN misto (quadrado) e baseline espectral (diamante) em preto e branco.
+CALIBRATION_ARMS = (
+    ("cnn_active_figshare", "Figshare (ativo)", "o", "#000000", "-", True),
+    ("cnn_mixed_figshare", "Figshare (misto)", "s", "#555555", "--", False),
+    ("rf_spectral_figshare", "Figshare (RF espectral)", "D", "#666666", ":", True),
+    ("cnn_active_vitaldb", "VitalDB (ativo)", "o", "#000000", "-", True),
+    ("cnn_mixed_vitaldb", "VitalDB (misto)", "s", "#555555", "--", False),
+    ("rf_spectral_vitaldb", "VitalDB (RF espectral)", "D", "#666666", ":", True),
+)
+CALIBRATION_CROSSCHECKS = (
+    ("cnn_active_figshare", "figshare_holdout_evaluation.json"),
+    ("cnn_mixed_figshare", "mixed_fixed_figshare_holdout.json"),
+    ("cnn_active_vitaldb", "vitaldb_external_validation.json"),
+    ("cnn_mixed_vitaldb", "mixed_vitaldb_external.json"),
+)
 
 
 def report_value(report: dict[str, Any], *keys: str) -> Any:
@@ -117,6 +137,81 @@ def audit_pk_reports(
             f"unexpected Pk bootstrap count in {pk_name}",
         )
         ensure(int(pk_report.get("bootstrap_seed", -1)) == 42, f"seed drift in {pk_name}")
+
+
+def audit_calibration(calibration: dict[str, Any], reports: dict[str, dict[str, Any]]) -> None:
+    """Check the calibration snapshot against the audited historical aggregates."""
+    ensure(calibration.get("scope") == "research_only", "unsafe calibration scope")
+    ensure(calibration.get("retrained") is False, "calibration unexpectedly retrained")
+    ensure(
+        int(calibration.get("bootstrap_samples", 0)) == 1000,
+        "unexpected calibration bootstrap count",
+    )
+    ensure(int(calibration.get("bootstrap_seed", -1)) == 42, "calibration seed drift")
+    arms = calibration.get("arms")
+    ensure(isinstance(arms, dict), "calibration arms missing")
+    ensure(
+        set(arms) == {key for key, *_ in CALIBRATION_ARMS},
+        "calibration arms changed",
+    )
+    for key, *_ in CALIBRATION_ARMS:
+        arm = arms[key]
+        line = arm["calibration_line"]
+        ensure(
+            line.get("x") == "referência BIS" and line.get("y") == "predição",
+            f"calibration axes changed in {key}",
+        )
+        ensure(int(line.get("bootstrap_samples", 0)) == 1000,
+               f"unexpected slope bootstrap count in {key}")
+        ensure(int(line.get("bootstrap_seed", -1)) == 42, f"slope seed drift in {key}")
+        slope = float(line["slope"])
+        ensure(
+            float(line["slope_ci95_lower"]) <= slope <= float(line["slope_ci95_upper"]),
+            f"slope outside its interval in {key}",
+        )
+        intercept = float(line["intercept"])
+        ensure(
+            float(line["intercept_ci95_lower"]) <= intercept
+            <= float(line["intercept_ci95_upper"]),
+            f"intercept outside its interval in {key}",
+        )
+        icc = float(arm["icc_2_1_absolute_agreement"])
+        ensure(-1.0 <= icc <= 1.0, f"ICC outside [-1, 1] in {key}")
+        fraction = float(arm["fraction_abs_error_le_10"])
+        ensure(0.0 <= fraction <= 1.0, f"error fraction outside [0, 1] in {key}")
+        ensure(
+            abs(float(arm["bias"]) - float(arm["bland_altman"]["bias"])) < 1e-9,
+            f"bias drift in {key}",
+        )
+        ensure(int(arm["n"]) > 0 and int(arm["n_cases"]) > 0, f"missing sample size in {key}")
+    for key, name in CALIBRATION_CROSSCHECKS:
+        arm = arms[key]
+        historical = metrics(reports[name])
+        ensure(int(arm["n"]) == int(historical["n"]), f"calibration n drift in {key}")
+        ensure(
+            abs(float(arm["mae"]) - float(historical["mae"])) < 1e-4,
+            f"calibration mae drift in {key}",
+        )
+
+
+def load_calibration(
+    reports: dict[str, dict[str, Any]], attempts: int = 10, delay_seconds: float = 3.0
+) -> dict[str, Any]:
+    """Load the calibration snapshot, tolerating an in-flight rewrite."""
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            path = REPORTS / CALIBRATION_FILE
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            ensure(isinstance(payload, dict), f"{CALIBRATION_FILE} must contain a JSON object")
+            audit_calibration(payload, reports)
+            return payload
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            last_error = error
+            if attempt + 1 < attempts:
+                print(f"retrying {CALIBRATION_FILE} in {delay_seconds:g}s ({error})")
+                time.sleep(delay_seconds)
+    raise ValueError(f"invalid {CALIBRATION_FILE} after {attempts} attempts: {last_error}")
 
 
 def audit_reports(reports: dict[str, dict[str, Any]]) -> None:
@@ -639,7 +734,7 @@ def figure_pk(pk_reports: dict[str, dict[str, Any]]) -> None:
         ylim=(len(benchmarks) - 0.55, -0.6),
         xlim=(0.4, 1.0),
         xticks=[0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-        xlabel="Pk (1 = ordem perfeita · 0,5 = chance)",
+        xlabel="$P_K$ (1 = ordem perfeita · 0,5 = chance)",
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
     ax.legend(loc="lower right", frameon=False)
@@ -871,24 +966,21 @@ def figure_corpus_panels(reports):
     save_figure(fig, "corpus_panels", ["reports/corpus_manifest.json"])
 
 
-def figure_training_panels(reports):
-    """Histórico de treino e a projeção de casos, em duas colunas legíveis."""
-    import numpy as np
-
-    from brainsniffer.pipeline.planning import (
-        LEARNING_CURVE_KEY_COUNTS,
-        LEARNING_CURVE_MAX_CASES,
-        theoretical_training_mae,
-    )
-
+def figure_training_panels(reports, calibration):
+    """Histórico de treino do checkpoint ativo e calibração medida por braço."""
     model = json.loads((ROOT / "models" / MODEL_FILES[0]).read_text())
     history = model.get("history", [])
     ensure(isinstance(history, list) and bool(history), "training history missing")
-    holdout_mae = float(metrics(reports["figshare_holdout_evaluation.json"])["mae"])
-    anchor_cases = len(model["split"]["train_cases"])
-    ensure(anchor_cases > 0 and holdout_mae > 0, "planning anchor missing")
+    arms = calibration["arms"]
+    ensure(set(arms) == {key for key, *_ in CALIBRATION_ARMS}, "calibration arms changed")
 
-    fig, grid = plt.subplots(1, 2, figsize=(WIDTH, 3.8), layout="constrained")
+    fig, grid = plt.subplots(
+        1,
+        2,
+        figsize=(WIDTH, 3.8),
+        layout="constrained",
+        gridspec_kw={"width_ratios": (1, 1.25)},
+    )
 
     ax = grid[0]
     rows = [row for row in history if isinstance(row, dict)]
@@ -919,31 +1011,92 @@ def figure_training_panels(reports):
     )
     ax.legend(frameon=False, fontsize=8, loc="upper right", borderaxespad=0.6)
 
+    # Dot-and-whisker da inclinação de calibração (IC 95% por bootstrap por caso).
+    # x = 1 é identidade e x = 0 é ausência de calibração; à direita, ICC(2,1)
+    # absoluto e a fração de janelas com |erro| <= 10 pontos BIS.
     ax = grid[1]
-    grid_counts = np.geomspace(anchor_cases, LEARNING_CURVE_MAX_CASES, 200)
-    counts = np.unique(np.concatenate(([float(anchor_cases)], grid_counts)))
-    projected = theoretical_training_mae(counts, anchor_cases=anchor_cases, anchor_mae=holdout_mae)
-    ax.plot(np.log10(counts), projected, color=COLORS[0], linewidth=1.6, label="Projeção teórica")
-    ax.plot(
-        [np.log10(anchor_cases)],
-        [holdout_mae],
-        marker="D",
-        color=COLORS[1],
-        markersize=7,
-        linestyle="none",
-        label=f"Medido hoje ({holdout_mae:.2f})",
-    )
-    spaced = {count for count in LEARNING_CURVE_KEY_COUNTS[::3] if count >= anchor_cases}
-    ticks = sorted(spaced | {LEARNING_CURVE_MAX_CASES})
+    annotation_x = 1.07
+    for row, (key, label, marker, color, style, filled) in enumerate(CALIBRATION_ARMS):
+        arm = arms[key]
+        line = arm["calibration_line"]
+        slope = float(line["slope"])
+        low = float(line["slope_ci95_lower"])
+        upper = float(line["slope_ci95_upper"])
+        ensure(low <= slope <= upper, f"slope outside its interval in {key}")
+        ax.hlines(row, low, upper, color=color, linewidth=1.3, linestyles=style)
+        ax.plot(
+            [low, upper],
+            [row, row],
+            marker="|",
+            color=color,
+            linestyle="none",
+            markersize=5,
+        )
+        ax.plot(
+            slope,
+            row,
+            marker=marker,
+            color=color,
+            markerfacecolor=color if filled else "white",
+            markersize=5.5,
+            linestyle="none",
+        )
+        icc = float(arm["icc_2_1_absolute_agreement"])
+        fraction = float(arm["fraction_abs_error_le_10"]) * 100.0
+        ax.text(
+            annotation_x,
+            row,
+            f"ICC {icc:.2f}".replace(".", ",")
+            + "\n"
+            + f"{fraction:.1f}".replace(".", ",")
+            + "% ≤10",
+            fontsize=7,
+            color=".25",
+            ha="left",
+            va="center",
+            linespacing=1.25,
+        )
+    separator = len(CALIBRATION_ARMS) / 2 - 0.5
+    ax.axhline(separator, color=".85", linewidth=0.6, zorder=1)
+    ax.axvline(0.0, color=".45", linewidth=0.8, linestyle=":", zorder=1)
+    ax.axvline(1.0, color=".45", linewidth=0.8, linestyle="--", zorder=1)
+    handles = []
+    for index, legend_label in enumerate(("CNN ativo", "CNN misto", "RF espectral")):
+        _, _, marker, color, _, filled = CALIBRATION_ARMS[index]
+        drawn = ax.plot(
+            [],
+            [],
+            marker=marker,
+            color=color,
+            markerfacecolor=color if filled else "white",
+            markersize=5.5,
+            linestyle="none",
+            label=legend_label,
+        )
+        handles.extend(drawn)
     ax.set(
-        title="(b) Projeção por casos (não medida)",
-        xlabel="Casos de treino (escala log)",
-        ylabel="MAE projetada (pontos BIS)",
-        xticks=[float(np.log10(count)) for count in ticks],
-        xticklabels=[str(count) for count in ticks],
-        ylim=(holdout_mae * 0.72, holdout_mae * 1.06),
+        title="(b) Calibração: inclinação\n(IC 95% por caso)",
+        xlabel="Predito ~ referência\nx = 0: sem calibração\nx = 1: identidade\n"
+        "rótulos: ICC e % |erro| ≤ 10",
+        yticks=range(len(CALIBRATION_ARMS)),
+        yticklabels=[label for _, label, *_ in CALIBRATION_ARMS],
+        ylim=(len(CALIBRATION_ARMS) - 0.55, -0.6),
+        xlim=(-0.25, 1.62),
+        xticks=[0, 0.5, 1],
     )
-    ax.legend(frameon=False, fontsize=8, loc="lower left", borderaxespad=0.6)
+    ax.grid(axis="x", color=".9", linewidth=0.5)
+    ax.legend(
+        handles=handles,
+        loc="upper left",
+        fontsize=7,
+        frameon=True,
+        facecolor="white",
+        edgecolor=".85",
+        framealpha=1.0,
+        borderpad=0.5,
+        labelspacing=0.4,
+        handletextpad=0.5,
+    )
 
     for axis in grid:
         axis.grid(color=".9", linewidth=0.5)
@@ -952,7 +1105,7 @@ def figure_training_panels(reports):
     save_figure(
         fig,
         "training_panels",
-        [f"models/{MODEL_FILES[0]}", "reports/figshare_holdout_evaluation.json"],
+        [f"models/{MODEL_FILES[0]}", f"reports/{CALIBRATION_FILE}"],
     )
 
 
@@ -970,20 +1123,21 @@ def main():
     audit_reports(reports)
     pk_reports = load_pk_reports()
     audit_pk_reports(reports, pk_reports)
+    calibration = load_calibration(reports)
     figure_pipeline(reports)
     figure_comparison(reports)
     figure_offset(reports)
     figure_bootstrap(reports)
     figure_pk(pk_reports)
     figure_corpus_panels(reports)
-    figure_training_panels(reports)
+    figure_training_panels(reports, calibration)
     if args.infer_trajectory:
         infer_trajectory()
     if args.infer_trajectory or args.trajectory:
         figure_trajectory()
     print(
-        f"audited {len(reports)} report snapshots + {len(pk_reports)} Pk snapshots; "
-        "generated historical figures"
+        f"audited {len(reports)} report snapshots + {len(pk_reports)} Pk snapshots "
+        f"+ {CALIBRATION_FILE}; generated historical figures"
     )
 
 
