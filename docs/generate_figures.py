@@ -624,7 +624,7 @@ def figure_comparison(reports, ewma):
                 handles.extend(drawn)
     ax.set(
         yticks=range(len(ids)),
-        yticklabels=[k.removeprefix("vitaldb_") for k in ids],
+        yticklabels=[f"caso {k.split('case')[-1]}" for k in ids],
         ylim=(len(ids) - 0.4, -0.6),
         xlim=(0, 24),
         xticks=[0, 6, 12, 18, 24],
@@ -956,7 +956,7 @@ def figure_trajectory():
     axes[0].plot(time, smoothed, color="black", linestyle=":", linewidth=1.1,
                  label="CNN ativa EWMA span 10 (linha pontilhada)")
     axes[0].set(ylabel="Índice (pontos BIS)", ylim=(0, 100),
-                title="Figshare case19 · gravação completa · comparação offline")
+                title="Figshare, caso 19 · gravação completa · comparação offline")
     axes[0].legend(frameon=False, loc="upper center")
     axes[1].plot(time, raw - reference, color="black", linestyle="-", linewidth=0.7)
     axes[1].axhline(0, color=".4", linewidth=0.7)
