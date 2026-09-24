@@ -648,53 +648,170 @@ def figure_corpus_panels(reports):
     """Composição do corpus e mapa de qualidade, em duas colunas legíveis."""
     corpus = reports["corpus_manifest.json"]
     summary = corpus.get("summary", {})
-    source_summary = summary.get("source_summary", {}) if isinstance(summary, dict) else {}
+    ensure(isinstance(summary, dict), "corpus summary missing")
+    cases = [record for record in corpus.get("cases", []) if isinstance(record, dict)]
+    ensure(bool(cases), "corpus case list missing")
+    ensure(
+        len(cases) == int(summary.get("total_files", -1)),
+        "corpus case count differs from total_files",
+    )
+    roles = {record.get("role") for record in cases}
+    ensure(
+        roles <= {"development_pool", "frozen_external"},
+        f"unexpected corpus roles: {sorted(roles - {'development_pool', 'frozen_external'})}",
+    )
+    statuses = {record.get("quality_status") for record in cases}
+    ensure(
+        statuses <= {"include", "quarantine"},
+        f"unexpected quality statuses: {sorted(statuses - {'include', 'quarantine'})}",
+    )
+
+    sources = ("figshare", "vitaldb")
+    names = {"figshare": "Figshare", "vitaldb": "VitalDB"}
+    eligible: list[int] = []
+    quarantined: list[int] = []
+    frozen: list[int] = []
+    frozen_failing: list[int] = []
+    for source in sources:
+        selected = [record for record in cases if record.get("source_key") == source]
+        ensure(bool(selected), f"corpus source missing: {source}")
+        external = [record for record in selected if record.get("role") == "frozen_external"]
+        eligible.append(
+            sum(
+                1
+                for record in selected
+                if record.get("role") == "development_pool"
+                and record.get("quality_status") == "include"
+            )
+        )
+        quarantined.append(
+            sum(
+                1
+                for record in selected
+                if record.get("role") == "development_pool"
+                and record.get("quality_status") == "quarantine"
+            )
+        )
+        frozen.append(len(external))
+        frozen_failing.append(
+            sum(1 for record in external if record.get("quality_status") != "include")
+        )
+    totals = [
+        part_eligible + part_quarantine + part_frozen
+        for part_eligible, part_quarantine, part_frozen in zip(
+            eligible, quarantined, frozen, strict=True
+        )
+    ]
+    # Categorias mutuamente exclusivas derivadas de role/quality_status, pois o
+    # source_summary do manifesto soma os congelados em quarantined_cases.
+    ensure(
+        sum(totals) == int(summary.get("total_files", -1)),
+        "corpus composition differs from total_files",
+    )
+    ensure(
+        sum(eligible) == int(summary.get("eligible_training_cases", -1)),
+        "eligible training cases differ",
+    )
+    ensure(
+        sum(quarantined) == int(summary.get("quarantined_development_cases", -1)),
+        "development quarantine differs",
+    )
+    ensure(
+        sum(frozen) == int(summary.get("frozen_external_cases", -1)),
+        "frozen external cases differ",
+    )
+    ensure(
+        sum(eligible) + sum(quarantined) == int(summary.get("development_cases", -1)),
+        "development pool size differs",
+    )
+    source_summary = summary.get("source_summary", {})
     ensure(
         isinstance(source_summary, dict) and bool(source_summary),
         "corpus source summary missing",
     )
+    for index, source in enumerate(sources):
+        expected = source_summary.get(source, {})
+        ensure(isinstance(expected, dict), f"missing source summary: {source}")
+        ensure(
+            int(expected.get("cases", -1)) == totals[index],
+            f"case total differs for {source}",
+        )
+        ensure(
+            int(expected.get("eligible_cases", -1)) == eligible[index],
+            f"eligible cases differ for {source}",
+        )
+        ensure(
+            int(expected.get("frozen_external_cases", -1)) == frozen[index],
+            f"frozen external cases differ for {source}",
+        )
+        ensure(
+            int(expected.get("quarantined_cases", -1))
+            == quarantined[index] + frozen_failing[index],
+            f"quarantine accounting differs for {source}",
+        )
 
     fig, grid = plt.subplots(1, 2, figsize=(WIDTH, 4.0), layout="constrained")
-    names = {"figshare": "Figshare", "vitaldb": "VitalDB"}
-    sources = sorted(source_summary)
-
     ax = grid[0]
     positions = list(range(len(sources)))
-    eligible = [int(source_summary[name].get("eligible_cases", 0)) for name in sources]
-    quarantined = [int(source_summary[name].get("quarantined_cases", 0)) for name in sources]
-    frozen = [int(source_summary[name].get("frozen_external_cases", 0)) for name in sources]
-    ax.bar(positions, eligible, 0.5, label="Elegíveis (preenchido)", color="black", edgecolor="black")
-    ax.bar(positions, quarantined, 0.5, label="Quarentena (hachurado)", color="white", edgecolor="black", hatch="///", bottom=eligible)
+    ax.bar(
+        positions,
+        eligible,
+        0.5,
+        label="Elegíveis para treino (sólido)",
+        color="black",
+        edgecolor="black",
+    )
+    ax.bar(
+        positions,
+        quarantined,
+        0.5,
+        label="Quarentena de desenvolvimento (hachurado)",
+        color="white",
+        edgecolor="black",
+        hatch="///",
+        bottom=eligible,
+    )
+    frozen_bottom = [
+        part_eligible + part_quarantine
+        for part_eligible, part_quarantine in zip(eligible, quarantined, strict=True)
+    ]
     ax.bar(
         positions,
         frozen,
         0.5,
-        label="Benchmark histórico (quadriculado)",
+        label="Congelados, fora do pool (quadriculado)",
         color="#BBBBBB",
         edgecolor="black",
         hatch="xx",
-        bottom=[a + b for a, b in zip(eligible, quarantined, strict=True)],
+        bottom=frozen_bottom,
     )
-    totals = [
-        a + b + c for a, b, c in zip(eligible, quarantined, frozen, strict=True)
-    ]
     for position, total in enumerate(totals):
         ax.text(position, total + 1.2, f"{total} casos", ha="center", fontsize=8, color=".3")
+    frozen_total = sum(frozen)
+    frozen_failing_total = sum(frozen_failing)
+    if frozen_total > 0 and frozen_failing_total > 0:
+        anchor = max(range(len(sources)), key=lambda index: frozen[index])
+        ensure(frozen[anchor] > 0, "frozen annotation without frozen cases")
+        ax.text(
+            anchor,
+            frozen_bottom[anchor] + frozen[anchor] / 2,
+            f"{frozen_failing[anchor]} de {frozen[anchor]}\nreprovam\nnos gates",
+            ha="center",
+            va="center",
+            fontsize=6.5,
+            bbox={"facecolor": "white", "edgecolor": "none", "pad": 1.0, "alpha": 0.85},
+        )
     ax.set(
         xticks=positions,
         xticklabels=[names.get(source, source) for source in sources],
-        title="(a) Composição do corpus por fonte",
+        title=f"(a) Composição do corpus ({sum(totals)} casos)",
         ylabel="Casos",
-        ylim=(0, max(totals) * 1.28),
+        ylim=(0, max(totals) * 1.3),
     )
-    ax.legend(frameon=False, fontsize=8, loc="upper left", borderaxespad=0.6)
+    ax.legend(frameon=False, fontsize=7.5, loc="upper left", borderaxespad=0.6)
 
     ax = grid[1]
-    records = [
-        record
-        for record in corpus.get("cases", [])
-        if isinstance(record, dict) and isinstance(record.get("signal"), dict)
-    ]
+    records = [record for record in cases if isinstance(record.get("signal"), dict)]
     gate = corpus.get("quality_config", {})
     min_finite = 90.0
     if isinstance(gate, dict):
