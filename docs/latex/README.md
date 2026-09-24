@@ -31,7 +31,8 @@ TECTONIC_BIN=/caminho/para/tectonic scripts/build_tcc_article.sh
 
 O Tectonic resolve o ciclo LaTeX/BibTeX, mantém log e intermediários em
 `tmp/pdfs/tcc-build/`, atualiza `docs/tcc_brainsniffer.pdf`, rejeita referências
-indefinidas ou caixas `Overfull`, exige **exatamente 17 páginas** e valida a extração
+indefinidas ou caixas `Overfull`, exige **no máximo 17 páginas** por padrão
+(`TCC_MAX_PAGES` permite teto maior em experimentos) e valida a extração
 de texto com Poppler. A cópia para `docs/tcc_brainsniffer.pdf` ocorre somente
 depois desses gates; eles não substituem revisão visual ou científica.
 

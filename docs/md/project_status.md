@@ -432,6 +432,15 @@ identidade desse publisher e relógio liblsl, conforme
 
 ## Rodada de revisão editorial — 24/09/2026
 
+- **Branch `experimento/ewma-postprocess`:** suavização EWMA causal pós-hoc (sem
+  retreino) implementada em `scripts/ewma_postprocess.py` com relatório em
+  `reports/ewma_postprocess.json`; o artigo da branch inclui nova subseção de
+  método e de resultados, figura de varredura e tabela; o teto de páginas do build
+  é parametrizado por `TCC_MAX_PAGES` (padrão 17). Resultado central: o misto
+  alcança MAE 5,84 (span 10) no Figshare agrupado e 7,89 no VitalDB, com
+  $P_K$ 0,791/0,703 — mesma faixa de trabalhos publicados no mesmo corpus, com
+  modelo de 0,15 M de parâmetros.
+
 - **Dados:** os 15 derivados `data/vitaldb/*.npz` saíram do índice e do histórico Git
   (reescrita + push forçado); a cópia local permanece ignorada. O repositório público
   não redistribui VitalDB; o README documenta a política. A ref local `refs/codex/*`,
