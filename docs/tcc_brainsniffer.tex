@@ -26,13 +26,14 @@
 \makeatletter
 \renewcommand{\thebibliography}[1]{\section*{\refname
     \@mkboth{\MakeUppercase\refname}{\MakeUppercase\refname}}%
-  \small
+  \footnotesize
+  \setlength{\baselineskip}{11pt}
   \list{\@biblabel{\@arabic\c@enumiv}}%
        {\settowidth\labelwidth{\@biblabel{#1}}%
         \leftmargin\labelwidth
         \advance\leftmargin\labelsep
         \itemindent -\leftmargin
-        \itemsep 4pt
+        \itemsep 1pt
         \@openbib@code
         \usecounter{enumiv}%
         \let\p@enumiv\@empty
@@ -90,7 +91,7 @@ O Índice Bispectral (Bispectral Index, BIS) é uma saída proprietária calcula
 
 \subsection{Vazamento entre janelas e partição por grupo}
 
-Redes profundas já foram estudadas com alvos, canais, populações e equipamentos distintos para aproximar índices derivados de EEG \cite{park2020,shi2023}. O problema é que janelas vizinhas da mesma cirurgia são parecidas entre si em amplitude, espectro e nível de BIS, porque refletem o mesmo paciente no mesmo plano anestésico. Se essas janelas forem espalhadas aleatoriamente entre treino e teste, o teste contém trechos quase idênticos aos de treino, e a métrica mede a capacidade de reconhecer um caso já visto, não de generalizar: é o vazamento (\textit{leakage}), que infla o desempenho de forma silenciosa. Para evitar isso, este trabalho separa os dados por caso ou por pessoa (o grupo), de modo que nenhum grupo contribua simultaneamente para treino e para teste; o custo é uma estimativa mais pessimista e mais realista do uso em um caso novo. Resultados recentes nesse corpus e evidência metodológica mais ampla mostram que essa unidade de separação altera materialmente a estimativa de desempenho \cite{sukriti2026,saeb2017}.
+Redes profundas já foram estudadas com alvos, canais, populações e equipamentos distintos para aproximar índices derivados de EEG \cite{park2020,shi2023}. O problema é que janelas vizinhas da mesma cirurgia são parecidas entre si em amplitude, espectro e nível de BIS, porque refletem o mesmo paciente no mesmo plano anestésico. Se essas janelas forem espalhadas aleatoriamente entre treino e teste, o teste contém trechos quase idênticos aos de treino, e a métrica mede a capacidade de reconhecer um caso já visto, não de generalizar: é o vazamento (\textit{leakage}), que infla o desempenho de forma silenciosa. Para evitar isso, este trabalho separa os dados por caso ou por pessoa (o grupo), de modo que nenhum grupo contribua simultaneamente para treino e para teste; o custo é uma estimativa mais pessimista e mais realista do uso em um caso novo. Essa unidade de separação altera a estimativa de desempenho \cite{sukriti2026,saeb2017}.
 
 \subsection{Corpora, transparência e relato de modelos}
 
@@ -98,7 +99,7 @@ O conjunto ``EEG and BIS raw data'' reúne 24 casos anônimos com EEG frontal e 
 
 O VitalDB é um banco de sinais perioperatórios de milhares de cirurgias e inclui os canais de EEG e de BIS usados aqui (\texttt{BIS/EEG1\_WAV} e \texttt{BIS/BIS}) \cite{lee2022,vitaldb}. O conjunto aberto (\texttt{vitaldb.net}) exige licença CC BY-NC-SA 4.0 e acordo de uso de dados, sem redistribuição. Escala, equipamento, montagem e população diferem do Figshare; por isso, o VitalDB informa a sensibilidade à troca de fonte de dados, sem isolar a causa. As fontes também diferem no instrumento do rótulo: o corpus Figshare registra BIS a cada 5 s por sensor BIS Quatro (Aspect Medical Systems) \cite{ma2017,sukriti2026}, enquanto o VitalDB registra BIS numérico de 1 s de monitores BIS Vista (Covidien/Medtronic) \cite{vitaldb,lee2022}; versões de algoritmo e suavização não são públicas, então o rótulo não é o mesmo instrumento entre as fontes. O conjunto DOSE-I (Zenodo, CC BY 4.0) não foi incorporado à regressão porque usa uma escala clínica de sedação por observação (Modified Observer's Assessment of Alertness/Sedation, MOAA/S) e estado de consciência, não conversíveis em BIS \cite{dosei}.
 
-Uma reimplementação aberta do algoritmo do índice ajuda a discutir a transparência do cálculo, mas não torna um regressor treinado contra o BIS equivalente a um monitor nem certificado como tal \cite{openbis}. A independência entre desenvolvimento e avaliação, a descrição de grupos e a análise de calibração e acordo são componentes centrais de relato e avaliação de modelos; para desfecho contínuo, o tamanho da validação deve ser planejado pela precisão desejada, não pelo número de réplicas bootstrap \cite{tripodai,archer2021}.
+Uma reimplementação aberta do algoritmo do índice não torna um regressor treinado contra o BIS equivalente a um monitor \cite{openbis}. Independência entre desenvolvimento e avaliação, descrição de grupos e análise de acordo e calibração são centrais no relato de modelos \cite{tripodai,archer2021}.
 
 \section{Materiais e métodos}
 
@@ -183,7 +184,7 @@ O resultado principal agrega todas as janelas aceitas (casos longos pesam mais),
 
 A associação ordinal entre estimativa e referência é medida pela probabilidade de predição $P_K$ (na literatura de anestesia, $Pk$), proposta por Smith, Dutton e Smith \cite{smith1996} como variante reescalada da medida $d_{y.x}$ de Kim. A pergunta que ela responde é direta: sorteados dois momentos com profundidades de referência distintas, qual é a chance de o indicador ordená-los na mesma ordem da referência? Vale 1 na ordem perfeita e 0,5 no acaso, como cara-ou-coroa.
 
-Na prática, pares com o mesmo BIS de referência são excluídos (não informam ordenação) e pares empatados no indicador contam 0,5. Por depender só da ordem, $P_K$ ignora erro sistemático de escala: um modelo que erra sempre por 10 pontos, mas preserva a ordem, pode ter $P_K$ alto com MAE ruim; outro com MAE menor, mas que embaralha níveis próximos, pode ter $P_K$ baixo. Essa invariância separa ganho de ordenação de mero ajuste de escala, o que MAE, RMSE e Pearson sozinhos confundem.
+Na prática, pares com o mesmo BIS de referência são excluídos (não informam ordenação) e pares empatados no indicador contam 0,5. Por depender só da ordem, $P_K$ ignora erro sistemático de escala: um modelo que erra sempre por 10 pontos, mas preserva a ordem, pode ter $P_K$ alto com MAE ruim.
 
 O comando \texttt{evaluate-pk} reaproveita as janelas e as predições dos mesmos benchmarks, sem retreino, e grava \texttt{pk\_*.json}; os intervalos vêm de reamostragem de casos ($B=1.000$, seed 42), na mesma unidade agrupada do bootstrap \cite{smith1996}.
 
@@ -220,18 +221,18 @@ Baseline espectral & 8,86 & 13,23 & 0,667 & 0,540 & 0,480\\
 \end{tabular}
 \end{table}
 
-A Figura~\ref{fig:trajectory} mostra queda inicial e elevação final em ambas as curvas, mas a CNN superestima o patamar intermediário e não reproduz várias oscilações da referência. Nas 850 janelas aceitas, MAE 8,72, RMSE 10,21, viés $+4{,}79$ e Pearson intra-caso 0,910: associação alta não elimina erro sistemático; é exemplo ilustrativo, não evidência de generalização. A série BIS tem 906 pontos e vai além do EEG; das 871 janelas completas, 21 foram rejeitadas, 35 pontos finais ficaram sem janela e as 56 posições sem previsão permanecem NaN (não havia EEG inválido neste caso).
+A Figura~\ref{fig:trajectory} mostra queda inicial e elevação final em ambas as curvas, mas a CNN superestima o patamar intermediário e não reproduz várias oscilações da referência. Nas 850 janelas aceitas, MAE 8,72, RMSE 10,21, viés $+4{,}79$ e Pearson intra-caso 0,910: associação alta não elimina erro sistemático; é exemplo ilustrativo, não evidência de generalização. Das 871 janelas completas, 21 foram rejeitadas por qualidade e 56 posições ficaram sem previsão (NaN).
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.92\columnwidth]{figures/bis_trajectory.pdf}
+\includegraphics[width=0.88\columnwidth]{figures/bis_trajectory.pdf}
 \caption{Trajetória offline do Figshare case19: referência e predição bruta (topo) e erro por janela (base).}
 \label{fig:trajectory}
 \end{figure}
 
 \subsection{Comparação dos checkpoints nos benchmarks históricos}
 
-O candidato misto apresentou MAE 6,69, RMSE 10,67, viés 2,12, Pearson 0,818 e macro-F1 0,574 no holdout Figshare. Nos 15 participantes e 38.730 janelas do holdout VitalDB histórico, obteve 8,60, 11,74, $-1{,}01$, 0,688 e 0,486. O ativo obteve, respectivamente, 7,03/11,08/0,79/0,784/0,548 no Figshare e 12,43/18,80/1,40/0,024/0,398 no VitalDB. A Tabela~\ref{tab:benchmarks} organiza esses agregados. Três dos quatro MAE ficam abaixo de 10 unidades BIS (6,69; 7,03 e 8,60) --- inclusive o do misto nessa fonte, embora ele tenha visto participantes dela no ajuste ---; o ativo no VitalDB (12,43) ultrapassa essa escala, compatível com a perda de ordenação medida pelo $P_K$.
+O candidato misto apresentou MAE 6,69, RMSE 10,67, viés 2,12, Pearson 0,818 e macro-F1 0,574 no holdout Figshare. Nos 15 participantes e 38.730 janelas do holdout VitalDB histórico, obteve 8,60, 11,74, $-1{,}01$, 0,688 e 0,486. O ativo obteve, respectivamente, 7,03/11,08/0,79/0,784/0,548 no Figshare e 12,43/18,80/1,40/0,024/0,398 no VitalDB. A Tabela~\ref{tab:benchmarks} organiza esses agregados. Três dos quatro MAE ficam abaixo de 10 unidades BIS (6,69; 7,03 e 8,60) --- inclusive o do misto nessa fonte, embora ele tenha visto participantes dela no ajuste ---; o ativo no VitalDB (12,43) ultrapassa essa escala, compatível com a perda de ordenação medida pelo $P_K$. Como referência no mesmo corpus, a entropia amostral com floresta aleatória reportou MAE 5,22 $\pm$ 2,12 \cite{liu2018} e um modelo contemporâneo, 6,03 $\pm$ 0,38 sob validação agrupada com suavização \cite{sukriti2026}; com protocolos distintos, o MAE obtido (6,69--7,03) fica na mesma ordem de grandeza, sem ranking.
 
 \begin{table}[H]
 \centering
@@ -258,7 +259,7 @@ No VitalDB, o MAE do candidato caiu em 14 dos 15 casos pareados; no \texttt{vita
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.92\columnwidth]{figures/comparison.pdf}
+\includegraphics[width=0.88\columnwidth]{figures/comparison.pdf}
 \caption{Agregados por janela e MAE pareado por caso; em (c), cada ponto é um caso e linhas à esquerda indicam menor MAE do misto.}
 \label{fig:comparison}
 \end{figure}
@@ -266,7 +267,7 @@ No VitalDB, o MAE do candidato caiu em 14 dos 15 casos pareados; no \texttt{vita
 \subsection{Probabilidade de predição $P_K$}
 
 A associação ordinal é medida pela probabilidade de predição $P_K$ de Smith, Dutton e Smith \cite{smith1996}: com que frequência o indicador ordena corretamente duas profundidades observadas distintas? A Tabela~\ref{tab:benchmarks} e a Figura~\ref{fig:pk} trazem os valores e os intervalos de 95\%.
-No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico (0,773 para 0,774): não há evidência de mudança na ordenação, e as diferenças são pequenas frente à incerteza dos intervalos. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996}. Por caso, o $P_K$ do ativo no VitalDB varia de 0,39 a 0,74 (mediana 0,48) e o do misto, de 0,48 a 0,81 (mediana 0,67); no Figshare, as medianas são 0,80 e 0,81. Pares com alvo empatado excluem 3,1\% dos pares no Figshare e 0,3\% no VitalDB (5,0\% no \texttt{vitaldb\_case13}).
+No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico (0,773 para 0,774): não há evidência de mudança na ordenação, e as diferenças são pequenas frente à incerteza dos intervalos. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996}. Por caso, o $P_K$ do ativo no VitalDB varia de 0,39 a 0,74 (mediana 0,48) e o do misto, de 0,48 a 0,81 (mediana 0,67); no Figshare, as medianas são 0,80 e 0,81.
 
 \begin{figure}[H]
 \centering
@@ -278,11 +279,11 @@ No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o
 
 \subsection{Bootstrap agrupado e sensibilidade ao offset}
 
-A Tabela~\ref{tab:benchmarks} reúne os intervalos de 95\% do bootstrap agrupado por caso. Os marcadores da Figura~\ref{fig:bootstrap} são as métricas observadas; somente as barras representam as réplicas, cujas médias não substituem esses pontos.
+A Tabela~\ref{tab:benchmarks} reúne os intervalos de 95\% do bootstrap agrupado por caso; na Figura~\ref{fig:bootstrap}, os marcadores são as métricas observadas e as barras, as réplicas, cujas médias não substituem esses pontos.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.84\columnwidth]{figures/bootstrap_intervals.pdf}
+\includegraphics[width=0.80\columnwidth]{figures/bootstrap_intervals.pdf}
 \caption{Bootstrap agrupado por caso.}
 \label{fig:bootstrap}
 \end{figure}
@@ -291,7 +292,7 @@ Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,0
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.84\columnwidth]{figures/offset_sensitivity.pdf}
+\includegraphics[width=0.80\columnwidth]{figures/offset_sensitivity.pdf}
 \caption{Sensibilidade ao offset do rótulo; eixos ampliados (variação total $\leq 0{,}5$ ponto de MAE e $0{,}04$ de Pearson).}
 \label{fig:offset}
 \end{figure}
@@ -305,16 +306,16 @@ A Figura~\ref{fig:corpus}a separa os 59 casos em três estados mutuamente exclus
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.94\columnwidth]{figures/corpus_panels.pdf}
+\includegraphics[width=0.90\columnwidth]{figures/corpus_panels.pdf}
 \caption{Composição e qualidade do corpus.}
 \label{fig:corpus}
 \end{figure}
 
-A Figura~\ref{fig:training}a acompanha a perda de treino e as métricas de validação por época. As curvas medem coisas diferentes: a perda é a função otimizada (Smooth L1, adimensional) e o MAE/RMSE de validação estão em pontos BIS; o critério de leitura é a validação, e sobreajuste apareceria como perda caindo com MAE de validação piorando. Nesta execução, a perda de treino cai de 6,2 para 4,7 ao longo das dez épocas fixas, enquanto o MAE de validação oscila entre 5,49 e 6,38 sem platô claro; o checkpoint salvo é o de melhor MAE de validação (época 3), não o da última época. O painel (b) troca a projeção teórica por calibração medida: a inclinação predito--referência cai de 0,72 (0,61--0,80) no Figshare ativo para 0,02 ($-0,08$--0,13) no VitalDB ativo, com ICC(2,1) 0,02 e 57,2\% das janelas com $|erro|\leq10$ pontos BIS; o misto recupera 0,55 (0,46--0,64), ICC 0,67 e 68,9\% no VitalDB, ainda abaixo do Figshare (misto: 0,82, ICC 0,81 e 80,6\%). Concordância e associação divergem: o $P_K$ do misto no VitalDB (0,672) convive com limites de concordância de 95\% de $-24$ a $+22$ pontos \cite{archer2021}.
+A Figura~\ref{fig:training}a acompanha o treino: a perda cai de 6,2 para 4,7 em dez épocas, o MAE de validação oscila entre 5,49 e 6,38, e o checkpoint salvo é o de melhor validação (época 3). O painel (b) troca a projeção teórica por calibração medida: a inclinação predito--referência cai de 0,72 (0,61--0,80) no Figshare ativo para 0,02 ($-0,08$--0,13) no VitalDB ativo, com ICC(2,1) 0,02 e 57,2\% das janelas com $|erro|\leq10$ pontos BIS; o misto recupera 0,55 (0,46--0,64), ICC 0,67 e 68,9\%, ainda abaixo do Figshare (misto: 0,82, ICC 0,81 e 80,6\%).
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.96\columnwidth]{figures/training_panels.pdf}
+\includegraphics[width=0.90\columnwidth]{figures/training_panels.pdf}
 \caption{Treinamento do checkpoint ativo e calibração por braço (inclinação predito--referência com IC 95\% por bootstrap de casos).}
 \label{fig:training}
 \end{figure}
@@ -322,26 +323,26 @@ A Figura~\ref{fig:training}a acompanha a perda de treino e as métricas de valid
 
 \section{Discussão e limitações}
 
-A degradação do ativo ao ir do Figshare para o VitalDB é evidência interna de sensibilidade à troca de fonte, não prova de qual diferença (equipamento, centro, ganho, montagem, população ou distribuição do BIS) a causou. Um estudo contemporâneo no mesmo corpus reporta MAE 6,03 $\pm$ 0,38 e CCC 0,819 com validação cruzada agrupada por sujeito e suavização exponencial \cite{sukriti2026}; como o protocolo difere (folds, suavização, normalização e seleção de modelo), a comparação serve como ordem de grandeza, não como ranking. A redução de erro do misto é compatível com adaptação após incorporar participantes VitalDB; como o benchmark é da mesma fonte e já havia sido observado, ele gera hipótese para uma nova coorte travada, não alegação de generalização externa \cite{lee2022,tripodai,imdrfn88}.
+A degradação do ativo do Figshare para o VitalDB é evidência interna de sensibilidade à troca de fonte, não prova de qual diferença (equipamento, ganho, montagem, população ou BIS) a causou. A redução de erro do misto é compatível com adaptação após incorporar participantes VitalDB; como o benchmark é da mesma fonte e já havia sido observado, ele gera hipótese para uma nova coorte travada, não generalização externa \cite{lee2022,tripodai,imdrfn88}.
 
-A melhora em 14/15 casos convive com piora no caso 16, e os agregados por janela privilegiam cirurgias longas: no VitalDB, a mediana do MAE por caso é 12,96 no ativo e 9,60 no misto, contra 12,43 e 8,60 agregados (faixas por caso: 6,57--21,43 no ativo; 6,11--12,66 no misto); Pearson pode aumentar mesmo com viés relevante. A referência de 10 unidades é escala de concordância entre medições do monitor, não limiar estatístico para MAE \cite{harada2021}. As análises de concordância e calibração feitas aqui são exploratórias; validação com mais casos segue necessária \cite{tripodai,archer2021}.
+A melhora em 14/15 casos convive com piora no caso 16, e os agregados por janela privilegiam cirurgias longas: no VitalDB, a mediana do MAE por caso é 12,96 no ativo e 9,60 no misto, contra 12,43 e 8,60 agregados; Pearson pode aumentar mesmo com viés relevante. A referência de 10 unidades é escala de concordância entre medições do monitor, não limiar para MAE \cite{harada2021}. As análises de concordância e calibração são exploratórias; validação com mais casos segue necessária \cite{tripodai,archer2021}.
 
-O bootstrap representa só a variabilidade de reamostrar os casos disponíveis sob o algoritmo escolhido; não cobre incerteza de treinamento, seleção de checkpoint, hiperparâmetros, mudança de centro ou erro do rótulo BIS. O pequeno $n$ Figshare e o reaproveitamento do benchmark VitalDB impedem leitura confirmatória e elevam o risco de viés do relato \cite{field2007,archer2021,probastai}; a avaliação é pré-clínica, não de um sistema em uso \cite{decideai}.
+O bootstrap cobre só a variabilidade de reamostrar os casos disponíveis sob o algoritmo escolhido; não cobre incerteza de treinamento, seleção de checkpoint, hiperparâmetros, mudança de centro ou erro do rótulo. O pequeno $n$ Figshare e o reaproveitamento do benchmark VitalDB impedem leitura confirmatória e elevam o risco de viés do relato \cite{field2007,archer2021,probastai}; a avaliação é pré-clínica \cite{decideai}.
 
-O alvo é a saída BIS, sensível a EMG, bloqueio neuromuscular, cetamina e atrasos; logo, baixo erro contra o monitor não equivale a medir consciência ou efeito farmacológico verdadeiro \cite{schuller2015,hans2005,pilge2006}. Além disso, o modelo usa a banda de 0,5--45 Hz, que inclui gama frontal sensível a EMG, e o \textit{notch} fixo em 50 Hz não corresponde obrigatoriamente à rede elétrica de cada centro (o VitalDB é de Seul); nenhuma dessas duas sensibilidades foi medida. Faixas e limiares de qualidade do protótipo são heurísticas de engenharia, sem validação clínica. DOSE-I permanece tarefa separada para MOAA/S e estado de consciência, sem conversão artificial para BIS \cite{dosei}.
+O alvo é a saída BIS, sensível a EMG, bloqueio neuromuscular, cetamina e atrasos; baixo erro contra o monitor não equivale a medir consciência ou efeito farmacológico \cite{schuller2015,hans2005,pilge2006}. O modelo usa a banda de 0,5--45 Hz, que inclui gama frontal sensível a EMG, e o \textit{notch} fixo em 50 Hz não corresponde obrigatoriamente à rede de cada centro (o VitalDB é de Seul); nenhuma dessas sensibilidades foi medida. Faixas e limiares de qualidade são heurísticas de engenharia, sem validação clínica; DOSE-I permanece tarefa separada para MOAA/S \cite{dosei}.
 
 A leitura ordinal separa dois diagnósticos: no VitalDB o ativo tem $P_K$ 0,515, quase acaso; no Figshare alcança 0,773, e o misto eleva o Pearson sem mover $P_K$, o que não caracteriza ganho de ordenação. Como a escala é o BIS de referência, não um desfecho de resposta ao estímulo, esses valores não substituem validação clínica \cite{smith1996}.
 
-Em engenharia, a cadeia registra hashes, partições, pré-processamento, relatórios e replay; a política de amostragem do checkpoint ativo não foi registrada, lacuna mantida como limitação histórica. A trajetória individual mostra erros que os agregados ocultam, mas não substitui a análise entre casos; investigar lacunas e concordância são extensões possíveis \cite{tripodai}.
+Em engenharia, a cadeia registra hashes, partições, pré-processamento e replay; a política de amostragem do checkpoint ativo não foi registrada, limitação histórica. A trajetória individual mostra erros que os agregados ocultam, mas não substitui a análise entre casos; investigar lacunas e concordância são extensões possíveis \cite{tripodai}.
 
 \section{Conclusão}
 
-O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição a esse domínio, sem independência confirmatória. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelo número de casos, pelo reuso dos benchmarks e pela imputação offline.
+O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição a esse domínio, sem independência confirmatória. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelos casos, pelo reuso dos benchmarks e pela imputação offline.
 
 A contribuição defensável é uma base auditável para formular e testar hipóteses, não um sistema clínico. O software não mede consciência, não prescreve dose, não controla bomba e não deve acionar alarme ou conduta; uma futura alegação de generalização exigiria avaliação independente \cite{tripodai}.
 
 \subsection*{Disponibilidade}
-O código-fonte, os relatórios de métricas e as figuras deste artigo estão em \url{https://github.com/Bruno-BRG/brainsniffer}, sob licença MIT, no commit \texttt{114f3d7} (ou posterior). Os dados não são redistribuídos: o Figshare permanece no DOI original (CC BY 4.0), e o VitalDB é obtido localmente pelo comando de download, sob seus termos de uso. Relatórios JSON e sidecars dos checkpoints registram hashes e configurações para auditoria das partições e das métricas.
+O código-fonte e os relatórios deste artigo estão em \url{https://github.com/Bruno-BRG/brainsniffer}, sob licença MIT, no commit \texttt{114f3d7} (ou posterior); os dados não são redistribuídos (Figshare CC BY 4.0; VitalDB sob seus termos de uso), e relatórios e sidecars registram hashes para auditoria.
 
 \bibliographystyle{sbc}
 \bibliography{referencias}
