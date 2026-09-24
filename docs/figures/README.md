@@ -8,8 +8,10 @@ JSON de checkpoints explicitamente listados em `MODEL_FILES` e confere hashes,
 contagens e separação do holdout Figshare no desenvolvimento fixo. A figura por
 de Pk valida ainda os quatro relatórios `pk_*.json` contra os agregados
 históricos (mesmo $n$, MAE/RMSE/bias/Pearson dentro de $10^{-4}$, Pk dentro do
-próprio intervalo e semente fixa). Arquivos JSON locais fora dessas listas não
-entram nas figuras.
+próprio intervalo e semente fixa), e o painel de calibração valida
+`reports/calibration_analysis.json` contra os mesmos agregados (mesmo $n$ e MAE
+dentro de $10^{-4}$). Arquivos JSON locais fora dessas listas não entram nas
+figuras.
 
 ## Contrato visual comum
 
@@ -23,6 +25,10 @@ entram nas figuras.
   Fundo branco, eixos pretos de 0,7 pt e grid cinza claro de 0,5 pt.
 - Paleta: preto `#000000`, cinza `#555555` e neutros; sem gradientes e sem depender de cor para distinguir séries.
 - Distinção por formato (leitura em preto e branco): círculo preenchido e linha contínua para o checkpoint ativo, quadrado aberto e linha tracejada para o candidato misto; IC misto tracejado. Segmentos cinza unem os pares na comparação. No offset, métricas usam símbolos/linhas distintos (círculo/linha contínua vs. quadrado/linha tracejada). Na trajetória, BIS de referência em linha contínua e CNN em linha tracejada. Nas barras de corpus, elegíveis de desenvolvimento em preenchimento sólido, quarentena de desenvolvimento em hachurado (`///`) e congelados fora do pool em quadriculado (`xx`), todos com borda preta; o "9 de 15" dentro do bloco congelado é uma anotação sobre a mesma barra, sem dupla contagem.
+- Painel de calibração: diamante cinza preenchido marca o baseline espectral
+  (RF); as linhas de referência em x = 0 (pontilhada) e x = 1 (tracejada)
+  distinguem-se dos IC por braço (sólido para o ativo, tracejado para o misto
+  e pontilhado para o RF).
 - Escalas: MAE parte de zero quando compara magnitudes; Pearson usa o domínio
   completo de -1 a +1; eixos ampliados da análise de offset são declarados.
 - Escopo: resultados exploratórios de pesquisa, sem interpretação como
@@ -128,17 +134,26 @@ entram nas figuras.
 
 ## `training_panels.png`
 
-- Pergunta: como o treinamento se comporta e o que uma projeção de casos
-  permitiria planejar?
+- Pergunta: como o treinamento se comporta e como cada braço calibra fora do
+  domínio em que foi ajustado?
 - Takeaway: a perda de treino e as métricas de validação medem coisas diferentes
-  (adimensional versus pontos BIS) e o critério de leitura é a validação; a
-  projeção é um cenário ancorado no único valor medido, não uma curva medida.
+  (adimensional versus pontos BIS) e o critério de leitura é a validação; na
+  calibração, o ativo perde a relação no VitalDB (inclinação 0,02, ICC 0,02) e o
+  misto recupera parcialmente (0,55, ICC 0,67) sem igualar o Figshare.
 - Painéis: (a) histórico de treino e validação por época (perda de treino,
-  adimensional, e MAE/RMSE de validação, em pontos BIS); (b) projeção teórica de
-  MAE por número de casos de treino em escala logarítmica, ancorada em 13 casos e
-  MAE 7,03, explicitamente não medida.
+  adimensional, e MAE/RMSE de validação, em pontos BIS); (b) inclinação da reta
+  de calibração predito~referência por braço, com IC 95% por bootstrap de casos;
+  as linhas de referência marcam x = 0 (sem calibração) e x = 1 (identidade), e
+  as anotações à direita trazem o ICC(2,1) absoluto e a fração de janelas com
+  |erro| ≤ 10 pontos BIS. Círculo preenchido: CNN ativo; quadrado aberto: CNN
+  misto; diamante cinza: baseline espectral (RF); eixo y agrupado por benchmark,
+  Figshare acima e VitalDB abaixo.
+- Escopo: a projeção teórica de MAE por número de casos permanece apenas nos
+  relatórios e no painel do site, fora do artigo; aqui a calibração é medida nos
+  mesmos holdouts auditados (Figshare com 5 casos/5.523 janelas e VitalDB com
+  15/38.730; B=1.000, seed 42) e confere n e MAE com os agregados históricos.
 - Fontes: `models/brainsniffer_cnn.json` e
-  `reports/figshare_holdout_evaluation.json`.
+  `reports/calibration_analysis.json`.
 
 ## `bis_trajectory.png`
 
@@ -150,7 +165,7 @@ entram nas figuras.
 
 ## Inventário auditado
 
-Além dos dez relatórios quantitativos usados diretamente, os dois snapshots
+Além dos onze relatórios quantitativos usados diretamente, os dois snapshots
 LSL sintéticos foram auditados apenas para confirmar as barreiras de uso
 registradas nas execuções históricas. LSL, seu comando, dependências e publisher
 foram removidos do projeto. Os snapshots permanecem inalterados para auditoria
@@ -160,15 +175,16 @@ não foram reatribuídos ao JSONL. A fixture
 publisher removido e relógio liblsl, não uma instrução ativa. Eles não são
 tratados como evidência de desempenho científico. A lista completa é:
 
-1. `reports/corpus_manifest.json`
-2. `reports/figshare_holdout_evaluation.json`
-3. `reports/lsl_synthetic_intake_session.json`
-4. `reports/lsl_synthetic_session.json`
-5. `reports/mixed_fixed_figshare_holdout.json`
-6. `reports/mixed_vitaldb_external.json`
-7. `reports/offset_sensitivity.json`
-8. `reports/vitaldb_external_validation.json`
-9. `reports/pk_figshare_active.json`
-10. `reports/pk_figshare_mixed.json`
-11. `reports/pk_vitaldb_active.json`
-12. `reports/pk_vitaldb_mixed.json`
+1. `reports/calibration_analysis.json`
+2. `reports/corpus_manifest.json`
+3. `reports/figshare_holdout_evaluation.json`
+4. `reports/lsl_synthetic_intake_session.json`
+5. `reports/lsl_synthetic_session.json`
+6. `reports/mixed_fixed_figshare_holdout.json`
+7. `reports/mixed_vitaldb_external.json`
+8. `reports/offset_sensitivity.json`
+9. `reports/vitaldb_external_validation.json`
+10. `reports/pk_figshare_active.json`
+11. `reports/pk_figshare_mixed.json`
+12. `reports/pk_vitaldb_active.json`
+13. `reports/pk_vitaldb_mixed.json`
