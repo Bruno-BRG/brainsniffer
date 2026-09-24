@@ -60,24 +60,24 @@
 \maketitle
 
 \begin{abstract}
-This paper describes BrainSniffer, a reproducible engineering prototype that estimates a Bispectral Index (BIS) reference label from frontal electroencephalography (EEG). The pipeline uses five-second windows at 128 Hz, a compact one-dimensional convolutional neural network, and partitions grouped by case or subject. The active Figshare-only checkpoint reached mean absolute error (MAE) 7.03 and Pearson correlation 0.784 in a five-case Figshare holdout, but 12.43 and 0.024 in a 15-case VitalDB cross-dataset assessment, where ordinal prediction probability (Pk) dropped to 0.515, indistinguishable from chance. A mixed candidate trained with Figshare and part of VitalDB reached 6.69/0.818 on the Figshare benchmark and 8.60/0.688 on the historical VitalDB participant holdout. These results are retrospective and exploratory; Pearson is interpreted as association, not agreement. BrainSniffer neither measures consciousness nor supports clinical decisions, alarms, or drug dosing.
+This paper describes BrainSniffer, a reproducible engineering prototype that estimates a Bispectral Index (BIS) reference label from frontal electroencephalography (EEG). The pipeline uses five-second windows at 128 Hz, a compact one-dimensional convolutional neural network, and partitions grouped by case or subject. The active Figshare-only checkpoint reached mean absolute error (MAE) 7.03 and Pearson correlation 0.784 in a five-case Figshare holdout, but 12.43 and 0.024 in a 15-case VitalDB cross-dataset assessment, where ordinal prediction probability (Pk) dropped to 0.515, indistinguishable from chance. A mixed candidate trained with Figshare and part of VitalDB reached 6.69/0.818 on the Figshare benchmark and 8.60/0.688 on the historical VitalDB participant holdout; a causal per-case exponential smoothing (EWMA, exploratory, no retraining) lowers the mixed candidate to 5.84 and 7.89 (span 10), respectively. These results are retrospective and exploratory; Pearson is interpreted as association, not agreement. BrainSniffer neither measures consciousness nor supports clinical decisions, alarms, or drug dosing.
 
-\textbf{Keywords:} frontal EEG; BIS reference label; one-dimensional CNN; grouped validation; domain shift; reproducibility.
+\textbf{Keywords:} frontal EEG; BIS reference label; one-dimensional CNN; grouped validation; domain shift; causal smoothing; reproducibility.
 \end{abstract}
 
 \begin{resumo}
-Este artigo descreve o BrainSniffer, protótipo de engenharia reproduzível que estima, a partir de eletroencefalografia (EEG) frontal, um rótulo de referência do Índice Bispectral (BIS). O pipeline usa janelas de cinco segundos a 128 Hz, uma rede neural convolucional unidimensional compacta (1-D CNN) e partições agrupadas por caso ou pessoa. O checkpoint ativo, treinado apenas no Figshare, obteve erro absoluto médio (MAE) 7,03 e correlação de Pearson 0,784 em cinco casos Figshare, mas 12,43 e 0,024 na avaliação com 15 casos VitalDB, com $P_K$ 0,515, indistinguível do acaso. Um candidato misto, treinado com Figshare e parte do VitalDB, obteve 6,69/0,818 no benchmark Figshare e 8,60/0,688 no holdout histórico VitalDB por participante. Os resultados são retrospectivos e exploratórios; Pearson é tratado como associação, não acordo. O BrainSniffer não mede consciência nem apoia decisão clínica, alarme ou dose.
+Este artigo descreve o BrainSniffer, protótipo de engenharia reproduzível que estima, a partir de eletroencefalografia (EEG) frontal, um rótulo de referência do Índice Bispectral (BIS). O pipeline usa janelas de cinco segundos a 128 Hz, uma rede neural convolucional unidimensional compacta (1-D CNN) e partições agrupadas por caso ou pessoa. O checkpoint ativo, treinado apenas no Figshare, obteve erro absoluto médio (MAE) 7,03 e correlação de Pearson 0,784 em cinco casos Figshare, mas 12,43 e 0,024 na avaliação com 15 casos VitalDB, com $P_K$ 0,515, indistinguível do acaso. Um candidato misto, treinado com Figshare e parte do VitalDB, obteve 6,69/0,818 no benchmark Figshare e 8,60/0,688 no holdout histórico VitalDB por participante; uma suavização exponencial causal por caso (EWMA, exploratória, sem retreino) reduz o misto para 5,84 e 7,89 (span 10). Os resultados são retrospectivos e exploratórios; Pearson é tratado como associação, não acordo. O BrainSniffer não mede consciência nem apoia decisão clínica, alarme ou dose.
 
-\textbf{Palavras-chave:} EEG frontal; rótulo BIS; CNN unidimensional; validação agrupada; mudança de domínio; reprodutibilidade.
+\textbf{Palavras-chave:} EEG frontal; rótulo BIS; CNN unidimensional; validação agrupada; mudança de domínio; suavização causal; reprodutibilidade.
 \end{resumo}
 
 \section{Introdução}
 
 Na anestesia geral, é preciso saber se o paciente está suficientemente hipnotizado sem exagerar na dose, e para isso usam-se referências objetivas de profundidade. O Índice Bispectral (Bispectral Index, BIS), calculado a partir da eletroencefalografia (EEG) frontal, é a referência mais usada à beira do leito, mas é uma saída proprietária: sua regra de combinação não é publicada e não pode ser reproduzida exatamente a partir do sinal. Modelos que tentam aproximar esse rótulo enfrentam ainda um risco metodológico silencioso: janelas vizinhas da mesma cirurgia são quase idênticas, então uma partição aleatória entre treino e teste mede o reconhecimento de casos já vistos, não a generalização. Falta um protótipo reproduzível que estime esse rótulo com partições por caso, um controle espectral e avaliação entre fontes; este trabalho apresenta o BrainSniffer, com esse desenho.
 
-A pesquisa responde a duas perguntas. (i) Quanto uma rede neural convolucional unidimensional compacta (1-D CNN) aproxima o rótulo BIS em casos não usados no ajuste, comparada a um controle mais simples baseado em medidas espectrais (baseline espectral)? (ii) Esse desempenho se mantém ao trocar a fonte dos dados, do Figshare para o VitalDB, com outro equipamento, montagem e população? O objetivo geral é avaliar essa aproximação de forma reproduzível. Os objetivos específicos são: comparar a CNN ao baseline espectral no holdout Figshare; quantificar a degradação do modelo ao aplicá-lo ao VitalDB; testar se incorporar parte do VitalDB ao treino (candidato misto) reduz o erro; e caracterizar a ordenação das estimativas (probabilidade de predição $P_K$) e a incerteza da avaliação (bootstrap agrupado de casos).
+A pesquisa responde a duas perguntas. (i) Quanto uma rede neural convolucional unidimensional compacta (1-D CNN) aproxima o rótulo BIS em casos não usados no ajuste, comparada a um controle mais simples baseado em medidas espectrais (baseline espectral)? (ii) Esse desempenho se mantém ao trocar a fonte dos dados, do Figshare para o VitalDB, com outro equipamento, montagem e população? O objetivo geral é avaliar essa aproximação de forma reproduzível. Os objetivos específicos são: comparar a CNN ao baseline espectral no holdout Figshare; quantificar a degradação do modelo ao aplicá-lo ao VitalDB; testar se incorporar parte do VitalDB ao treino (candidato misto) reduz o erro; e caracterizar a ordenação das estimativas (probabilidade de predição $P_K$) e a incerteza da avaliação (bootstrap agrupado de casos); além disso, testar o efeito de uma suavização causal (EWMA) sobre as predições congeladas.
 
-Vale fixar o vocabulário: o modelo estima um rótulo de referência derivado do BIS, não o BIS como grandeza independente, porque o próprio BIS é a saída de um monitor sobre o mesmo sinal. A contribuição é uma cadeia com partições por grupo, controle espectral, comparação entre fontes e análise de incerteza. O escopo deste trabalho é avaliar essa cadeia, não desenvolver um dispositivo médico. A Seção~2 fundamenta o índice BIS e o problema do vazamento entre janelas; a Seção~3 descreve materiais e métodos; a Seção~4 apresenta os resultados; a Seção~5 discute limitações; e a Seção~6 conclui.
+Vale fixar o vocabulário: o modelo estima um rótulo de referência derivado do BIS, não o BIS como grandeza independente, porque o próprio BIS é a saída de um monitor sobre o mesmo sinal. A contribuição é uma cadeia com partições por grupo, controle espectral, comparação entre fontes, análise de incerteza e suavização causal exploratória. O escopo deste trabalho é avaliar essa cadeia, não desenvolver um dispositivo médico. A Seção~2 fundamenta o índice BIS e o problema do vazamento entre janelas; a Seção~3 descreve materiais e métodos; a Seção~4 apresenta os resultados; a Seção~5 discute limitações; e a Seção~6 conclui.
 
 
 
@@ -87,7 +87,7 @@ Vale fixar o vocabulário: o modelo estima um rótulo de referência derivado do
 
 \subsection{O índice BIS e seus limites}
 
-O Índice Bispectral (Bispectral Index, BIS) é uma saída proprietária calculada a partir da eletroencefalografia (EEG), o registro da atividade elétrica cerebral captada no couro cabeludo; a formulação deriva da análise bispectral do EEG e de suas primeiras aplicações clínicas \cite{johansen2000}. Sua escala vai de 0, próximo de silêncio elétrico, a 100, tipicamente associado à vigília; a faixa intermediária costuma ser usada como referência de hipnose em anestesia geral, sem que isso defina um limiar clínico único ou uma fronteira nítida entre estados. O cálculo combina características no domínio do tempo e da frequência (incluindo componentes bispectrais e de supressão de surto) por uma regra de combinação não publicada; por ser fechado, o índice não pode ser reproduzido exatamente a partir do EEG, e qualquer modelo treinado contra ele herda esse limite. O BIS é indicado apenas como auxílio, em contexto e sob supervisão definidos, não como medida direta de consciência, de adequação anestésica ou de dose. Sua leitura varia com a atividade elétrica muscular (eletromiografia, EMG), o bloqueio neuromuscular, os fármacos usados e o atraso de processamento: estudos controlados documentaram queda do índice após bloqueio em voluntários acordados, resposta paradoxal à cetamina e atrasos distintos entre monitores processados \cite{fda2024,openbis,schuller2015,hans2005,pilge2006}. Ensaios com protocolos guiados pelo índice também produziram resultados que dependem do grupo de comparação e da população, o que impede extrapolar um único número para benefício clínico universal \cite{baware,bunaware,bagrecall}.
+O Índice Bispectral (Bispectral Index, BIS) é uma saída proprietária calculada a partir da eletroencefalografia (EEG), o registro da atividade elétrica cerebral captada no couro cabeludo; a formulação deriva da análise bispectral do EEG e de suas primeiras aplicações clínicas \cite{johansen2000}. Sua escala vai de 0, próximo de silêncio elétrico, a 100, tipicamente associado à vigília; a faixa intermediária costuma ser usada como referência de hipnose em anestesia geral, sem que isso defina um limiar clínico único ou uma fronteira nítida entre estados. O cálculo combina características no domínio do tempo e da frequência (incluindo componentes bispectrais e de supressão de surto) por uma regra de combinação não publicada; por ser fechado, o índice não pode ser reproduzido exatamente a partir do EEG, e qualquer modelo treinado contra ele herda esse limite. O BIS é indicado apenas como auxílio, em contexto e sob supervisão definidos, não como medida direta de consciência, de adequação anestésica ou de dose. Sua leitura varia com a atividade elétrica muscular (eletromiografia, EMG), o bloqueio neuromuscular, os fármacos usados e o atraso de processamento: estudos controlados documentaram queda do índice após bloqueio em voluntários acordados, resposta paradoxal à cetamina e atrasos distintos entre monitores processados \cite{fda2024,openbis,schuller2015,hans2005,pilge2006}. Ensaios com protocolos guiados pelo índice também produziram resultados que dependem do grupo de comparação e da população, o que impede extrapolar um único número para benefício clínico universal \cite{baware,bunaware,bagrecall}. Além disso, o BIS chega suavizado e com atraso \cite{pilge2006}: comparar predições brutas de janela única a esse alvo superestima a oscilação do modelo, e a suavização causal é prática comum em trabalhos recentes no mesmo corpus \cite{sukriti2026}.
 
 \subsection{Vazamento entre janelas e partição por grupo}
 
@@ -200,6 +200,11 @@ Replay significa percorrer uma gravação existente, não adquirir EEG: preenche
 
 Para visualizar o comportamento temporal, fixou-se antes da inferência o \texttt{case19} do holdout Figshare (escolha declarada antes da inferência e não guiada pelo desempenho), usando toda a gravação (4.355 s). O procedimento reutiliza \texttt{make\_windows}, a configuração do checkpoint ativo e loader restrito, em CPU, sem treino. A curva bruta (sem EWMA) é posicionada no instante do alvo offline (início mais offset 0 s), em passos de 5 s; não representa disponibilidade sem atraso. Métricas e hashes ficam registrados na auditoria; a execução padrão não faz inferência nem download.
 
+\subsection{Suavização causal (EWMA) das predições}
+\label{sec:ewma-metodo}
+
+Como o alvo é uma saída já suavizada pelo monitor, o pipeline também permite uma média móvel exponencial causal por caso (EWMA), aplicada às predições congeladas, sem retreino: $s_t = \alpha y_t + (1-\alpha)s_{t-1}$, com $\alpha = 2/(\mathrm{span}+1)$ e reinício por caso; o \textit{span} é medido em janelas de 5 s e $\mathrm{span}=1$ reproduz a predição bruta. Usar apenas amostras passadas mantém o caminho compatível com o replay. A varredura de spans é retrospectiva e exploratória --- foi examinada depois dos resultados e não reescolhe checkpoint, treino ou arquitetura --- e segue a prática de suavização temporal de trabalhos contemporâneos \cite{sukriti2026,pilge2006}. Os artefatos ficam em \texttt{scripts/ewma\_postprocess.py} e \texttt{reports/ewma\_postprocess.json}.
+
 \section{Resultados}
 \label{sec:resultados}
 
@@ -297,8 +302,44 @@ Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,0
 \label{fig:offset}
 \end{figure}
 
+\subsection{Suavização EWMA das predições}
+\label{sec:ewma}
+
+A Tabela~\ref{tab:ewma} e a Figura~\ref{fig:ewma} mostram a varredura de spans. No Figshare, o EWMA reduz o MAE do ativo (7,03 para 5,91 no span 15) e do misto (6,69 para 5,68), elevando Pearson (0,784/0,818 para 0,850/0,873) e $P_K$ (0,773/0,774 para 0,803/0,793); com 50 s de memória (span 10), o misto alcança 5,84. O custo é latência efetiva (span$\times$5 s) e viés um pouco maior (0,79/2,12 para 0,86/2,21). No VitalDB, o ativo quase não muda (12,43 para 12,06; $P_K$ 0,515 para 0,510), enquanto o misto vai de 8,60 para 7,89 (span 10), com Pearson 0,755, $P_K$ 0,703 e 72,9\% das janelas com $|erro|\leq10$; o ganho pequeno do ativo reforça que ali a perda é de ordenação, não de ruído. O baseline espectral também melhora (8,86 para 7,56; 13,62 para 12,62), como esperado de um pós-processamento genérico.
+
+A calibração acompanha: o ICC(2,1) do misto sobe de 0,81 para 0,86 no Figshare e de 0,67 para 0,71 no VitalDB (span 10), enquanto o ativo no VitalDB permanece em 0,03 --- sem suavização que recupere a ordenação perdida.
+
+Para situar: com a mesma família de suavização, o misto alcança 5,68--5,84 no Figshare agrupado --- abaixo dos 6,03 $\pm$ 0,38 do modelo contemporâneo com validação agrupada e suavização \cite{sukriti2026} e próximo dos 5,22 da entropia amostral com divisão aleatória de segmentos \cite{liu2018} ---, com 0,15 milhão de parâmetros contra 1,07 milhão e dez épocas. A comparação não é ranking: partições e alvos diferem; o ponto é que a cadeia compacta e auditável fica na mesma faixa de erro de trabalhos publicados no mesmo corpus quando recebe o mesmo tipo de pós-processamento.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Efeito do EWMA causal por caso; MAE em pontos BIS; predições congeladas, sem retreino.}
+\label{tab:ewma}
+\begin{tabular}{llrrrr}
+\hline
+Benchmark & Braço & Bruto & Span 5 & Span 10 & Span 15\\
+\hline
+Figshare & ativo & 7,03 & 6,39 & 6,10 & 5,91\\
+Figshare & misto & 6,69 & 6,11 & 5,84 & 5,68\\
+Figshare & RF espectral & 8,86 & 7,86 & 7,56 & 7,38\\
+VitalDB & ativo & 12,43 & 12,11 & 12,06 & 12,06\\
+VitalDB & misto & 8,60 & 7,95 & 7,89 & 7,93\\
+VitalDB & RF espectral & 13,62 & 12,75 & 12,62 & 12,58\\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\columnwidth]{figures/ewma_sweep.pdf}
+\caption{Varredura de spans do EWMA causal por braço: MAE e $P_K$ no Figshare e no VitalDB.}
+\label{fig:ewma}
+\end{figure}
+
 \FloatBarrier
-\subsection{Painéis de apoio: corpus, qualidade e projeção}
+\subsection{Painéis de apoio: corpus, qualidade e calibração}
 
 As duas figuras seguintes detalham o que as tabelas e os agregados comprimem. A primeira caracteriza o corpus que alimenta o protótipo; a segunda documenta o comportamento do treinamento e uma projeção declarada de planejamento. Os painéis de composição e de qualidade da Figura~\ref{fig:corpus} e o histórico da Figura~\ref{fig:training}a documentam o corpus e o treinamento; somente a projeção da Figura~\ref{fig:training}b é cenário ancorado no MAE 7,03 medido, não curva observada.
 
@@ -333,11 +374,13 @@ O alvo é a saída BIS, sensível a EMG, bloqueio neuromuscular, cetamina e atra
 
 A leitura ordinal separa dois diagnósticos: no VitalDB o ativo tem $P_K$ 0,515, quase acaso; no Figshare alcança 0,773, e o misto eleva o Pearson sem mover $P_K$, o que não caracteriza ganho de ordenação. Como a escala é o BIS de referência, não um desfecho de resposta ao estímulo, esses valores não substituem validação clínica \cite{smith1996}.
 
+A suavização EWMA é pós-hoc: foi escolhida após os resultados, aumenta a latência efetiva e o viés, e não substitui os números brutos da Tabela~\ref{tab:benchmarks}; no VitalDB ativo ela quase não altera o erro, o que separa ruído de perda de ordenação. A comparação com trabalhos publicados mantém as ressalvas de partição e alvo: os valores situam a ordem de grandeza, não ranqueiam modelos.
+
 Em engenharia, a cadeia registra hashes, partições, pré-processamento e replay; a política de amostragem do checkpoint ativo não foi registrada, limitação histórica. A trajetória individual mostra erros que os agregados ocultam, mas não substitui a análise entre casos; investigar lacunas e concordância são extensões possíveis \cite{tripodai}.
 
 \section{Conclusão}
 
-O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição a esse domínio, sem independência confirmatória. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelos casos, pelo reuso dos benchmarks e pela imputação offline.
+O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição a esse domínio, sem independência confirmatória. Com a suavização causal exploratória, o erro do misto no Figshare agrupado cai para 5,68--5,84, faixa de trabalhos publicados no mesmo corpus, com 0,15 milhão de parâmetros contra 1,07 milhão do modelo contemporâneo. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelos casos, pelo reuso dos benchmarks e pela imputação offline.
 
 A contribuição defensável é uma base auditável para formular e testar hipóteses, não um sistema clínico. O software não mede consciência, não prescreve dose, não controla bomba e não deve acionar alarme ou conduta; uma futura alegação de generalização exigiria avaliação independente \cite{tripodai}.
 

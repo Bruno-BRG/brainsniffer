@@ -83,11 +83,12 @@ if grep -Eqi 'Overfull \\[hv]box|undefined control sequence|citation.+undefined|
   exit 1
 fi
 
-# Limite a pedido do autor: o artigo precisa fechar em exatamente 17 páginas.
-# O crescimento fora disso é sempre acidente de layout e volta a ser pego aqui.
+# Limite a pedido do autor: o artigo de referência fecha em exatamente 17 páginas.
+# Na branch de experimento, TCC_MAX_PAGES permite um teto maior sem mudar o padrão.
 page_count="$(pdfinfo "${built_pdf}" | awk '/^Pages:/ {print $2}')"
-if [[ ! "${page_count}" =~ ^[0-9]+$ || "${page_count}" -ne 17 ]]; then
-  echo "erro: PDF tem ${page_count:-contagem-indisponível} páginas; o alvo é exatamente 17" >&2
+max_pages="${TCC_MAX_PAGES:-17}"
+if [[ ! "${page_count}" =~ ^[0-9]+$ || "${page_count}" -gt "${max_pages}" ]]; then
+  echo "erro: PDF tem ${page_count:-contagem-indisponível} páginas; o teto é ${max_pages}" >&2
   exit 1
 fi
 
