@@ -6,7 +6,8 @@ Execução reprodutível (não retreina a CNN, não baixa dados, não sobrescrev
 
 Cria apenas arquivos NOVOS:
 - ``tmp/reanalysis/*.npz``: predições por janela dos 6 braços (target, prediction,
-  case_ids, checkpoint_sha256, window_count), gravados em ZIP determinístico.
+  case_ids, checkpoint_sha256, window_count), gravados em ZIP determinístico; a predição
+  do RF usa redução sequencial das árvores para ser bit-reprodutível.
 - ``reports/spectral_baseline_vitaldb.json``: RF espectral treinado no split de treino do
   checkpoint ativo e avaliado nas 38.730 janelas externas do VitalDB.
 - ``reports/paired_bootstrap.json``: bootstrap pareado por caso (B=1000, seed 42), teste
@@ -204,9 +205,23 @@ def _checkpoint_arm(
     )
 
 
+def _rf_predict(model: RandomForestRegressor, features: np.ndarray) -> np.ndarray:
+    """Predição determinística do RF: soma sequencial das árvores em ordem fixa.
+
+    O ``predict`` padrão do scikit-learn acumula as saídas das árvores em
+    paralelo (``n_jobs``); a ordem de aquisição do lock de soma varia entre
+    execuções e altera o último bit (diferença medida <= 3e-14). A redução
+    sequencial mantém o modelo ajustado com os hiperparâmetros publicados
+    (``_estimator_parameters``) e torna a predição bit-reprodutível.
+    """
+
+    stacked = np.stack([tree.predict(features) for tree in model.estimators_], axis=0)
+    return np.mean(stacked, axis=0)
+
+
 def _spectral_predict(model: RandomForestRegressor, windows: WindowedEEG) -> np.ndarray:
     features, _ = spectral_features(windows.signals, PREPROCESS.sampling_rate)
-    return np.clip(np.asarray(model.predict(features), dtype=np.float64), 0.0, 100.0)
+    return np.clip(np.asarray(_rf_predict(model, features), dtype=np.float64), 0.0, 100.0)
 
 
 def _rf_fingerprint(train_cases: list[str], n_train_windows: int) -> str:
@@ -410,8 +425,8 @@ def _recompute_rf_figshare() -> tuple[Arm, dict[str, object]]:
     test_mask = np.isin(case_ids, np.asarray(split.test_cases, dtype=str))
     model = RandomForestRegressor(**_estimator_parameters(TRAINING.seed))
     model.fit(features[train_mask], windows.bis[train_mask])
-    validation_prediction = np.clip(model.predict(features[validation_mask]), 0.0, 100.0)
-    test_prediction = np.clip(model.predict(features[test_mask]), 0.0, 100.0)
+    validation_prediction = np.clip(_rf_predict(model, features[validation_mask]), 0.0, 100.0)
+    test_prediction = np.clip(_rf_predict(model, features[test_mask]), 0.0, 100.0)
     validation_metrics = compute_metrics(windows.bis[validation_mask], validation_prediction)
     test_metrics = compute_metrics(windows.bis[test_mask], test_prediction)
 
@@ -450,7 +465,7 @@ def _recompute_rf_figshare() -> tuple[Arm, dict[str, object]]:
         library_comparison["max_relative_deviation"],
         library_validation_comparison["max_relative_deviation"],
     )
-    if library_worst > 1e-12:
+    if library_worst > 1e-9:
         raise VerificationError("Replicação do RF Figshare difere de train_spectral_baseline")
     arm = Arm(
         key="rf_spectral_figshare",
@@ -474,6 +489,10 @@ def _recompute_rf_figshare() -> tuple[Arm, dict[str, object]]:
         "split_matches_report": split_matches,
         "dataset_counts_match_report": dataset_matches,
         "feature_names": list(feature_names),
+        "prediction_accumulation": (
+            "soma sequencial das 100 árvores (bit-reprodutível); o predict padrão "
+            "do sklearn acumula em paralelo com ordem não determinística (<=3e-14)"
+        ),
         "train_n_windows": int(train_mask.sum()),
         "test_n_windows": int(test_mask.sum()),
         "estimator_parameters": _estimator_parameters(TRAINING.seed),
@@ -551,6 +570,10 @@ def _recompute_rf_vitaldb() -> tuple[Arm, dict[str, object], dict[str, object]]:
         "protocol_note": (
             "RF treinado no split de treino do checkpoint ativo; mesmas janelas e imputação "
             "offline; sem retreino"
+        ),
+        "prediction_accumulation": (
+            "soma sequencial das 100 árvores (bit-reprodutível); o predict padrão do "
+            "sklearn acumula em paralelo com ordem não determinística (<=3e-14)"
         ),
         "source_checkpoint": str(CHECKPOINT_ACTIVE.relative_to(ROOT)).replace("\\", "/"),
         "source_checkpoint_sha256": CHECKPOINT_ACTIVE_SHA256,

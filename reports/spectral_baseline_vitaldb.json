@@ -79,77 +79,77 @@
   ],
   "input_files": [
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case1.npz",
+      "path": "data\\vitaldb\\vitaldb_case1.npz",
       "sha256": "d7deabed88cf2fcdb92b07828b0e6424dfc604c1d2e67d057e2d94d06fc6e351",
       "size_bytes": 2846245
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case10.npz",
+      "path": "data\\vitaldb\\vitaldb_case10.npz",
       "sha256": "522d599996806043cb4397582f057d1fe000c36831a7799e9ed1fd77d39278df",
       "size_bytes": 5224987
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case12.npz",
+      "path": "data\\vitaldb\\vitaldb_case12.npz",
       "sha256": "c0144924216772e77f38bb364bd848ba5c4f9e44c30c3349a56df92dd0ed8958",
       "size_bytes": 7542406
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case13.npz",
+      "path": "data\\vitaldb\\vitaldb_case13.npz",
       "sha256": "9cdd7cfd1daaaa4ed698cce686a79b73e2bb91d09c55c11839baa50bd4219c33",
       "size_bytes": 2595201
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case14.npz",
+      "path": "data\\vitaldb\\vitaldb_case14.npz",
       "sha256": "140a288d153d320f7a14310e193176176746de25e04673e3589433f78639a741",
       "size_bytes": 1014678
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case16.npz",
+      "path": "data\\vitaldb\\vitaldb_case16.npz",
       "sha256": "d50b021c41554c844bb0917912928ff17dff8f55917fd12436d1dd263e51edb5",
       "size_bytes": 3353203
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case17.npz",
+      "path": "data\\vitaldb\\vitaldb_case17.npz",
       "sha256": "2187ba516a6c4cb36d5f2317e522dcaab027f8964e27dd3d79b5da07bd27bd23",
       "size_bytes": 5007601
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case2.npz",
+      "path": "data\\vitaldb\\vitaldb_case2.npz",
       "sha256": "db934a20f45fc2aacea7d4e63aef08a6ad215d44644a696358524185b86003d9",
       "size_bytes": 3872841
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case3.npz",
+      "path": "data\\vitaldb\\vitaldb_case3.npz",
       "sha256": "de08d7657802d0a292c1a4db47c6093e31a260b159fa6408a8874b34ff7cd592",
       "size_bytes": 993903
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case4.npz",
+      "path": "data\\vitaldb\\vitaldb_case4.npz",
       "sha256": "be6d41513a2aa8a4c7b31f18c0f7e1e6330981c3978264c521c8ca9e29bdea51",
       "size_bytes": 5084242
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case5.npz",
+      "path": "data\\vitaldb\\vitaldb_case5.npz",
       "sha256": "abd4ce5ec928c66b6c9116b2e051557d73b3d5d29837afe86d08717786a6632f",
       "size_bytes": 5034963
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case6.npz",
+      "path": "data\\vitaldb\\vitaldb_case6.npz",
       "sha256": "fda94791d476b812a81a35e51795e1e56bec569bccffe5f9af8f80d9af072633",
       "size_bytes": 913396
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case7.npz",
+      "path": "data\\vitaldb\\vitaldb_case7.npz",
       "sha256": "9c4af0cc5f0ca0f1fa62de2450e52c09a324317d2ebb8eedba17c1d6cd0c34b7",
       "size_bytes": 1820249
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case8.npz",
+      "path": "data\\vitaldb\\vitaldb_case8.npz",
       "sha256": "ae84855735e9af405db649b4a5165edbf5e44ab2f48fbf835059f19c64c81255",
       "size_bytes": 1464710
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case9.npz",
+      "path": "data\\vitaldb\\vitaldb_case9.npz",
       "sha256": "83e06e78a5a7177f9e50095e255ebc94b12a0b99b64f7f919a7ff8afd33b76b3",
       "size_bytes": 1061909
     }
@@ -353,6 +353,7 @@
     "mean": 0.502350284965,
     "upper_95": 0.551163171972
   },
+  "prediction_accumulation": "soma sequencial das 100 árvores (bit-reprodutível); o predict padrão do sklearn acumula em paralelo com ordem não determinística (<=3e-14)",
   "protocol": "external_spectral_baseline",
   "protocol_note": "RF treinado no split de treino do checkpoint ativo; mesmas janelas e imputação offline; sem retreino",
   "raw_eeg_in_report": false,
@@ -403,67 +404,67 @@
   },
   "training_input_files": [
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case1.mat",
+      "path": "data\\raw\\case1.mat",
       "sha256": "3f96f696d213c96b46fa859dc956fe83d97c9a3a202ba915f996ae88bc7d947e",
       "size_bytes": 637612
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case10.mat",
+      "path": "data\\raw\\case10.mat",
       "sha256": "a078f8b155f76ff1acd6cea4def151c7064c0fdc0289b086ef5d35dac8928971",
       "size_bytes": 1263925
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case11.mat",
+      "path": "data\\raw\\case11.mat",
       "sha256": "5062172f5fe18c3f8a7fc619fbff0454c77a6fe027c73f74b5ebf3dc72a87c46",
       "size_bytes": 2495259
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case13.mat",
+      "path": "data\\raw\\case13.mat",
       "sha256": "a51056ac4c2fd745795779f2e79c90bed3be133d9cbf4fcd93467d97823002a8",
       "size_bytes": 762725
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case14.mat",
+      "path": "data\\raw\\case14.mat",
       "sha256": "deb75307a8f3b034afe36840885f30552f15379732081de35682143699a93fc8",
       "size_bytes": 605803
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case17.mat",
+      "path": "data\\raw\\case17.mat",
       "sha256": "75ff2745e1bf86fa0ae6fbb37c677277d3144e68c283bc4c15df34925d60f679",
       "size_bytes": 1292068
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case2.mat",
+      "path": "data\\raw\\case2.mat",
       "sha256": "c360d742903ffcfe37208df1b561afc7438a95a0162fa83233999cd5ece4481e",
       "size_bytes": 906024
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case20.mat",
+      "path": "data\\raw\\case20.mat",
       "sha256": "8fdda9fb089c9bc93213797353bd6ea8772cfaa6644181f4c52f635c2c628c54",
       "size_bytes": 1612058
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case21.mat",
+      "path": "data\\raw\\case21.mat",
       "sha256": "31eb4ce744f711017bb5f68f2286e20ce90398d890e2ac36f7182b9b6a5a2f1c",
       "size_bytes": 1577358
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case22.mat",
+      "path": "data\\raw\\case22.mat",
       "sha256": "a85dd87cc4e4beab55239a1edf223afda21b77e1d0ff86fdeaff07180f62d97a",
       "size_bytes": 400422
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case6.mat",
+      "path": "data\\raw\\case6.mat",
       "sha256": "25b3ad78b9cb5be5fc64c774479ba52b6e975ed96c86555838b76140c0239f85",
       "size_bytes": 859237
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case7.mat",
+      "path": "data\\raw\\case7.mat",
       "sha256": "23a7a61444838ee90915de986ba4e82074d8a223e4b0d5c44206e356844f5f95",
       "size_bytes": 1140316
     },
     {
-      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case8.mat",
+      "path": "data\\raw\\case8.mat",
       "sha256": "1ed4c6b8f639790c4bd46235754bc8e3c1c0a729d1186cd45a5f714e0c16fd9f",
       "size_bytes": 1581977
     }

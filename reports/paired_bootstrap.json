@@ -923,6 +923,7 @@
         "line_length"
       ],
       "library_path_max_relative_deviation": 0.0,
+      "prediction_accumulation": "soma sequencial das 100 árvores (bit-reprodutível); o predict padrão do sklearn acumula em paralelo com ordem não determinística (<=3e-14)",
       "reference_report": "reports/spectral_baseline_holdout.json",
       "split_matches_report": true,
       "test_max_relative_deviation": 1e-12,
