@@ -1,14 +1,18 @@
 """Render audited historical report snapshots as conventional Matplotlib article figures.
 
-Historical metrics are not recomputed. Explicit --infer-trajectory runs bounded
-CPU inference on the complete, preselected case19; default runs never infer,
-download or train. --trajectory redraws its saved audit arrays without inference.
+Historical metrics are not recomputed. The exploratory EWMA post-processing is
+read from its own audited snapshot (frozen predictions, no retraining), and the
+trajectory EWMA is derived at plot time from the saved audit arrays. Explicit
+--infer-trajectory runs bounded CPU inference on the complete, preselected
+case19; default runs never infer, download or train. --trajectory redraws its
+saved audit arrays without inference.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -17,6 +21,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +71,45 @@ CALIBRATION_CROSSCHECKS = (
     ("cnn_mixed_vitaldb", "mixed_vitaldb_external.json"),
 )
 
+EWMA_FILE = "ewma_postprocess.json"
+# Varredura exploratória do EWMA causal (pós-hoc, sem retreino). Chave no relatório,
+# benchmark, braço, chave no relatório de calibração e snapshot de Pk bruto (o RF
+# espectral não tem relatório de Pk próprio).
+EWMA_ARMS = (
+    ("figshare_holdout__ativo", "figshare_holdout", "ativo",
+     "cnn_active_figshare", "pk_figshare_active.json"),
+    ("figshare_holdout__misto", "figshare_holdout", "misto",
+     "cnn_mixed_figshare", "pk_figshare_mixed.json"),
+    ("figshare_holdout__rf_spectral", "figshare_holdout", "rf_spectral",
+     "rf_spectral_figshare", None),
+    ("vitaldb_external__ativo", "vitaldb_external", "ativo",
+     "cnn_active_vitaldb", "pk_vitaldb_active.json"),
+    ("vitaldb_external__misto", "vitaldb_external", "misto",
+     "cnn_mixed_vitaldb", "pk_vitaldb_mixed.json"),
+    ("vitaldb_external__rf_spectral", "vitaldb_external", "rf_spectral",
+     "rf_spectral_vitaldb", None),
+)
+EWMA_SPANS = (1, 2, 3, 5, 10, 15)
+EWMA_BOOTSTRAP_SPANS = (1, 10)
+EWMA_BOOTSTRAP_ARMS = ("ativo", "misto")
+EWMA_REFERENCE_SPAN = 10
+EWMA_BENCHMARKS = (("figshare_holdout", "Figshare"), ("vitaldb_external", "VitalDB"))
+# Série da varredura: braço, rótulo, marcador, cor, preenchido, estilo de linha.
+EWMA_SWEEP_STYLE = (
+    ("ativo", "CNN ativo", "o", "#000000", True, "-"),
+    ("misto", "CNN misto", "s", "#555555", False, "--"),
+    ("rf_spectral", "RF espectral", "D", "#666666", True, ":"),
+)
+# Chave no relatório de calibração -> chave no relatório de EWMA.
+EWMA_FOR_CALIBRATION = {
+    "cnn_active_figshare": "figshare_holdout__ativo",
+    "cnn_mixed_figshare": "figshare_holdout__misto",
+    "rf_spectral_figshare": "figshare_holdout__rf_spectral",
+    "cnn_active_vitaldb": "vitaldb_external__ativo",
+    "cnn_mixed_vitaldb": "vitaldb_external__misto",
+    "rf_spectral_vitaldb": "vitaldb_external__rf_spectral",
+}
+
 
 def report_value(report: dict[str, Any], *keys: str) -> Any:
     value: Any = report
@@ -74,6 +118,13 @@ def report_value(report: dict[str, Any], *keys: str) -> Any:
             raise ValueError(f"missing report field: {'.'.join(keys)}")
         value = value[key]
     return value
+
+
+def ewma_block(ewma: dict[str, Any], benchmark: str, arm: str, span: int) -> dict[str, Any]:
+    """Bloco auditado da varredura EWMA para benchmark, braço e span."""
+    block = report_value(ewma, "arms", f"{benchmark}__{arm}", "by_span", str(span))
+    ensure(isinstance(block, dict), f"missing EWMA block {benchmark}__{arm} span {span}")
+    return block
 
 
 def ensure(condition: bool, message: str) -> None:
@@ -212,6 +263,122 @@ def load_calibration(
                 print(f"retrying {CALIBRATION_FILE} in {delay_seconds:g}s ({error})")
                 time.sleep(delay_seconds)
     raise ValueError(f"invalid {CALIBRATION_FILE} after {attempts} attempts: {last_error}")
+
+
+def audit_ewma(
+    ewma: dict[str, Any],
+    calibration: dict[str, Any],
+    pk_reports: dict[str, dict[str, Any]],
+) -> None:
+    """Check the exploratory EWMA snapshot against the audited historical aggregates."""
+    ensure(ewma.get("scope") == "research_only", "unsafe EWMA scope")
+    ensure(ewma.get("retrained") is False, "EWMA unexpectedly retrained")
+    ensure(
+        int(ewma.get("bootstrap_samples", 0)) == 1000,
+        "unexpected EWMA bootstrap count",
+    )
+    ensure(int(ewma.get("bootstrap_seed", -1)) == 42, "EWMA seed drift")
+    ensure(tuple(ewma.get("spans", ())) == EWMA_SPANS, "EWMA spans changed")
+    ensure(
+        tuple(ewma.get("bootstrap_spans", ())) == EWMA_BOOTSTRAP_SPANS,
+        "EWMA bootstrap spans changed",
+    )
+    arms = ewma.get("arms")
+    ensure(isinstance(arms, dict), "EWMA arms missing")
+    ensure(set(arms) == {key for key, *_ in EWMA_ARMS}, "EWMA arms changed")
+    calibration_arms = calibration["arms"]
+    for key, benchmark, arm, calibration_key, pk_name in EWMA_ARMS:
+        block = arms[key]
+        ensure(
+            block.get("benchmark") == benchmark and block.get("arm") == arm,
+            f"EWMA identity drift in {key}",
+        )
+        by_span = block.get("by_span")
+        ensure(isinstance(by_span, dict), f"EWMA spans missing in {key}")
+        ensure(
+            set(by_span) == {str(span) for span in EWMA_SPANS},
+            f"EWMA span grid changed in {key}",
+        )
+        reference = calibration_arms[calibration_key]
+        ensure(int(block["n_windows"]) == int(reference["n"]), f"EWMA n drift in {key}")
+        ensure(
+            int(block["n_cases"]) == int(reference["n_cases"]),
+            f"EWMA case count drift in {key}",
+        )
+        raw_metrics = by_span["1"]["metrics"]
+        for metric in ("mae", "rmse", "bias", "pearson_r"):
+            ensure(
+                abs(float(raw_metrics[metric]) - float(reference[metric])) < 1e-4,
+                f"EWMA span 1 {metric} differs from raw in {key}",
+            )
+        if pk_name is not None:
+            ensure(
+                abs(float(by_span["1"]["pk"]) - float(pk_reports[pk_name]["pk"])) < 1e-4,
+                f"EWMA span 1 Pk differs from raw in {key}",
+            )
+        expected_bootstrap = (
+            {str(span) for span in EWMA_BOOTSTRAP_SPANS}
+            if arm in EWMA_BOOTSTRAP_ARMS
+            else set()
+        )
+        observed_bootstrap = {
+            span for span, payload in by_span.items() if "case_bootstrap" in payload
+        }
+        ensure(
+            observed_bootstrap == expected_bootstrap,
+            f"EWMA bootstrap spans changed in {key}",
+        )
+        for span in EWMA_SPANS:
+            payload = by_span[str(span)]
+            pk_value = float(payload["pk"])
+            ensure(0.0 <= pk_value <= 1.0, f"EWMA Pk outside [0, 1] in {key} span {span}")
+            calibration_payload = payload["calibration"]
+            slope = float(calibration_payload["slope"])
+            ensure(math.isfinite(slope), f"EWMA slope not finite in {key} span {span}")
+            icc = float(calibration_payload["icc_2_1_absolute_agreement"])
+            ensure(-1.0 <= icc <= 1.0, f"EWMA ICC outside [-1, 1] in {key} span {span}")
+            for metric in (
+                "mae",
+                "rmse",
+                "bias",
+                "pearson_r",
+                "stage_accuracy",
+                "stage_macro_f1",
+            ):
+                ensure(
+                    math.isfinite(float(payload["metrics"][metric])),
+                    f"EWMA {metric} not finite in {key} span {span}",
+                )
+        for span in expected_bootstrap:
+            for metric, interval in by_span[span]["case_bootstrap"].items():
+                ensure(
+                    float(interval["lower_95"]) <= float(interval["mean"])
+                    <= float(interval["upper_95"]),
+                    f"EWMA bootstrap interval disordered in {key} span {span}: {metric}",
+                )
+
+
+def load_ewma(
+    calibration: dict[str, Any],
+    pk_reports: dict[str, dict[str, Any]],
+    attempts: int = 10,
+    delay_seconds: float = 3.0,
+) -> dict[str, Any]:
+    """Load the exploratory EWMA snapshot, tolerating an in-flight rewrite."""
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            path = REPORTS / EWMA_FILE
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            ensure(isinstance(payload, dict), f"{EWMA_FILE} must contain a JSON object")
+            audit_ewma(payload, calibration, pk_reports)
+            return payload
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            last_error = error
+            if attempt + 1 < attempts:
+                print(f"retrying {EWMA_FILE} in {delay_seconds:g}s ({error})")
+                time.sleep(delay_seconds)
+    raise ValueError(f"invalid {EWMA_FILE} after {attempts} attempts: {last_error}")
 
 
 def audit_reports(reports: dict[str, dict[str, Any]]) -> None:
@@ -379,7 +546,23 @@ def point(ax, x, y, model, **kwargs):
     )
 
 
-def figure_comparison(reports):
+def ewma_point(ax, x, y, model, **kwargs):
+    """Marcador do EWMA exploratório: mesma forma do braço, metade esquerda preenchida."""
+    return ax.plot(
+        x,
+        y,
+        marker=MARKERS[model],
+        color=COLORS[model],
+        markerfacecolor=COLORS[model] if model == 0 else "white",
+        markerfacecoloralt="white" if model == 0 else COLORS[model],
+        fillstyle="left",
+        markersize=5.5,
+        linestyle="none",
+        **kwargs,
+    )
+
+
+def figure_comparison(reports, ewma):
     fig = plt.figure(figsize=(WIDTH, 4.4), layout="constrained")
     grid = fig.add_gridspec(2, 2, width_ratios=(1, 1.35))
     for i, (metric, title, limits) in enumerate(
@@ -389,17 +572,42 @@ def figure_comparison(reports):
         )
     ):
         ax = fig.add_subplot(grid[i, 0])
-        for source in range(2):
+        for source, benchmark in enumerate(("figshare_holdout", "vitaldb_external")):
             vals = [metrics(reports[HOLDOUTS[2 * source + m]])[metric] for m in range(2)]
-            ax.plot(vals, [source, source], color=".55", linewidth=0.8)
+            smoothed = [
+                float(ewma_block(ewma, benchmark, arm, EWMA_REFERENCE_SPAN)["metrics"][metric])
+                for arm in ("ativo", "misto")
+            ]
+            raw_y, ewma_y = source, source + 0.32
+            ax.plot(vals, [raw_y, raw_y], color=".55", linewidth=0.8)
             for model, val in enumerate(vals):
-                point(ax, val, source, model)
+                ensure(
+                    limits[0] <= val <= limits[1],
+                    f"aggregate {metric} outside axis: {benchmark}",
+                )
+                ensure(
+                    limits[0] <= smoothed[model] <= limits[1],
+                    f"EWMA {metric} outside axis: {benchmark}",
+                )
+                point(ax, val, raw_y, model)
+                ax.plot(
+                    [val, smoothed[model]],
+                    [raw_y, ewma_y],
+                    color=".7",
+                    linewidth=0.6,
+                    linestyle=(0, (1, 1.6)),
+                )
+                ewma_point(ax, smoothed[model], ewma_y, model)
         ax.set(
             yticks=[0, 1],
             yticklabels=["Figshare", "VitalDB"],
             xlim=limits,
-            ylim=(1.5, -0.5),
+            ylim=(1.62, -0.35),
             title=title,
+        )
+        ax.set_yticks([0.32, 1.32], minor=True)
+        ax.set_yticklabels(
+            ["EWMA span 10", "EWMA span 10"], minor=True, fontsize=6.5, color=".35"
         )
         ax.grid(axis="x", color=".9", linewidth=0.5)
     ax = fig.add_subplot(grid[:, 1])
@@ -425,18 +633,37 @@ def figure_comparison(reports):
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
     fig.legend(
-        handles=handles,
-        labels=list(LABELS),
+        handles=[
+            *handles,
+            Line2D(
+                [],
+                [],
+                marker="o",
+                color="#000000",
+                markerfacecolor="#000000",
+                markerfacecoloralt="white",
+                fillstyle="left",
+                markersize=5.5,
+                linestyle="none",
+            ),
+        ],
+        labels=[*LABELS, "EWMA span 10"],
         loc="outside lower center",
-        ncol=2,
+        ncol=3,
         frameon=False,
     )
-    save_figure(fig, "comparison", [f"reports/{n}" for n in HOLDOUTS])
+    save_figure(fig, "comparison", [f"reports/{n}" for n in (*HOLDOUTS, EWMA_FILE)])
 
 
-def figure_bootstrap(reports):
-    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.8), layout="constrained")
+def figure_bootstrap(reports, ewma):
+    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 4.4), layout="constrained")
     labels = ["Figshare · ativo", "Figshare · misto", "VitalDB · ativo", "VitalDB · misto"]
+    smoothed_arms = (
+        ("figshare_holdout", "ativo"),
+        ("figshare_holdout", "misto"),
+        ("vitaldb_external", "ativo"),
+        ("vitaldb_external", "misto"),
+    )
     for ax, metric, title, limits in zip(
         axes,
         ("pearson_r", "mae"),
@@ -450,19 +677,59 @@ def figure_bootstrap(reports):
             lo, hi = ci["lower_95"], ci["upper_95"]
             observed = metrics(report)[metric]
             ensure(limits[0] <= lo <= hi <= limits[1], f"interval outside axis: {name}")
+            raw_y = y - 0.17
             ax.hlines(
-                y, lo, hi, color=COLORS[y % 2], linestyles="solid" if y % 2 == 0 else "dashed"
+                raw_y, lo, hi, color=COLORS[y % 2], linestyles="solid" if y % 2 == 0 else "dashed"
             )
-            ax.plot([lo, hi], [y, y], "|", color=COLORS[y % 2], markersize=6)
-            point(ax, observed, y, y % 2)
-        ax.set(yticks=range(4), yticklabels=labels, ylim=(3.6, -0.6), xlim=limits, title=title)
+            ax.plot([lo, hi], [raw_y, raw_y], "|", color=COLORS[y % 2], markersize=6)
+            point(ax, observed, raw_y, y % 2)
+            benchmark, arm = smoothed_arms[y]
+            smoothed = ewma_block(ewma, benchmark, arm, EWMA_REFERENCE_SPAN)
+            smoothed_ci = smoothed["case_bootstrap"][metric]
+            smoothed_value = float(smoothed["metrics"][metric])
+            smoothed_lo, smoothed_hi = smoothed_ci["lower_95"], smoothed_ci["upper_95"]
+            ensure(
+                limits[0] <= smoothed_lo <= smoothed_hi <= limits[1],
+                f"EWMA interval outside axis: {name}",
+            )
+            ewma_y = y + 0.17
+            ax.hlines(
+                ewma_y, smoothed_lo, smoothed_hi, color=COLORS[y % 2], linestyles=(0, (1.0, 1.4))
+            )
+            ax.plot(
+                [smoothed_lo, smoothed_hi], [ewma_y, ewma_y], "|",
+                color=COLORS[y % 2], markersize=5,
+            )
+            ewma_point(ax, smoothed_value, ewma_y, y % 2)
+        ax.set(
+            yticks=range(4),
+            yticklabels=labels,
+            ylim=(3.68, -0.68),
+            xlim=limits,
+            title=title,
+        )
         ax.grid(axis="x", color=".9", linewidth=0.5)
         if metric == "pearson_r":
             ax.set_xticks([-1, -0.5, 0, 0.5, 1])
             ax.axvline(0, color=".5", linewidth=0.7)
         else:
             ax.set_xticks([0, 4, 8, 12, 16])
-    save_figure(fig, "bootstrap_intervals", [f"reports/{n}" for n in HOLDOUTS])
+    fig.legend(
+        handles=[
+            Line2D(
+                [], [], color=".25", linewidth=1.2, linestyle="-", marker="|",
+                markersize=6, label="bruto (IC 95% por caso)",
+            ),
+            Line2D(
+                [], [], color=".25", linewidth=1.2, linestyle=(0, (1.0, 1.4)), marker="|",
+                markersize=5, label="EWMA span 10 (IC 95% por caso)",
+            ),
+        ],
+        loc="outside lower center",
+        ncol=2,
+        frameon=False,
+    )
+    save_figure(fig, "bootstrap_intervals", [f"reports/{n}" for n in (*HOLDOUTS, EWMA_FILE)])
 
 
 def figure_offset(reports):
@@ -671,15 +938,26 @@ def figure_trajectory():
         time = saved["reference_seconds"] / 60
         reference, raw = saved["reference_bis"], saved["cnn_raw_bis"]
     audit = json.loads((TRAJECTORY / "case19.json").read_text())
+    # EWMA causal do span de referência, derivada aqui das predições salvas
+    # (mesma regra do relatório: alpha = 2/(span+1), um caso, sem olhar o futuro).
+    alpha = 2.0 / (EWMA_REFERENCE_SPAN + 1.0)
+    smoothed = np.full(raw.shape, np.nan)
+    state: float | None = None
+    for index in np.flatnonzero(np.isfinite(raw)):
+        value = float(raw[index])
+        state = value if state is None else alpha * value + (1.0 - alpha) * state
+        smoothed[index] = state
     fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.5), sharex=True,
                              gridspec_kw={"height_ratios": [2, 1]}, layout="constrained")
     axes[0].plot(time, reference, color="black", linestyle="-",
                  label="BIS referência (linha contínua)", linewidth=1.0)
     axes[0].plot(time, raw, color="black", linestyle="--", dashes=(4, 2),
                  label="CNN ativa bruta (linha tracejada)", linewidth=1.0)
+    axes[0].plot(time, smoothed, color="black", linestyle=":", linewidth=1.1,
+                 label="CNN ativa EWMA span 10 (linha pontilhada)")
     axes[0].set(ylabel="Índice (pontos BIS)", ylim=(0, 100),
                 title="Figshare case19 · gravação completa · comparação offline")
-    axes[0].legend(frameon=False, loc="upper right")
+    axes[0].legend(frameon=False, loc="upper center")
     axes[1].plot(time, raw - reference, color="black", linestyle="-", linewidth=0.7)
     axes[1].axhline(0, color=".4", linewidth=0.7)
     axes[1].set(ylabel="Erro (pontos BIS)", xlabel="Tempo da referência desde o início (min)")
@@ -690,38 +968,43 @@ def figure_trajectory():
                                       "tmp/pdfs/trajectory-audit/case19.json"])
 
 
-def figure_pk(pk_reports: dict[str, dict[str, Any]]) -> None:
-    """Prediction probability Pk with case-cluster intervals, ativo vs misto."""
-    fig, ax = plt.subplots(figsize=(WIDTH, 3.2), layout="constrained")
-    benchmarks = [name for name, _, _ in PK_HOLDOUTS]
-    for model in range(2):
-        values: list[float] = []
-        lowers: list[float] = []
-        uppers: list[float] = []
-        for _, active_name, mixed_name in PK_HOLDOUTS:
-            report = pk_reports[(active_name, mixed_name)[model]]
-            interval = report["pk_bootstrap"]
-            values.append(float(report["pk"]))
-            lowers.append(float(interval["lower_95"]))
-            uppers.append(float(interval["upper_95"]))
-        for row, (value, low, high) in enumerate(
-            zip(values, lowers, uppers, strict=True)
-        ):
-            ensure(0.0 <= low <= value <= high <= 1.0, f"Pk interval outside [0, 1]: {value}")
-            y = row + (model - 0.5) * 0.17
-            ax.hlines(
-                y,
-                low,
-                high,
-                color=COLORS[model],
-                linewidth=1.4,
-                linestyles="solid" if model == 0 else "dashed",
-            )
-            point(ax, value, y, model, label=LABELS[model] if row == 0 else None)
+def figure_pk(pk_reports: dict[str, dict[str, Any]], ewma: dict[str, Any]) -> None:
+    """Prediction probability Pk with case-cluster intervals; bruto vs EWMA span 10."""
+    fig, ax = plt.subplots(figsize=(WIDTH, 3.7), layout="constrained")
+    lanes = (
+        ("Figshare", "bruto", False),
+        ("Figshare", "EWMA span 10", True),
+        ("VitalDB", "bruto", False),
+        ("VitalDB", "EWMA span 10", True),
+    )
+    benchmarks = ("figshare_holdout", "vitaldb_external")
+    for row, (_, lane_label, smoothed) in enumerate(lanes):
+        benchmark = benchmarks[row // 2]
+        for model, arm in enumerate(("ativo", "misto")):
+            y = row + (model - 0.5) * 0.28
+            if smoothed:
+                value = float(ewma_block(ewma, benchmark, arm, EWMA_REFERENCE_SPAN)["pk"])
+                ensure(0.4 <= value <= 1.0, f"EWMA Pk outside axis: {benchmark} {arm}")
+                ewma_point(ax, value, y, model)
+            else:
+                report = pk_reports[PK_FILES[2 * (row // 2) + model]]
+                interval = report["pk_bootstrap"]
+                value = float(report["pk"])
+                low, high = float(interval["lower_95"]), float(interval["upper_95"])
+                ensure(0.0 <= low <= value <= high <= 1.0, f"Pk interval outside [0, 1]: {value}")
+                ax.hlines(
+                    y,
+                    low,
+                    high,
+                    color=COLORS[model],
+                    linewidth=1.4,
+                    linestyles="solid" if model == 0 else "dashed",
+                )
+                point(ax, value, y, model)
     ax.axvline(0.5, color=".45", linewidth=0.7, linestyle=":")
     ax.text(
         0.505,
-        -0.5,
+        -0.52,
         "chance 0,5",
         fontsize=7,
         color=".35",
@@ -729,16 +1012,119 @@ def figure_pk(pk_reports: dict[str, dict[str, Any]]) -> None:
         va="center",
     )
     ax.set(
-        yticks=range(len(benchmarks)),
-        yticklabels=benchmarks,
-        ylim=(len(benchmarks) - 0.55, -0.6),
+        yticks=range(len(lanes)),
+        yticklabels=[f"{name} · {lane}" for name, lane, _ in lanes],
+        ylim=(len(lanes) - 0.55, -0.62),
         xlim=(0.4, 1.0),
         xticks=[0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         xlabel="$P_K$ (1 = ordem perfeita · 0,5 = chance)",
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
-    ax.legend(loc="lower right", frameon=False)
-    save_figure(fig, "pk_prediction", [f"reports/{n}" for n in PK_FILES])
+    ax.legend(
+        handles=[
+            Line2D([], [], marker="o", color=COLORS[0], markerfacecolor=COLORS[0],
+                   markersize=5, linestyle="none", label=LABELS[0]),
+            Line2D([], [], marker="s", color=COLORS[1], markerfacecolor="white",
+                   markersize=5, linestyle="none", label=LABELS[1]),
+            Line2D([], [], marker="o", color=COLORS[0], markerfacecolor=COLORS[0],
+                   markerfacecoloralt="white", fillstyle="left", markersize=5.5,
+                   linestyle="none", label="EWMA span 10"),
+            Line2D([], [], color=".35", linewidth=1.2, linestyle="-", marker="|",
+                   markersize=6, label="IC 95% por caso (bruto)"),
+        ],
+        loc="lower right",
+        frameon=False,
+        fontsize=8,
+    )
+    save_figure(fig, "pk_prediction", [f"reports/{n}" for n in (*PK_FILES, EWMA_FILE)])
+
+
+def figure_ewma_sweep(ewma: dict[str, Any]) -> None:
+    """Varredura de spans do EWMA causal por braço (MAE e Pk) — exploratória."""
+    spans = EWMA_SPANS
+    positions = list(range(len(spans)))
+    reference_position = spans.index(EWMA_REFERENCE_SPAN)
+    annotations = {
+        ("figshare_holdout", "mae"): {"offset": (-4, -8), "vertical": "top", "align": "right"},
+        ("figshare_holdout", "pk"): {"offset": (0, 9), "vertical": "bottom", "align": "center"},
+        ("vitaldb_external", "mae"): {"offset": (-4, -8), "vertical": "top", "align": "right"},
+        ("vitaldb_external", "pk"): {"offset": (0, 9), "vertical": "bottom", "align": "center"},
+    }
+    panels = (
+        ("mae", "MAE (pontos BIS)", (0, 14.5)),
+        ("pk", "$P_K$", (0.4, 1.0)),
+    )
+    fig, grid = plt.subplots(2, 2, figsize=(WIDTH, 4.3), layout="constrained", sharex="col")
+    for row, (benchmark, benchmark_label) in enumerate(EWMA_BENCHMARKS):
+        for column, (metric, metric_label, limits) in enumerate(panels):
+            ax = grid[row, column]
+            for arm, series_label, marker, color, filled, linestyle in EWMA_SWEEP_STYLE:
+                values = [
+                    float(block["pk"] if metric == "pk" else block["metrics"][metric])
+                    for block in (ewma_block(ewma, benchmark, arm, span) for span in spans)
+                ]
+                for value in values:
+                    ensure(
+                        limits[0] <= value <= limits[1],
+                        f"EWMA sweep outside axis: {benchmark} {arm} {metric}",
+                    )
+                ax.plot(
+                    positions,
+                    values,
+                    marker=marker,
+                    color=color,
+                    linestyle=linestyle,
+                    linewidth=1.1,
+                    markersize=5,
+                    markerfacecolor=color if filled else "white",
+                    label=series_label,
+                )
+            ax.axvline(reference_position, color=".85", linewidth=0.8, zorder=0)
+            misto_block = ewma_block(ewma, benchmark, "misto", EWMA_REFERENCE_SPAN)
+            misto_value = float(
+                misto_block["pk"] if metric == "pk" else misto_block["metrics"][metric]
+            )
+            anchor = annotations[(benchmark, metric)]
+            ax.annotate(
+                f"misto {misto_value:.2f}".replace(".", ","),
+                xy=(reference_position, misto_value),
+                xytext=anchor["offset"],
+                textcoords="offset points",
+                ha=anchor["align"],
+                va=anchor["vertical"],
+                fontsize=7,
+                color=".3",
+                bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.8, "alpha": 0.9},
+            )
+            if metric == "pk":
+                ax.axhline(0.5, color=".45", linewidth=0.7, linestyle=":")
+                ax.set_yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+            else:
+                ax.set_yticks([0, 2, 4, 6, 8, 10, 12, 14])
+            ax.set(
+                title=f"({chr(97 + 2 * row + column)}) {benchmark_label} · {metric_label}",
+                xlim=(-0.35, len(spans) - 0.65),
+                ylim=limits,
+            )
+            ax.grid(axis="y", color=".9", linewidth=0.5)
+    for column in range(2):
+        grid[1, column].set_xticks(positions)
+        grid[1, column].set_xticklabels([str(span) for span in spans])
+        grid[1, column].set_xlabel("Span EWMA (janelas de 5 s)")
+    fig.legend(
+        handles=[
+            Line2D([], [], marker="o", color="#000000", markerfacecolor="#000000",
+                   markersize=5, linestyle="-", linewidth=1.1, label="CNN ativo"),
+            Line2D([], [], marker="s", color="#555555", markerfacecolor="white",
+                   markersize=5, linestyle="--", linewidth=1.1, label="CNN misto"),
+            Line2D([], [], marker="D", color="#666666", markerfacecolor="#666666",
+                   markersize=5, linestyle=":", linewidth=1.1, label="RF espectral"),
+        ],
+        loc="outside lower center",
+        ncol=3,
+        frameon=False,
+    )
+    save_figure(fig, "ewma_sweep", [f"reports/{EWMA_FILE}"])
 
 
 def figure_corpus_panels(reports):
@@ -966,7 +1352,7 @@ def figure_corpus_panels(reports):
     save_figure(fig, "corpus_panels", ["reports/corpus_manifest.json"])
 
 
-def figure_training_panels(reports, calibration):
+def figure_training_panels(reports, calibration, ewma):
     """Histórico de treino do checkpoint ativo e calibração medida por braço."""
     model = json.loads((ROOT / "models" / MODEL_FILES[0]).read_text())
     history = model.get("history", [])
@@ -977,7 +1363,7 @@ def figure_training_panels(reports, calibration):
     fig, grid = plt.subplots(
         1,
         2,
-        figsize=(WIDTH, 3.8),
+        figsize=(WIDTH, 3.9),
         layout="constrained",
         gridspec_kw={"width_ratios": (1, 1.25)},
     )
@@ -1011,11 +1397,12 @@ def figure_training_panels(reports, calibration):
     )
     ax.legend(frameon=False, fontsize=8, loc="upper right", borderaxespad=0.6)
 
-    # Dot-and-whisker da inclinação de calibração (IC 95% por bootstrap por caso).
-    # x = 1 é identidade e x = 0 é ausência de calibração; à direita, ICC(2,1)
-    # absoluto e a fração de janelas com |erro| <= 10 pontos BIS.
+    # Dot-and-whisker da inclinação de calibração. Linha de cima: bruto, com IC 95%
+    # por bootstrap por caso; linha de baixo: EWMA span 10 (pós-hoc, sem IC, que não
+    # existe). x = 1 é identidade e x = 0 é ausência de calibração; à direita, o
+    # ICC(2,1) absoluto de cada versão e a fração bruta de janelas com |erro| <= 10.
     ax = grid[1]
-    annotation_x = 1.07
+    annotation_x = 1.04
     for row, (key, label, marker, color, style, filled) in enumerate(CALIBRATION_ARMS):
         arm = arms[key]
         line = arm["calibration_line"]
@@ -1023,10 +1410,11 @@ def figure_training_panels(reports, calibration):
         low = float(line["slope_ci95_lower"])
         upper = float(line["slope_ci95_upper"])
         ensure(low <= slope <= upper, f"slope outside its interval in {key}")
-        ax.hlines(row, low, upper, color=color, linewidth=1.3, linestyles=style)
+        raw_y = row - 0.10
+        ax.hlines(raw_y, low, upper, color=color, linewidth=1.3, linestyles=style)
         ax.plot(
             [low, upper],
-            [row, row],
+            [raw_y, raw_y],
             marker="|",
             color=color,
             linestyle="none",
@@ -1034,27 +1422,53 @@ def figure_training_panels(reports, calibration):
         )
         ax.plot(
             slope,
-            row,
+            raw_y,
             marker=marker,
             color=color,
             markerfacecolor=color if filled else "white",
             markersize=5.5,
             linestyle="none",
         )
+        benchmark, arm_key = EWMA_FOR_CALIBRATION[key].split("__")
+        smoothed = ewma_block(ewma, benchmark, arm_key, EWMA_REFERENCE_SPAN)
+        smoothed_slope = float(smoothed["calibration"]["slope"])
+        ensure(-0.25 <= smoothed_slope <= 1.62, f"EWMA slope outside axis in {key}")
+        smoothed_y = row + 0.10
+        ax.plot(
+            [slope, smoothed_slope],
+            [raw_y, smoothed_y],
+            color=".7",
+            linewidth=0.6,
+            linestyle=(0, (1, 1.6)),
+        )
+        ax.plot(
+            smoothed_slope,
+            smoothed_y,
+            marker=marker,
+            color=color,
+            markerfacecolor=color,
+            markerfacecoloralt="white",
+            fillstyle="left",
+            markersize=5.5,
+            linestyle="none",
+        )
         icc = float(arm["icc_2_1_absolute_agreement"])
+        smoothed_icc = float(smoothed["calibration"]["icc_2_1_absolute_agreement"])
         fraction = float(arm["fraction_abs_error_le_10"]) * 100.0
         ax.text(
             annotation_x,
             row,
-            f"ICC {icc:.2f}".replace(".", ",")
+            f"ICC bruto {icc:.2f}".replace(".", ",")
+            + "\n"
+            + f"ICC EWMA {smoothed_icc:.2f}".replace(".", ",")
             + "\n"
             + f"{fraction:.1f}".replace(".", ",")
             + "% ≤10",
-            fontsize=7,
+            fontsize=6.5,
             color=".25",
             ha="left",
             va="center",
-            linespacing=1.25,
+            linespacing=1.2,
         )
     separator = len(CALIBRATION_ARMS) / 2 - 0.5
     ax.axhline(separator, color=".85", linewidth=0.6, zorder=1)
@@ -1074,14 +1488,28 @@ def figure_training_panels(reports, calibration):
             label=legend_label,
         )
         handles.extend(drawn)
+    handles.append(
+        Line2D(
+            [],
+            [],
+            marker="o",
+            color=COLORS[0],
+            markerfacecolor=COLORS[0],
+            markerfacecoloralt="white",
+            fillstyle="left",
+            markersize=5.5,
+            linestyle="none",
+            label="EWMA span 10",
+        )
+    )
     ax.set(
-        title="(b) Calibração: inclinação\n(IC 95% por caso)",
+        title="(b) Calibração: inclinação\n(bruto: IC 95% · EWMA sem IC)",
         xlabel="Predito ~ referência\nx = 0: sem calibração\nx = 1: identidade\n"
-        "rótulos: ICC e % |erro| ≤ 10",
+        "ICC bruto/EWMA · % ≤10 bruto",
         yticks=range(len(CALIBRATION_ARMS)),
         yticklabels=[label for _, label, *_ in CALIBRATION_ARMS],
         ylim=(len(CALIBRATION_ARMS) - 0.55, -0.6),
-        xlim=(-0.25, 1.62),
+        xlim=(-0.25, 1.66),
         xticks=[0, 0.5, 1],
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
@@ -1094,7 +1522,7 @@ def figure_training_panels(reports, calibration):
         edgecolor=".85",
         framealpha=1.0,
         borderpad=0.5,
-        labelspacing=0.4,
+        labelspacing=0.35,
         handletextpad=0.5,
     )
 
@@ -1105,7 +1533,7 @@ def figure_training_panels(reports, calibration):
     save_figure(
         fig,
         "training_panels",
-        [f"models/{MODEL_FILES[0]}", f"reports/{CALIBRATION_FILE}"],
+        [f"models/{MODEL_FILES[0]}", f"reports/{CALIBRATION_FILE}", f"reports/{EWMA_FILE}"],
     )
 
 
@@ -1124,20 +1552,22 @@ def main():
     pk_reports = load_pk_reports()
     audit_pk_reports(reports, pk_reports)
     calibration = load_calibration(reports)
+    ewma = load_ewma(calibration, pk_reports)
     figure_pipeline(reports)
-    figure_comparison(reports)
+    figure_comparison(reports, ewma)
     figure_offset(reports)
-    figure_bootstrap(reports)
-    figure_pk(pk_reports)
+    figure_bootstrap(reports, ewma)
+    figure_pk(pk_reports, ewma)
     figure_corpus_panels(reports)
-    figure_training_panels(reports, calibration)
+    figure_training_panels(reports, calibration, ewma)
+    figure_ewma_sweep(ewma)
     if args.infer_trajectory:
         infer_trajectory()
     if args.infer_trajectory or args.trajectory:
         figure_trajectory()
     print(
         f"audited {len(reports)} report snapshots + {len(pk_reports)} Pk snapshots "
-        f"+ {CALIBRATION_FILE}; generated historical figures"
+        f"+ {CALIBRATION_FILE} + {EWMA_FILE}; generated historical figures"
     )
 
 
