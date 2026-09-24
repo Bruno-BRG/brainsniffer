@@ -22,7 +22,7 @@ entram nas figuras.
 - Tipografia: DejaVu Sans distribuída com Matplotlib, 9–10 pt na escala final.
   Fundo branco, eixos pretos de 0,7 pt e grid cinza claro de 0,5 pt.
 - Paleta: preto `#000000`, cinza `#555555` e neutros; sem gradientes e sem depender de cor para distinguir séries.
-- Distinção por formato (leitura em preto e branco): círculo preenchido e linha contínua para o checkpoint ativo, quadrado aberto e linha tracejada para o candidato misto; IC misto tracejado. Segmentos cinza unem os pares na comparação. No offset, métricas usam símbolos/linhas distintos (círculo/linha contínua vs. quadrado/linha tracejada). Na trajetória, BIS de referência em linha contínua e CNN em linha tracejada. Nas barras de corpus, elegíveis em preenchimento sólido, quarentena em hachurado (`///`) e benchmark histórico em quadriculado (`xx`), todos com borda preta.
+- Distinção por formato (leitura em preto e branco): círculo preenchido e linha contínua para o checkpoint ativo, quadrado aberto e linha tracejada para o candidato misto; IC misto tracejado. Segmentos cinza unem os pares na comparação. No offset, métricas usam símbolos/linhas distintos (círculo/linha contínua vs. quadrado/linha tracejada). Na trajetória, BIS de referência em linha contínua e CNN em linha tracejada. Nas barras de corpus, elegíveis de desenvolvimento em preenchimento sólido, quarentena de desenvolvimento em hachurado (`///`) e congelados fora do pool em quadriculado (`xx`), todos com borda preta; o "9 de 15" dentro do bloco congelado é uma anotação sobre a mesma barra, sem dupla contagem.
 - Escalas: MAE parte de zero quando compara magnitudes; Pearson usa o domínio
   completo de -1 a +1; eixos ampliados da análise de offset são declarados.
 - Escopo: resultados exploratórios de pesquisa, sem interpretação como
@@ -113,13 +113,17 @@ entram nas figuras.
 
 - Pergunta: como o corpus se compõe e por que os dois gates de qualidade não são
   redundantes?
-- Takeaway: os casos se dividem em elegíveis, quarentena e benchmark histórico,
-  e um caso pode ter quase todo o EEG finito e ainda perder janelas por
-  qualidade, ou ser retido antes da contagem por lacuna inválida.
-- Painéis: (a) casos por fonte, separando elegíveis, quarentena e benchmark
-  histórico, com a soma rotulada por fonte; (b) fração de amostras de EEG
-  finitas contra fração de janelas aceitas, com a linha tracejada no gate de 90%
-  de finitude.
+- Takeaway: os 59 arquivos se dividem em categorias mutuamente exclusivas por
+  fonte — 33 elegíveis de desenvolvimento, 11 em quarentena de desenvolvimento e
+  15 congelados do benchmark histórico, que ficam fora do pool — e um caso pode
+  ter quase todo o EEG finito e ainda perder janelas por qualidade, ou ser
+  retido antes da contagem por lacuna inválida.
+- Painéis: (a) casos por fonte (24 Figshare + 35 VitalDB = 59), empilhando
+  elegíveis de desenvolvimento, quarentena de desenvolvimento e congelados fora
+  do pool, com a soma rotulada por fonte e a anotação de que 9 dos 15 congelados
+  reprovam nos gates internos (sobre a mesma barra, sem dupla contagem); (b)
+  fração de amostras de EEG finitas contra fração de janelas aceitas, com a linha
+  tracejada no gate de 90% de finitude.
 - Fontes: `reports/corpus_manifest.json`.
 
 ## `training_panels.png`
