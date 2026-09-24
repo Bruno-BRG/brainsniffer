@@ -357,17 +357,25 @@ Para um smoke test rápido, use `--max-windows 512`. O padrão de treino é `--m
 
 ### Dados e artefatos rastreados
 
-Regras de `.gitignore` para dados/modelos não retiram arquivos já rastreados do
-Git. Neste checkout, `git ls-files '*.mat' '*.pt' '*.pth' '*.pkl' '*.ckpt'`
-lista 24 MAT em `data/raw/` e quatro checkpoints `.pt` em `models/`, incluindo
-artefatos de smoke. Portanto, não presuma que esses arquivos estejam fora do
-histórico ou ausentes de um clone. Nenhum dado/checkpoint foi removido nesta
-revisão; exclusão futura do índice/histórico exige decisão separada.
+O código é MIT, mas os dados têm termos próprios. O repositório **não
+redistribui dados derivados do VitalDB**: os arquivos `vitaldb_case*.npz` são
+gerados localmente por `download-vitaldb`, sob o acordo de uso do VitalDB, e
+ficam fora do Git (`data/vitaldb/*.npz` no `.gitignore`). Em 24/09/2026 os 15
+arquivos derivados do VitalDB foram removidos do índice **e do histórico**;
+clones anteriores a essa data ainda podem contê-los e devem ser tratados como
+desatualizados.
 
-A licença MIT do código não relicencia os dados: preserve atribuição e termos
-do Figshare (CC BY 4.0), consulte os termos do VitalDB antes de uso/redistribuição
-e registre a proveniência e eventuais restrições dos modelos derivados.
-Rastreamento no Git não equivale a autorização de redistribuição ou uso clínico.
+Os 24 arquivos `.mat` do corpus [EEG and BIS raw data](https://doi.org/10.6084/m9.figshare.5589841.v1)
+permanecem em `data/raw/` sob CC BY 4.0, com o crédito acima; `download-data`
+reconstrói o diretório sem depender do clone. Os dois checkpoints `.pt` de
+pesquisa permanecem em `models/` para auditoria dos relatórios (hashes nos
+sidecars `.json`); pesos derivados de dados não relicenciam nem substituem os
+termos das fontes.
+
+A licença MIT não relicencia dados, checkpoints ou relatórios de terceiros.
+Preserve atribuição e termos do Figshare (CC BY 4.0), consulte os termos do
+VitalDB antes de qualquer uso e não presuma que rastreamento no Git equivalha a
+autorização de redistribuição ou uso clínico.
 
 ## Interpretação do rótulo
 
