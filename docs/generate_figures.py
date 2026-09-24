@@ -578,8 +578,10 @@ def figure_trajectory():
     audit = json.loads((TRAJECTORY / "case19.json").read_text())
     fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.5), sharex=True,
                              gridspec_kw={"height_ratios": [2, 1]}, layout="constrained")
-    axes[0].plot(time, reference, color="black", linestyle="-", label="BIS referência (linha contínua)", linewidth=1.0)
-    axes[0].plot(time, raw, color="black", linestyle="--", dashes=(4, 2), label="CNN ativa bruta (linha tracejada)", linewidth=1.0)
+    axes[0].plot(time, reference, color="black", linestyle="-",
+                 label="BIS referência (linha contínua)", linewidth=1.0)
+    axes[0].plot(time, raw, color="black", linestyle="--", dashes=(4, 2),
+                 label="CNN ativa bruta (linha tracejada)", linewidth=1.0)
     axes[0].set(ylabel="Índice (pontos BIS)", ylim=(0, 100),
                 title="Figshare case19 · gravação completa · comparação offline")
     axes[0].legend(frameon=False, loc="upper right")
