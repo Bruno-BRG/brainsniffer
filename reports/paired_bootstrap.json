@@ -1,0 +1,1070 @@
+{
+  "analysis": "paired_case_bootstrap_and_casewise_tests",
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "delta_definition": "delta = métrica(braço a) - métrica(braço b); cada par é reamostrado pelos MESMOS casos nos dois braços. Para MAE/RMSE, delta negativo favorece o braço a; para Pearson/Pk, delta positivo favorece o braço a; para viés, delta positivo indica viés mais positivo no braço a.",
+  "pairs": {
+    "figshare_holdout__active_minus_mixed": {
+      "arm_a": "cnn_active_figshare",
+      "arm_b": "cnn_mixed_figshare",
+      "benchmark": "figshare_holdout",
+      "bootstrap": {
+        "delta_bias": {
+          "ci_excludes_zero": true,
+          "lower_95": -2.479590434473,
+          "mean": -1.410864943519,
+          "n_finite_resamples": 1000,
+          "observed": -1.33524312512,
+          "upper_95": -0.4733496423
+        },
+        "delta_mae": {
+          "ci_excludes_zero": false,
+          "lower_95": -0.282607140291,
+          "mean": 0.307283728494,
+          "n_finite_resamples": 1000,
+          "observed": 0.336954055868,
+          "upper_95": 0.812274203253
+        },
+        "delta_pearson_r": {
+          "ci_excludes_zero": true,
+          "lower_95": -0.052658213962,
+          "mean": -0.030486249824,
+          "n_finite_resamples": 1000,
+          "observed": -0.034388860814,
+          "upper_95": -0.000480255621
+        },
+        "delta_pk": {
+          "ci_excludes_zero": false,
+          "lower_95": -0.012550712529,
+          "mean": -0.003195517496,
+          "n_finite_resamples": 1000,
+          "observed": -0.001241424287,
+          "upper_95": 0.007332278019
+        },
+        "delta_rmse": {
+          "ci_excludes_zero": false,
+          "lower_95": -0.272840432936,
+          "mean": 0.397510928262,
+          "n_finite_resamples": 1000,
+          "observed": 0.410720521818,
+          "upper_95": 0.955131675488
+        }
+      },
+      "case_alignment_verified": true,
+      "n_cases": 5,
+      "n_windows": 5523,
+      "observed_arm_a": {
+        "bias": 0.789179512023,
+        "mae": 7.025415630503,
+        "pearson_r": 0.783689706458,
+        "pk": 0.772712275428,
+        "rmse": 11.084903614378
+      },
+      "observed_arm_b": {
+        "bias": 2.124422637142,
+        "mae": 6.688461574635,
+        "pearson_r": 0.818078567272,
+        "pk": 0.773953699715,
+        "rmse": 10.67418309256
+      },
+      "observed_delta": {
+        "bias": -1.33524312512,
+        "mae": 0.336954055868,
+        "pearson_r": -0.034388860814,
+        "pk": -0.001241424287,
+        "rmse": 0.410720521818
+      }
+    },
+    "figshare_holdout__active_minus_rf": {
+      "arm_a": "cnn_active_figshare",
+      "arm_b": "rf_spectral_figshare",
+      "benchmark": "figshare_holdout",
+      "bootstrap": {
+        "delta_bias": {
+          "ci_excludes_zero": false,
+          "lower_95": -2.966920918322,
+          "mean": -0.600284185474,
+          "n_finite_resamples": 1000,
+          "observed": -0.876979072878,
+          "upper_95": 2.173501568083
+        },
+        "delta_mae": {
+          "ci_excludes_zero": true,
+          "lower_95": -2.374209395413,
+          "mean": -1.729113869973,
+          "n_finite_resamples": 1000,
+          "observed": -1.837872359234,
+          "upper_95": -0.657486142391
+        },
+        "delta_pearson_r": {
+          "ci_excludes_zero": true,
+          "lower_95": 0.044072979395,
+          "mean": 0.108952041897,
+          "n_finite_resamples": 1000,
+          "observed": 0.116357772525,
+          "upper_95": 0.151929698728
+        },
+        "delta_pk": {
+          "ci_excludes_zero": true,
+          "lower_95": 0.012456137355,
+          "mean": 0.045493600597,
+          "n_finite_resamples": 1000,
+          "observed": 0.050736472335,
+          "upper_95": 0.081380228975
+        },
+        "delta_rmse": {
+          "ci_excludes_zero": true,
+          "lower_95": -3.088437753731,
+          "mean": -2.110610221755,
+          "n_finite_resamples": 1000,
+          "observed": -2.148503909627,
+          "upper_95": -0.903655701324
+        }
+      },
+      "case_alignment_verified": true,
+      "n_cases": 5,
+      "n_windows": 5523,
+      "observed_arm_a": {
+        "bias": 0.789179512023,
+        "mae": 7.025415630503,
+        "pearson_r": 0.783689706458,
+        "pk": 0.772712275428,
+        "rmse": 11.084903614378
+      },
+      "observed_arm_b": {
+        "bias": 1.6661585849,
+        "mae": 8.863287989737,
+        "pearson_r": 0.667331933933,
+        "pk": 0.721975803094,
+        "rmse": 13.233407524005
+      },
+      "observed_delta": {
+        "bias": -0.876979072878,
+        "mae": -1.837872359234,
+        "pearson_r": 0.116357772525,
+        "pk": 0.050736472335,
+        "rmse": -2.148503909627
+      }
+    },
+    "vitaldb_external__active_minus_mixed": {
+      "arm_a": "cnn_active_vitaldb",
+      "arm_b": "cnn_mixed_vitaldb",
+      "benchmark": "vitaldb_external",
+      "bootstrap": {
+        "delta_bias": {
+          "ci_excludes_zero": true,
+          "lower_95": 0.383766074631,
+          "mean": 2.425942092147,
+          "n_finite_resamples": 1000,
+          "observed": 2.415417958423,
+          "upper_95": 4.612995950387
+        },
+        "delta_mae": {
+          "ci_excludes_zero": true,
+          "lower_95": 2.949610848002,
+          "mean": 3.867186138721,
+          "n_finite_resamples": 1000,
+          "observed": 3.831892255714,
+          "upper_95": 4.943824056408
+        },
+        "delta_pearson_r": {
+          "ci_excludes_zero": true,
+          "lower_95": -0.807630201295,
+          "mean": -0.664236719684,
+          "n_finite_resamples": 1000,
+          "observed": -0.66346705343,
+          "upper_95": -0.515122988963
+        },
+        "delta_pk": {
+          "ci_excludes_zero": true,
+          "lower_95": -0.215585671873,
+          "mean": -0.154928195331,
+          "n_finite_resamples": 1000,
+          "observed": -0.156622842639,
+          "upper_95": -0.083447897739
+        },
+        "delta_rmse": {
+          "ci_excludes_zero": true,
+          "lower_95": 5.497195974718,
+          "mean": 7.081993059736,
+          "n_finite_resamples": 1000,
+          "observed": 7.059469387084,
+          "upper_95": 8.920396055982
+        }
+      },
+      "case_alignment_verified": true,
+      "n_cases": 15,
+      "n_windows": 38730,
+      "observed_arm_a": {
+        "bias": 1.403254280859,
+        "mae": 12.432227095011,
+        "pearson_r": 0.02411712221,
+        "pk": 0.515499184158,
+        "rmse": 18.800117420377
+      },
+      "observed_arm_b": {
+        "bias": -1.012163677565,
+        "mae": 8.600334839297,
+        "pearson_r": 0.687584175641,
+        "pk": 0.672122026797,
+        "rmse": 11.740648033293
+      },
+      "observed_delta": {
+        "bias": 2.415417958423,
+        "mae": 3.831892255714,
+        "pearson_r": -0.66346705343,
+        "pk": -0.156622842639,
+        "rmse": 7.059469387084
+      }
+    },
+    "vitaldb_external__active_minus_rf": {
+      "arm_a": "cnn_active_vitaldb",
+      "arm_b": "rf_spectral_vitaldb",
+      "benchmark": "vitaldb_external",
+      "bootstrap": {
+        "delta_bias": {
+          "ci_excludes_zero": true,
+          "lower_95": -2.887498322868,
+          "mean": -1.95654386653,
+          "n_finite_resamples": 1000,
+          "observed": -1.987256069898,
+          "upper_95": -1.216073797811
+        },
+        "delta_mae": {
+          "ci_excludes_zero": true,
+          "lower_95": -2.127654968859,
+          "mean": -1.191974514427,
+          "n_finite_resamples": 1000,
+          "observed": -1.188374820686,
+          "upper_95": -0.338963217798
+        },
+        "delta_pearson_r": {
+          "ci_excludes_zero": true,
+          "lower_95": 0.004842035541,
+          "mean": 0.060835984634,
+          "n_finite_resamples": 1000,
+          "observed": 0.060414790138,
+          "upper_95": 0.111416876319
+        },
+        "delta_pk": {
+          "ci_excludes_zero": false,
+          "lower_95": -0.01892738687,
+          "mean": 0.012527999616,
+          "n_finite_resamples": 1000,
+          "observed": 0.013055051561,
+          "upper_95": 0.04692979344
+        },
+        "delta_rmse": {
+          "ci_excludes_zero": true,
+          "lower_95": -2.088661135735,
+          "mean": -1.444585639067,
+          "n_finite_resamples": 1000,
+          "observed": -1.44575687413,
+          "upper_95": -0.848397880692
+        }
+      },
+      "case_alignment_verified": true,
+      "n_cases": 15,
+      "n_windows": 38730,
+      "observed_arm_a": {
+        "bias": 1.403254280859,
+        "mae": 12.432227095011,
+        "pearson_r": 0.02411712221,
+        "pk": 0.515499184158,
+        "rmse": 18.800117420377
+      },
+      "observed_arm_b": {
+        "bias": 3.390510350757,
+        "mae": 13.620601915697,
+        "pearson_r": -0.036297667927,
+        "pk": 0.502444132597,
+        "rmse": 20.245874294507
+      },
+      "observed_delta": {
+        "bias": -1.987256069898,
+        "mae": -1.188374820686,
+        "pearson_r": 0.060414790138,
+        "pk": 0.013055051561,
+        "rmse": -1.44575687413
+      }
+    }
+  },
+  "per_case_tables": {
+    "figshare_holdout": {
+      "cnn_active_figshare": [
+        {
+          "bias": 4.785182822732,
+          "case_id": "case19",
+          "mae": 8.715155222276,
+          "n": 850,
+          "pearson_r": 0.910010868669,
+          "pk": 0.810906531724,
+          "rmse": 10.210041167897
+        },
+        {
+          "bias": 1.619582354304,
+          "case_id": "case3",
+          "mae": 6.500898992338,
+          "n": 2324,
+          "pearson_r": 0.683008524081,
+          "pk": 0.6704153517,
+          "rmse": 12.014441377824
+        },
+        {
+          "bias": -2.29835257361,
+          "case_id": "case4",
+          "mae": 8.256127373774,
+          "n": 761,
+          "pearson_r": 0.76563357622,
+          "pk": 0.808488241005,
+          "rmse": 12.143027261191
+        },
+        {
+          "bias": -2.168775246133,
+          "case_id": "case5",
+          "mae": 6.454917603705,
+          "n": 458,
+          "pearson_r": 0.779198212323,
+          "pk": 0.799494159212,
+          "rmse": 10.383922471623
+        },
+        {
+          "bias": -0.646310596972,
+          "case_id": "case9",
+          "mae": 6.23551693469,
+          "n": 1130,
+          "pearson_r": 0.88370039763,
+          "pk": 0.790513974977,
+          "rmse": 9.070661172268
+        }
+      ],
+      "cnn_mixed_figshare": [
+        {
+          "bias": 6.210312567318,
+          "case_id": "case19",
+          "mae": 9.72432087169,
+          "n": 850,
+          "pearson_r": 0.891182129424,
+          "pk": 0.812163070856,
+          "rmse": 11.2888224773
+        },
+        {
+          "bias": 2.13402079551,
+          "case_id": "case3",
+          "mae": 6.059920261731,
+          "n": 2324,
+          "pearson_r": 0.744021029838,
+          "pk": 0.67461972825,
+          "rmse": 11.542655510026
+        },
+        {
+          "bias": 0.647353233708,
+          "case_id": "case4",
+          "mae": 8.006477666747,
+          "n": 761,
+          "pearson_r": 0.79021976079,
+          "pk": 0.808321093642,
+          "rmse": 11.327624923313
+        },
+        {
+          "bias": -2.787121918524,
+          "case_id": "case5",
+          "mae": 5.808423171397,
+          "n": 458,
+          "pearson_r": 0.832455669301,
+          "pk": 0.850944268942,
+          "rmse": 9.344700213404
+        },
+        {
+          "bias": 2.016656851136,
+          "case_id": "case9",
+          "mae": 5.166600469572,
+          "n": 1130,
+          "pearson_r": 0.912438514974,
+          "pk": 0.803593982305,
+          "rmse": 8.075065368072
+        }
+      ],
+      "rf_spectral_figshare": [
+        {
+          "bias": 3.744433904178,
+          "case_id": "case19",
+          "mae": 10.185787360768,
+          "n": 850,
+          "pearson_r": 0.772719490206,
+          "pk": 0.768799648967,
+          "rmse": 12.919959374546
+        },
+        {
+          "bias": 5.219439889062,
+          "case_id": "case3",
+          "mae": 9.015216815134,
+          "n": 2324,
+          "pearson_r": 0.526571343113,
+          "pk": 0.614060416531,
+          "rmse": 14.17309555267
+        },
+        {
+          "bias": -0.653790036945,
+          "case_id": "case4",
+          "mae": 8.581027126719,
+          "n": 761,
+          "pearson_r": 0.736108251668,
+          "pk": 0.773543773049,
+          "rmse": 12.583676212825
+        },
+        {
+          "bias": -2.604349683921,
+          "case_id": "case5",
+          "mae": 6.9104631217,
+          "n": 458,
+          "pearson_r": 0.774508734853,
+          "pk": 0.808115103382,
+          "rmse": 10.319847605354
+        },
+        {
+          "bias": -3.911705206173,
+          "case_id": "case9",
+          "mae": 8.53761299037,
+          "n": 1130,
+          "pearson_r": 0.76091998865,
+          "pk": 0.747169578829,
+          "rmse": 12.939639014211
+        }
+      ]
+    },
+    "vitaldb_external": {
+      "cnn_active_vitaldb": [
+        {
+          "bias": -2.338717216207,
+          "case_id": "vitaldb_case1",
+          "mae": 15.530214697459,
+          "n": 2302,
+          "pearson_r": -0.139071857964,
+          "pk": 0.40481713115,
+          "rmse": 20.12414648364
+        },
+        {
+          "bias": -9.423105630184,
+          "case_id": "vitaldb_case10",
+          "mae": 12.392994785605,
+          "n": 4183,
+          "pearson_r": 0.058105231469,
+          "pk": 0.478851639481,
+          "rmse": 15.000984909361
+        },
+        {
+          "bias": -6.43326204799,
+          "case_id": "vitaldb_case12",
+          "mae": 9.931925416643,
+          "n": 6230,
+          "pearson_r": -0.223577936479,
+          "pk": 0.706082080454,
+          "rmse": 13.67719822205
+        },
+        {
+          "bias": 15.90187573616,
+          "case_id": "vitaldb_case13",
+          "mae": 19.464630350728,
+          "n": 2084,
+          "pearson_r": 0.013118739099,
+          "pk": 0.393731799778,
+          "rmse": 28.452939034425
+        },
+        {
+          "bias": 14.939391677762,
+          "case_id": "vitaldb_case14",
+          "mae": 20.726169489637,
+          "n": 810,
+          "pearson_r": -0.128033109297,
+          "pk": 0.452835376045,
+          "rmse": 29.717515801811
+        },
+        {
+          "bias": -0.34311343666,
+          "case_id": "vitaldb_case16",
+          "mae": 6.56497480029,
+          "n": 2440,
+          "pearson_r": 0.565588583909,
+          "pk": 0.638408931643,
+          "rmse": 9.713689448431
+        },
+        {
+          "bias": 9.145358317702,
+          "case_id": "vitaldb_case17",
+          "mae": 12.963041535731,
+          "n": 4056,
+          "pearson_r": -0.01109335999,
+          "pk": 0.407764250403,
+          "rmse": 18.572433959431
+        },
+        {
+          "bias": -5.293646710205,
+          "case_id": "vitaldb_case2",
+          "mae": 11.222536531982,
+          "n": 3125,
+          "pearson_r": 0.164252485162,
+          "pk": 0.737667954134,
+          "rmse": 16.56470844833
+        },
+        {
+          "bias": 13.249173090328,
+          "case_id": "vitaldb_case3",
+          "mae": 18.208219013236,
+          "n": 863,
+          "pearson_r": 0.205340215064,
+          "pk": 0.464386215868,
+          "rmse": 28.580236613461
+        },
+        {
+          "bias": 3.979571089645,
+          "case_id": "vitaldb_case4",
+          "mae": 11.218819117419,
+          "n": 4138,
+          "pearson_r": 0.46645853101,
+          "pk": 0.46818148199,
+          "rmse": 16.649604648956
+        },
+        {
+          "bias": 0.965240507784,
+          "case_id": "vitaldb_case5",
+          "mae": 9.788025946263,
+          "n": 4301,
+          "pearson_r": -0.472493941997,
+          "pk": 0.510787106035,
+          "rmse": 17.984179644144
+        },
+        {
+          "bias": -2.426880404504,
+          "case_id": "vitaldb_case6",
+          "mae": 13.249762006503,
+          "n": 691,
+          "pearson_r": 0.070480011907,
+          "pk": 0.568271524069,
+          "rmse": 18.330158673703
+        },
+        {
+          "bias": 9.182745218937,
+          "case_id": "vitaldb_case7",
+          "mae": 11.696804037385,
+          "n": 1444,
+          "pearson_r": 0.013210965646,
+          "pk": 0.56279847944,
+          "rmse": 20.740627418446
+        },
+        {
+          "bias": 15.676786506663,
+          "case_id": "vitaldb_case8",
+          "mae": 18.474967313867,
+          "n": 1176,
+          "pearson_r": -0.181666051858,
+          "pk": 0.483113934005,
+          "rmse": 26.683985327789
+        },
+        {
+          "bias": 13.756347492824,
+          "case_id": "vitaldb_case9",
+          "mae": 21.427803598638,
+          "n": 887,
+          "pearson_r": 0.038205683478,
+          "pk": 0.476427039441,
+          "rmse": 30.532598698003
+        }
+      ],
+      "cnn_mixed_vitaldb": [
+        {
+          "bias": -2.367535567071,
+          "case_id": "vitaldb_case1",
+          "mae": 11.599219670175,
+          "n": 2302,
+          "pearson_r": 0.518125844052,
+          "pk": 0.612302227608,
+          "rmse": 14.725753449917
+        },
+        {
+          "bias": -7.881528389645,
+          "case_id": "vitaldb_case10",
+          "mae": 10.097312558475,
+          "n": 4183,
+          "pearson_r": 0.295168048478,
+          "pk": 0.47504113335,
+          "rmse": 12.586264494951
+        },
+        {
+          "bias": -5.218740118641,
+          "case_id": "vitaldb_case12",
+          "mae": 6.112271905864,
+          "n": 6230,
+          "pearson_r": 0.764726160081,
+          "pk": 0.757990563749,
+          "rmse": 8.014715539964
+        },
+        {
+          "bias": 9.722009263289,
+          "case_id": "vitaldb_case13",
+          "mae": 12.624606889492,
+          "n": 2084,
+          "pearson_r": 0.735399438547,
+          "pk": 0.711204304225,
+          "rmse": 17.093980810391
+        },
+        {
+          "bias": 7.204436303878,
+          "case_id": "vitaldb_case14",
+          "mae": 12.581986880818,
+          "n": 810,
+          "pearson_r": 0.770193898996,
+          "pk": 0.67342328973,
+          "rmse": 16.712276940297
+        },
+        {
+          "bias": 2.709183356654,
+          "case_id": "vitaldb_case16",
+          "mae": 7.23520599247,
+          "n": 2440,
+          "pearson_r": 0.587723102598,
+          "pk": 0.628400948795,
+          "rmse": 9.769286163595
+        },
+        {
+          "bias": 2.643001409001,
+          "case_id": "vitaldb_case17",
+          "mae": 8.757808049226,
+          "n": 4056,
+          "pearson_r": 0.643651265231,
+          "pk": 0.674449897537,
+          "rmse": 11.522721141812
+        },
+        {
+          "bias": -5.733906299801,
+          "case_id": "vitaldb_case2",
+          "mae": 6.224134536648,
+          "n": 3125,
+          "pearson_r": 0.900564608723,
+          "pk": 0.81114463271,
+          "rmse": 8.207996328831
+        },
+        {
+          "bias": 2.200492895976,
+          "case_id": "vitaldb_case3",
+          "mae": 7.780829788843,
+          "n": 863,
+          "pearson_r": 0.892228467354,
+          "pk": 0.787415626903,
+          "rmse": 10.880508203497
+        },
+        {
+          "bias": -0.461543754802,
+          "case_id": "vitaldb_case4",
+          "mae": 8.157827120175,
+          "n": 4138,
+          "pearson_r": 0.785113816815,
+          "pk": 0.66938754445,
+          "rmse": 11.025797684936
+        },
+        {
+          "bias": -4.848618269244,
+          "case_id": "vitaldb_case5",
+          "mae": 6.798157737328,
+          "n": 4301,
+          "pearson_r": 0.792957070217,
+          "pk": 0.606463496222,
+          "rmse": 9.77967763964
+        },
+        {
+          "bias": 1.450126449037,
+          "case_id": "vitaldb_case6",
+          "mae": 12.214327954521,
+          "n": 691,
+          "pearson_r": 0.136755153688,
+          "pk": 0.578521280527,
+          "rmse": 17.814470408103
+        },
+        {
+          "bias": 7.354067686646,
+          "case_id": "vitaldb_case7",
+          "mae": 9.602438314593,
+          "n": 1444,
+          "pearson_r": 0.832508729988,
+          "pk": 0.702627730595,
+          "rmse": 11.733605798671
+        },
+        {
+          "bias": 9.718769799791,
+          "case_id": "vitaldb_case8",
+          "mae": 12.6569654456,
+          "n": 1176,
+          "pearson_r": 0.716362655489,
+          "pk": 0.683995752896,
+          "rmse": 16.273028689366
+        },
+        {
+          "bias": 4.550273586287,
+          "case_id": "vitaldb_case9",
+          "mae": 11.324166342666,
+          "n": 887,
+          "pearson_r": 0.824255639863,
+          "pk": 0.684201153835,
+          "rmse": 15.511724811918
+        }
+      ],
+      "rf_spectral_vitaldb": [
+        {
+          "bias": 0.745030640012,
+          "case_id": "vitaldb_case1",
+          "mae": 16.281403770403,
+          "n": 2302,
+          "pearson_r": -0.303727883669,
+          "pk": 0.42578710872,
+          "rmse": 23.547021939829
+        },
+        {
+          "bias": -7.659735072495,
+          "case_id": "vitaldb_case10",
+          "mae": 11.964804036724,
+          "n": 4183,
+          "pearson_r": -0.040865416755,
+          "pk": 0.497136599339,
+          "rmse": 15.306841331025
+        },
+        {
+          "bias": -4.616883634334,
+          "case_id": "vitaldb_case12",
+          "mae": 9.428598531136,
+          "n": 6230,
+          "pearson_r": -0.181154051082,
+          "pk": 0.637179943271,
+          "rmse": 13.782740233309
+        },
+        {
+          "bias": 17.343105223178,
+          "case_id": "vitaldb_case13",
+          "mae": 21.054543505312,
+          "n": 2084,
+          "pearson_r": 0.008229449998,
+          "pk": 0.432045874746,
+          "rmse": 29.468026426257
+        },
+        {
+          "bias": 14.444578777038,
+          "case_id": "vitaldb_case14",
+          "mae": 20.591200163175,
+          "n": 810,
+          "pearson_r": -0.144693684621,
+          "pk": 0.464285602707,
+          "rmse": 29.771192242543
+        },
+        {
+          "bias": 6.236615103743,
+          "case_id": "vitaldb_case16",
+          "mae": 10.935507314267,
+          "n": 2440,
+          "pearson_r": 0.283309958356,
+          "pk": 0.541201280753,
+          "rmse": 14.564994370999
+        },
+        {
+          "bias": 12.082478627329,
+          "case_id": "vitaldb_case17",
+          "mae": 15.694184112802,
+          "n": 4056,
+          "pearson_r": -0.038872467472,
+          "pk": 0.463771824389,
+          "rmse": 21.521842268805
+        },
+        {
+          "bias": -5.272203055344,
+          "case_id": "vitaldb_case2",
+          "mae": 11.927257976909,
+          "n": 3125,
+          "pearson_r": 0.095901781103,
+          "pk": 0.669798940947,
+          "rmse": 17.363272978298
+        },
+        {
+          "bias": 14.693105983332,
+          "case_id": "vitaldb_case3",
+          "mae": 21.42811746351,
+          "n": 863,
+          "pearson_r": 0.023954266125,
+          "pk": 0.445476168821,
+          "rmse": 30.82966074614
+        },
+        {
+          "bias": 4.884215689293,
+          "case_id": "vitaldb_case4",
+          "mae": 12.181563224191,
+          "n": 4138,
+          "pearson_r": 0.367521539645,
+          "pk": 0.512682222431,
+          "rmse": 18.278995969117
+        },
+        {
+          "bias": 3.935586515215,
+          "case_id": "vitaldb_case5",
+          "mae": 11.963962145337,
+          "n": 4301,
+          "pearson_r": -0.234488211426,
+          "pk": 0.481418545646,
+          "rmse": 19.349073020533
+        },
+        {
+          "bias": -4.426230945757,
+          "case_id": "vitaldb_case6",
+          "mae": 13.662248619065,
+          "n": 691,
+          "pearson_r": 0.041460284487,
+          "pk": 0.554704558433,
+          "rmse": 18.928755030633
+        },
+        {
+          "bias": 9.504656673866,
+          "case_id": "vitaldb_case7",
+          "mae": 12.79864981608,
+          "n": 1444,
+          "pearson_r": 0.018226133156,
+          "pk": 0.544415867097,
+          "rmse": 21.520311503725
+        },
+        {
+          "bias": 19.075232978063,
+          "case_id": "vitaldb_case8",
+          "mae": 21.807159118184,
+          "n": 1176,
+          "pearson_r": -0.214734774603,
+          "pk": 0.4459782844,
+          "rmse": 29.172669671298
+        },
+        {
+          "bias": 13.410616985271,
+          "case_id": "vitaldb_case9",
+          "mae": 21.607494435726,
+          "n": 887,
+          "pearson_r": -0.075923776463,
+          "pk": 0.493200334157,
+          "rmse": 30.755844174083
+        }
+      ]
+    }
+  },
+  "raw_eeg_in_report": false,
+  "retrained": false,
+  "scope": "research_only",
+  "verification": {
+    "cnn_active_figshare": {
+      "arm_report": "reports/figshare_holdout_evaluation.json",
+      "arm_report_max_relative_deviation": 5.063904e-06,
+      "arm_report_passes_1e-6": false,
+      "arm_report_worst_metric": "bias",
+      "pk_report": "reports/pk_figshare_active.json",
+      "pk_report_max_relative_deviation": 0.0,
+      "pk_report_reproduces_exactly": true,
+      "pk_value_relative_deviation": 0.0,
+      "window_counts_equal": true
+    },
+    "cnn_active_vitaldb": {
+      "arm_report": "reports/vitaldb_external_validation.json",
+      "arm_report_max_relative_deviation": 1.1417062e-05,
+      "arm_report_passes_1e-6": false,
+      "arm_report_worst_metric": "pearson_r",
+      "pk_report": "reports/pk_vitaldb_active.json",
+      "pk_report_max_relative_deviation": 0.0,
+      "pk_report_reproduces_exactly": true,
+      "pk_value_relative_deviation": 0.0,
+      "window_counts_equal": true
+    },
+    "cnn_mixed_figshare": {
+      "arm_report": "reports/mixed_fixed_figshare_holdout.json",
+      "arm_report_max_relative_deviation": 6.1525e-07,
+      "arm_report_passes_1e-6": true,
+      "arm_report_worst_metric": "bias",
+      "pk_report": "reports/pk_figshare_mixed.json",
+      "pk_report_max_relative_deviation": 0.0,
+      "pk_report_reproduces_exactly": true,
+      "pk_value_relative_deviation": 0.0,
+      "window_counts_equal": true
+    },
+    "cnn_mixed_vitaldb": {
+      "arm_report": "reports/mixed_vitaldb_external.json",
+      "arm_report_max_relative_deviation": 1.505587e-06,
+      "arm_report_passes_1e-6": false,
+      "arm_report_worst_metric": "bias",
+      "pk_report": "reports/pk_vitaldb_mixed.json",
+      "pk_report_max_relative_deviation": 0.0,
+      "pk_report_reproduces_exactly": true,
+      "pk_value_relative_deviation": 0.0,
+      "window_counts_equal": true
+    },
+    "note_environment": "Os relatórios de braço mais antigos divergem no 5º–7º dígito significativo (máx. ~1,1e-5 relativo) apenas em métricas contínuas; n, acurácia de estágio, macro-F1 e Pk são idênticos. Isso é consistente com diferença de build/kernels numéricos (o sidecar registra torch 2.14.0+cu130; o ambiente travado atual é torch 2.14.0+cpu). As predições recomputadas usadas em todas as análises pareadas reproduzem exatamente os relatórios pk_*.json do repositório.",
+    "policy": "Comparação com tolerância 1e-6 relativa contra o relatório de braço; verificação cruzada adicional contra reports/pk_*.json, que reproduz as mesmas janelas e é exigido bit a bit (<=1e-12). Se o relatório pk_*.json não reproduzir, o script para. Contagens de janelas são verificadas de forma exata.",
+    "rf_spectral_figshare": {
+      "dataset_counts_match_report": true,
+      "estimator_parameters": {
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "n_estimators": 100,
+        "n_jobs": -1,
+        "random_state": 42
+      },
+      "feature_names": [
+        "delta",
+        "theta",
+        "alpha",
+        "beta",
+        "gamma",
+        "relative_delta",
+        "relative_theta",
+        "relative_alpha",
+        "relative_beta",
+        "relative_gamma",
+        "spectral_edge_90hz",
+        "spectral_entropy",
+        "rms",
+        "line_length"
+      ],
+      "library_path_max_relative_deviation": 0.0,
+      "reference_report": "reports/spectral_baseline_holdout.json",
+      "split_matches_report": true,
+      "test_max_relative_deviation": 1e-12,
+      "test_n_windows": 5523,
+      "train_n_windows": 15894,
+      "validation_max_relative_deviation": 1e-12
+    },
+    "rf_spectral_vitaldb": {
+      "expected_test_n_windows": 38730,
+      "expected_train_n_windows": 15894,
+      "test_n_windows": 38730,
+      "train_n_windows": 15894
+    }
+  },
+  "vitaldb_casewise_mae_test": {
+    "comparison": "MAE por caso: braço a = CNN ativo, braço b = CNN misto (VitalDB)",
+    "expected": "14/15 casos com MAE menor no braço misto (relatado no TCC)",
+    "mean_delta": 4.606241963633,
+    "median_delta": 3.930995027285,
+    "n_arm_a_better": 1,
+    "n_arm_b_better": 14,
+    "n_pairs": 15,
+    "n_ties": 0,
+    "per_case": [
+      {
+        "case_id": "vitaldb_case1",
+        "delta_arm_a_minus_arm_b": 3.930995027285,
+        "mae_arm_a": 15.530214697459,
+        "mae_arm_b": 11.599219670175,
+        "n_windows": 2302
+      },
+      {
+        "case_id": "vitaldb_case10",
+        "delta_arm_a_minus_arm_b": 2.29568222713,
+        "mae_arm_a": 12.392994785605,
+        "mae_arm_b": 10.097312558475,
+        "n_windows": 4183
+      },
+      {
+        "case_id": "vitaldb_case12",
+        "delta_arm_a_minus_arm_b": 3.819653510779,
+        "mae_arm_a": 9.931925416643,
+        "mae_arm_b": 6.112271905864,
+        "n_windows": 6230
+      },
+      {
+        "case_id": "vitaldb_case13",
+        "delta_arm_a_minus_arm_b": 6.840023461236,
+        "mae_arm_a": 19.464630350728,
+        "mae_arm_b": 12.624606889492,
+        "n_windows": 2084
+      },
+      {
+        "case_id": "vitaldb_case14",
+        "delta_arm_a_minus_arm_b": 8.144182608819,
+        "mae_arm_a": 20.726169489637,
+        "mae_arm_b": 12.581986880818,
+        "n_windows": 810
+      },
+      {
+        "case_id": "vitaldb_case16",
+        "delta_arm_a_minus_arm_b": -0.67023119218,
+        "mae_arm_a": 6.56497480029,
+        "mae_arm_b": 7.23520599247,
+        "n_windows": 2440
+      },
+      {
+        "case_id": "vitaldb_case17",
+        "delta_arm_a_minus_arm_b": 4.205233486505,
+        "mae_arm_a": 12.963041535731,
+        "mae_arm_b": 8.757808049226,
+        "n_windows": 4056
+      },
+      {
+        "case_id": "vitaldb_case2",
+        "delta_arm_a_minus_arm_b": 4.998401995335,
+        "mae_arm_a": 11.222536531982,
+        "mae_arm_b": 6.224134536648,
+        "n_windows": 3125
+      },
+      {
+        "case_id": "vitaldb_case3",
+        "delta_arm_a_minus_arm_b": 10.427389224393,
+        "mae_arm_a": 18.208219013236,
+        "mae_arm_b": 7.780829788843,
+        "n_windows": 863
+      },
+      {
+        "case_id": "vitaldb_case4",
+        "delta_arm_a_minus_arm_b": 3.060991997244,
+        "mae_arm_a": 11.218819117419,
+        "mae_arm_b": 8.157827120175,
+        "n_windows": 4138
+      },
+      {
+        "case_id": "vitaldb_case5",
+        "delta_arm_a_minus_arm_b": 2.989868208936,
+        "mae_arm_a": 9.788025946263,
+        "mae_arm_b": 6.798157737328,
+        "n_windows": 4301
+      },
+      {
+        "case_id": "vitaldb_case6",
+        "delta_arm_a_minus_arm_b": 1.035434051982,
+        "mae_arm_a": 13.249762006503,
+        "mae_arm_b": 12.214327954521,
+        "n_windows": 691
+      },
+      {
+        "case_id": "vitaldb_case7",
+        "delta_arm_a_minus_arm_b": 2.094365722791,
+        "mae_arm_a": 11.696804037385,
+        "mae_arm_b": 9.602438314593,
+        "n_windows": 1444
+      },
+      {
+        "case_id": "vitaldb_case8",
+        "delta_arm_a_minus_arm_b": 5.818001868267,
+        "mae_arm_a": 18.474967313867,
+        "mae_arm_b": 12.6569654456,
+        "n_windows": 1176
+      },
+      {
+        "case_id": "vitaldb_case9",
+        "delta_arm_a_minus_arm_b": 10.103637255972,
+        "mae_arm_a": 21.427803598638,
+        "mae_arm_b": 11.324166342666,
+        "n_windows": 887
+      }
+    ],
+    "sign_test": {
+      "k_arm_b_better": 14,
+      "method": "scipy.stats.binomtest (sinal, exato)",
+      "n_non_tied": 15,
+      "p_one_sided_arm_b_better": 0.00048828125,
+      "p_two_sided": 0.0009765625
+    },
+    "wilcoxon_signed_rank": {
+      "method": "scipy.stats.wilcoxon (duas amostras pareadas)",
+      "p_one_sided_arm_a_lower": 0.999969482422,
+      "p_two_sided": 0.000122070312,
+      "statistic": 1.0
+    }
+  }
+}

@@ -1,0 +1,471 @@
+{
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "case_bootstrap": {
+    "bias": {
+      "lower_95": -0.893950803312,
+      "mean": 3.482493270675,
+      "upper_95": 8.529298071452
+    },
+    "mae": {
+      "lower_95": 11.97920777508,
+      "mean": 13.715796777394,
+      "upper_95": 16.011989208902
+    },
+    "pearson_r": {
+      "lower_95": -0.162036667962,
+      "mean": -0.037682627828,
+      "upper_95": 0.111032526626
+    },
+    "rmse": {
+      "lower_95": 17.631982149811,
+      "mean": 20.31513960385,
+      "upper_95": 23.364149204184
+    },
+    "stage_accuracy": {
+      "lower_95": 0.321028363755,
+      "mean": 0.414130760914,
+      "upper_95": 0.502057135344
+    },
+    "stage_macro_f1": {
+      "lower_95": 0.271059362992,
+      "mean": 0.323290222405,
+      "upper_95": 0.374607271204
+    }
+  },
+  "effective_configuration": {
+    "data_dir": "data/raw + data/vitaldb",
+    "estimator": {
+      "class": "sklearn.ensemble.RandomForestRegressor",
+      "parameters": {
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "n_estimators": 100,
+        "n_jobs": -1,
+        "random_state": 42
+      }
+    },
+    "feature_sampling_rate": 128,
+    "min_quality": 0.2,
+    "preprocess_config": {
+      "amplitude_scale_uv": 50.0,
+      "causal": true,
+      "clip_uv": 100.0,
+      "filter_order": 4,
+      "highcut_hz": 45.0,
+      "label_offset_seconds": 0.0,
+      "lowcut_hz": 0.5,
+      "notch_hz": 50.0,
+      "notch_quality": 30.0,
+      "sampling_rate": 128,
+      "window_seconds": 5.0
+    }
+  },
+  "feature_names": [
+    "delta",
+    "theta",
+    "alpha",
+    "beta",
+    "gamma",
+    "relative_delta",
+    "relative_theta",
+    "relative_alpha",
+    "relative_beta",
+    "relative_gamma",
+    "spectral_edge_90hz",
+    "spectral_entropy",
+    "rms",
+    "line_length"
+  ],
+  "input_files": [
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case1.npz",
+      "sha256": "d7deabed88cf2fcdb92b07828b0e6424dfc604c1d2e67d057e2d94d06fc6e351",
+      "size_bytes": 2846245
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case10.npz",
+      "sha256": "522d599996806043cb4397582f057d1fe000c36831a7799e9ed1fd77d39278df",
+      "size_bytes": 5224987
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case12.npz",
+      "sha256": "c0144924216772e77f38bb364bd848ba5c4f9e44c30c3349a56df92dd0ed8958",
+      "size_bytes": 7542406
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case13.npz",
+      "sha256": "9cdd7cfd1daaaa4ed698cce686a79b73e2bb91d09c55c11839baa50bd4219c33",
+      "size_bytes": 2595201
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case14.npz",
+      "sha256": "140a288d153d320f7a14310e193176176746de25e04673e3589433f78639a741",
+      "size_bytes": 1014678
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case16.npz",
+      "sha256": "d50b021c41554c844bb0917912928ff17dff8f55917fd12436d1dd263e51edb5",
+      "size_bytes": 3353203
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case17.npz",
+      "sha256": "2187ba516a6c4cb36d5f2317e522dcaab027f8964e27dd3d79b5da07bd27bd23",
+      "size_bytes": 5007601
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case2.npz",
+      "sha256": "db934a20f45fc2aacea7d4e63aef08a6ad215d44644a696358524185b86003d9",
+      "size_bytes": 3872841
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case3.npz",
+      "sha256": "de08d7657802d0a292c1a4db47c6093e31a260b159fa6408a8874b34ff7cd592",
+      "size_bytes": 993903
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case4.npz",
+      "sha256": "be6d41513a2aa8a4c7b31f18c0f7e1e6330981c3978264c521c8ca9e29bdea51",
+      "size_bytes": 5084242
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case5.npz",
+      "sha256": "abd4ce5ec928c66b6c9116b2e051557d73b3d5d29837afe86d08717786a6632f",
+      "size_bytes": 5034963
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case6.npz",
+      "sha256": "fda94791d476b812a81a35e51795e1e56bec569bccffe5f9af8f80d9af072633",
+      "size_bytes": 913396
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case7.npz",
+      "sha256": "9c4af0cc5f0ca0f1fa62de2450e52c09a324317d2ebb8eedba17c1d6cd0c34b7",
+      "size_bytes": 1820249
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case8.npz",
+      "sha256": "ae84855735e9af405db649b4a5165edbf5e44ab2f48fbf835059f19c64c81255",
+      "size_bytes": 1464710
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\vitaldb\\vitaldb_case9.npz",
+      "sha256": "83e06e78a5a7177f9e50095e255ebc94b12a0b99b64f7f919a7ff8afd33b76b3",
+      "size_bytes": 1061909
+    }
+  ],
+  "metrics": {
+    "bias": 3.390510350757,
+    "mae": 13.620601915697,
+    "n": 38730.0,
+    "pearson_r": -0.036297667927,
+    "rmse": 20.245874294507,
+    "stage_accuracy": 0.418900077459,
+    "stage_macro_f1": 0.329679108763
+  },
+  "model_fingerprint": "3de006998efade2ab48a0c917caf68510577418733e30f5d4205bfedc2768bb5",
+  "numeric_precision_decimal_places": 12,
+  "per_case": [
+    {
+      "bias": 0.745030640012,
+      "case_id": "vitaldb_case1",
+      "mae": 16.281403770403,
+      "n": 2302.0,
+      "n_windows": 2302,
+      "pearson_r": -0.303727883669,
+      "pk": 0.42578710872,
+      "rmse": 23.547021939829,
+      "stage_accuracy": 0.380973066898,
+      "stage_macro_f1": 0.281876348186
+    },
+    {
+      "bias": -7.659735072495,
+      "case_id": "vitaldb_case10",
+      "mae": 11.964804036724,
+      "n": 4183.0,
+      "n_windows": 4183,
+      "pearson_r": -0.040865416755,
+      "pk": 0.497136599339,
+      "rmse": 15.306841331025,
+      "stage_accuracy": 0.15013148458,
+      "stage_macro_f1": 0.128206054272
+    },
+    {
+      "bias": -4.616883634334,
+      "case_id": "vitaldb_case12",
+      "mae": 9.428598531136,
+      "n": 6230.0,
+      "n_windows": 6230,
+      "pearson_r": -0.181154051082,
+      "pk": 0.637179943271,
+      "rmse": 13.782740233309,
+      "stage_accuracy": 0.550561797753,
+      "stage_macro_f1": 0.248681992896
+    },
+    {
+      "bias": 17.343105223178,
+      "case_id": "vitaldb_case13",
+      "mae": 21.054543505312,
+      "n": 2084.0,
+      "n_windows": 2084,
+      "pearson_r": 0.008229449998,
+      "pk": 0.432045874746,
+      "rmse": 29.468026426257,
+      "stage_accuracy": 0.384357005758,
+      "stage_macro_f1": 0.30625998359
+    },
+    {
+      "bias": 14.444578777038,
+      "case_id": "vitaldb_case14",
+      "mae": 20.591200163175,
+      "n": 810.0,
+      "n_windows": 810,
+      "pearson_r": -0.144693684621,
+      "pk": 0.464285602707,
+      "rmse": 29.771192242543,
+      "stage_accuracy": 0.367901234568,
+      "stage_macro_f1": 0.322667554132
+    },
+    {
+      "bias": 6.236615103743,
+      "case_id": "vitaldb_case16",
+      "mae": 10.935507314267,
+      "n": 2440.0,
+      "n_windows": 2440,
+      "pearson_r": 0.283309958356,
+      "pk": 0.541201280753,
+      "rmse": 14.564994370999,
+      "stage_accuracy": 0.405327868852,
+      "stage_macro_f1": 0.369054440664
+    },
+    {
+      "bias": 12.082478627329,
+      "case_id": "vitaldb_case17",
+      "mae": 15.694184112802,
+      "n": 4056.0,
+      "n_windows": 4056,
+      "pearson_r": -0.038872467472,
+      "pk": 0.463771824389,
+      "rmse": 21.521842268805,
+      "stage_accuracy": 0.336291913215,
+      "stage_macro_f1": 0.251712136741
+    },
+    {
+      "bias": -5.272203055344,
+      "case_id": "vitaldb_case2",
+      "mae": 11.927257976909,
+      "n": 3125.0,
+      "n_windows": 3125,
+      "pearson_r": 0.095901781103,
+      "pk": 0.669798940947,
+      "rmse": 17.363272978298,
+      "stage_accuracy": 0.35008,
+      "stage_macro_f1": 0.314580118683
+    },
+    {
+      "bias": 14.693105983332,
+      "case_id": "vitaldb_case3",
+      "mae": 21.42811746351,
+      "n": 863.0,
+      "n_windows": 863,
+      "pearson_r": 0.023954266125,
+      "pk": 0.445476168821,
+      "rmse": 30.82966074614,
+      "stage_accuracy": 0.312862108922,
+      "stage_macro_f1": 0.27605082197
+    },
+    {
+      "bias": 4.884215689293,
+      "case_id": "vitaldb_case4",
+      "mae": 12.181563224191,
+      "n": 4138.0,
+      "n_windows": 4138,
+      "pearson_r": 0.367521539645,
+      "pk": 0.512682222431,
+      "rmse": 18.278995969117,
+      "stage_accuracy": 0.478733687772,
+      "stage_macro_f1": 0.348404912261
+    },
+    {
+      "bias": 3.935586515215,
+      "case_id": "vitaldb_case5",
+      "mae": 11.963962145337,
+      "n": 4301.0,
+      "n_windows": 4301,
+      "pearson_r": -0.234488211426,
+      "pk": 0.481418545646,
+      "rmse": 19.349073020533,
+      "stage_accuracy": 0.669611718205,
+      "stage_macro_f1": 0.249349800498
+    },
+    {
+      "bias": -4.426230945757,
+      "case_id": "vitaldb_case6",
+      "mae": 13.662248619065,
+      "n": 691.0,
+      "n_windows": 691,
+      "pearson_r": 0.041460284487,
+      "pk": 0.554704558433,
+      "rmse": 18.928755030633,
+      "stage_accuracy": 0.383502170767,
+      "stage_macro_f1": 0.287504256794
+    },
+    {
+      "bias": 9.504656673866,
+      "case_id": "vitaldb_case7",
+      "mae": 12.79864981608,
+      "n": 1444.0,
+      "n_windows": 1444,
+      "pearson_r": 0.018226133156,
+      "pk": 0.544415867097,
+      "rmse": 21.520311503725,
+      "stage_accuracy": 0.486842105263,
+      "stage_macro_f1": 0.353445662245
+    },
+    {
+      "bias": 19.075232978063,
+      "case_id": "vitaldb_case8",
+      "mae": 21.807159118184,
+      "n": 1176.0,
+      "n_windows": 1176,
+      "pearson_r": -0.214734774603,
+      "pk": 0.4459782844,
+      "rmse": 29.172669671298,
+      "stage_accuracy": 0.299319727891,
+      "stage_macro_f1": 0.188924446668
+    },
+    {
+      "bias": 13.410616985271,
+      "case_id": "vitaldb_case9",
+      "mae": 21.607494435726,
+      "n": 887.0,
+      "n_windows": 887,
+      "pearson_r": -0.075923776463,
+      "pk": 0.493200334157,
+      "rmse": 30.755844174083,
+      "stage_accuracy": 0.329199549042,
+      "stage_macro_f1": 0.255035140698
+    }
+  ],
+  "pk": 0.502444132597,
+  "pk_bootstrap": {
+    "lower_95": 0.446678467263,
+    "mean": 0.502350284965,
+    "upper_95": 0.551163171972
+  },
+  "protocol": "external_spectral_baseline",
+  "protocol_note": "RF treinado no split de treino do checkpoint ativo; mesmas janelas e imputação offline; sem retreino",
+  "raw_eeg_in_report": false,
+  "report_version": 1,
+  "retrained": false,
+  "scope": "research_only",
+  "source_checkpoint": "models/brainsniffer_cnn.pt",
+  "source_checkpoint_sha256": "fde8e45fff2fa5414944686fd086fc3dd42248f247c7fb4ea1e31aa00618ee8c",
+  "test_case_ids": [
+    "vitaldb_case1",
+    "vitaldb_case10",
+    "vitaldb_case12",
+    "vitaldb_case13",
+    "vitaldb_case14",
+    "vitaldb_case16",
+    "vitaldb_case17",
+    "vitaldb_case2",
+    "vitaldb_case3",
+    "vitaldb_case4",
+    "vitaldb_case5",
+    "vitaldb_case6",
+    "vitaldb_case7",
+    "vitaldb_case8",
+    "vitaldb_case9"
+  ],
+  "test_dataset": {
+    "n_cases": 15,
+    "n_windows": 38730
+  },
+  "train_cases": [
+    "case1",
+    "case10",
+    "case11",
+    "case13",
+    "case14",
+    "case17",
+    "case2",
+    "case20",
+    "case21",
+    "case22",
+    "case6",
+    "case7",
+    "case8"
+  ],
+  "train_dataset": {
+    "n_cases": 13,
+    "n_windows": 15894
+  },
+  "training_input_files": [
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case1.mat",
+      "sha256": "3f96f696d213c96b46fa859dc956fe83d97c9a3a202ba915f996ae88bc7d947e",
+      "size_bytes": 637612
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case10.mat",
+      "sha256": "a078f8b155f76ff1acd6cea4def151c7064c0fdc0289b086ef5d35dac8928971",
+      "size_bytes": 1263925
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case11.mat",
+      "sha256": "5062172f5fe18c3f8a7fc619fbff0454c77a6fe027c73f74b5ebf3dc72a87c46",
+      "size_bytes": 2495259
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case13.mat",
+      "sha256": "a51056ac4c2fd745795779f2e79c90bed3be133d9cbf4fcd93467d97823002a8",
+      "size_bytes": 762725
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case14.mat",
+      "sha256": "deb75307a8f3b034afe36840885f30552f15379732081de35682143699a93fc8",
+      "size_bytes": 605803
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case17.mat",
+      "sha256": "75ff2745e1bf86fa0ae6fbb37c677277d3144e68c283bc4c15df34925d60f679",
+      "size_bytes": 1292068
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case2.mat",
+      "sha256": "c360d742903ffcfe37208df1b561afc7438a95a0162fa83233999cd5ece4481e",
+      "size_bytes": 906024
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case20.mat",
+      "sha256": "8fdda9fb089c9bc93213797353bd6ea8772cfaa6644181f4c52f635c2c628c54",
+      "size_bytes": 1612058
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case21.mat",
+      "sha256": "31eb4ce744f711017bb5f68f2286e20ce90398d890e2ac36f7182b9b6a5a2f1c",
+      "size_bytes": 1577358
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case22.mat",
+      "sha256": "a85dd87cc4e4beab55239a1edf223afda21b77e1d0ff86fdeaff07180f62d97a",
+      "size_bytes": 400422
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case6.mat",
+      "sha256": "25b3ad78b9cb5be5fc64c774479ba52b6e975ed96c86555838b76140c0239f85",
+      "size_bytes": 859237
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case7.mat",
+      "sha256": "23a7a61444838ee90915de986ba4e82074d8a223e4b0d5c44206e356844f5f95",
+      "size_bytes": 1140316
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case8.mat",
+      "sha256": "1ed4c6b8f639790c4bd46235754bc8e3c1c0a729d1186cd45a5f714e0c16fd9f",
+      "size_bytes": 1581977
+    }
+  ]
+}
