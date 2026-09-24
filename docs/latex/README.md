@@ -43,12 +43,12 @@ geração de figuras, alteração de métricas, treino ou teste do sistema. Logs
 `inputenc` ignorado, bytes antigos em comentários do template e `Underfull`.
 As páginas de figuras têm espaço branco; não foi observado corte ou sobreposição.
 
-No Windows (sem bash/Poppler completos), a compilação equivalente usa
-`tmp/tectonic-install/tectonic.exe` com a flag `-f <caminho absoluto do .fmt do cache>`
-em `%LOCALAPPDATA%\TectonicProject\Tectonic\cache\formats\`: sem ela, a busca do
-formato `latex` colide com o diretório `docs/latex/` e falha com `Access is denied`.
-A contagem de páginas sai do log (`Output written ... (N pages)`) e a extração de
-texto do `pdftotext` do Git for Windows (`C:\Program Files\Git\mingw64\bin`).
+No Windows (sem bash/Poppler completos), o script aceita `TECTONIC_FMT` com o
+caminho do `.fmt` do cache (`%LOCALAPPDATA%\TectonicProject\Tectonic\cache\formats\`):
+sem a flag `-f`, a busca do formato `latex` colide com o diretório `docs/latex/` e
+falha com `Access is denied`. A contagem de páginas sai do log
+(`Output written ... (N pages)`) e a extração de texto do `pdftotext` do Git for
+Windows (`C:\Program Files\Git\mingw64\bin`).
 
 ```bash
 TECTONIC_BIN=/home/fryits/.local/bin/tectonic scripts/build_tcc_article.sh

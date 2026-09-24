@@ -430,6 +430,28 @@ identidade desse publisher e relógio liblsl, conforme
 - Segurança, ética, proteção de dados e avaliação regulatória para qualquer uso
   com pacientes.
 
+## Rodada de revisão editorial — 24/09/2026
+
+- **Dados:** os 15 derivados `data/vitaldb/*.npz` saíram do índice e do histórico Git
+  (reescrita + push forçado); a cópia local permanece ignorada. O repositório público
+  não redistribui VitalDB; o README documenta a política. A ref local `refs/codex/*`,
+  que retinha os objetos antigos, foi removida.
+- **Artigo:** fechado em 17 páginas (sem Overfull) após ajustes de revisão: seção de
+  Disponibilidade, ética assertiva, tabelas de benchmark fundidas com ICs, Fig. 7a com
+  categorias mutuamente exclusivas (59 casos) e Fig. 8b trocada por calibração; saíram
+  a projeção teórica do corpo e o duplicado de PhysioNet da bibliografia (24 entradas,
+  todas citadas; entrou Johansen \& Sebel 2000).
+- **Reanálises (sem retreino):** `scripts/reviewer_reanalysis.py` gera
+  `reports/paired_bootstrap.json`, `reports/calibration_analysis.json`,
+  `reports/pk_audit.json` e `reports/spectral_baseline_vitaldb.json` a partir de
+  predições por janela em `tmp/reanalysis/` (não versionadas). Resultados centrais:
+  bootstrap pareado por caso do $\Delta$MAE/$\Delta P_K$, baseline espectral também
+  sem transporte no VitalDB (MAE 13,62; $P_K$ 0,502) e calibração por
+  inclinação/ICC/$|erro|\leq10$.
+- **Pendências:** determinismo da segunda execução em verificação; pareceres
+  simulados arquivados fora do repositório (temp); hash do commit final a fixar na
+  seção de Disponibilidade; paridade site$\leftrightarrow$artigo revisada em seguida.
+
 ## Critério de conclusão do TCC retrospectivo
 
 A entrega é o artigo documentado, as comparações existentes e a trajetória

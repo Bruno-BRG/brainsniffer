@@ -3,7 +3,7 @@
 Regra: toda figura do artigo aparece no site e todo painel analítico do site
 aparece no artigo. Pendência, não decisão.
 
-## Correspondência verificada (2026-09-18)
+## Correspondência verificada (2026-09-18; revisada em 2026-09-24)
 
 | Artigo | Site | Status |
 |---|---|---|
@@ -13,8 +13,9 @@ aparece no artigo. Pendência, não decisão.
 | Fig. 4 `pk_prediction.pdf` | Resultados: gráfico Pk, tabela e galeria | OK |
 | Fig. 5 `bootstrap_intervals.pdf` | Resultados: incerteza por caso e galeria | OK |
 | Fig. 6 `offset_sensitivity.pdf` | Resultados: sensibilidade ao offset e galeria | OK |
-| Fig. 7 `support_panels.pdf` | Corpus (a, b) e Modelo (c, d) e galeria | OK |
-| Tabela de Pk | Resultados: tabela de Pk | OK |
+| Fig. 7 `corpus_panels.pdf` | Corpus (a, b) e galeria | OK |
+| Fig. 8 `training_panels.pdf` | Modelo: histórico de treino (a) e calibração por braço (b) e galeria | OK |
+| Tabela de benchmarks/Pk | Resultados: tabelas de MAE/Pk no site | OK |
 
 A galeria fica na aba Método e limites, na rota `/figures/<nome>`, com lista
 explícita em `ARTICLE_FIGURES`. A análise por zona (tabela e figura) foi
@@ -30,8 +31,9 @@ no texto; a forma é interativa, o conteúdo é o mesmo.
 - Erros contínuos e associação/classificação por conjunto: mesmos números das
   tabelas de benchmark.
 - Comparação ativa x misto e MAE por caso no VitalDB: mesmos números da Fig. 3.
-- Curva de aprendizagem: a mesma projeção do painel (d) da Fig. 7, calculada em
-  `brainsniffer.pipeline.planning` e importada pelos dois lados.
+- Curva de aprendizagem: projeção de planejamento do site, calculada em
+  `brainsniffer.pipeline.planning`; não está mais no artigo, cuja Fig. 8b passou a
+  mostrar a calibração por braço de `reports/calibration_analysis.json`.
 
 ## Citação
 

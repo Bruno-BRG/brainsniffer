@@ -22,6 +22,13 @@ if ! command -v "${tectonic_bin}" >/dev/null 2>&1; then
   exit 1
 fi
 
+# No Windows (sem cache de formato no local padrão), TECTONIC_FMT aponta para o
+# arquivo .fmt do cache e evita a colisão da busca do formato com docs/latex/.
+tectonic_flags=()
+if [[ -n "${TECTONIC_FMT:-}" ]]; then
+  tectonic_flags+=(-f "${TECTONIC_FMT}")
+fi
+
 for dependency in pdfinfo pdftotext; do
   if ! command -v "${dependency}" >/dev/null 2>&1; then
     echo "erro: ${dependency} não encontrado (Poppler é obrigatório)" >&2
@@ -35,6 +42,7 @@ cp "${docs_dir}/latex/sbc.bst" "${build_dir}/sbc.bst"
 (
   cd "${docs_dir}"
   "${tectonic_bin}" \
+    "${tectonic_flags[@]}" \
     -Z search-path="${docs_dir}" \
     -Z search-path="${docs_dir}/latex" \
     --chatter minimal \
@@ -45,6 +53,7 @@ cp "${docs_dir}/latex/sbc.bst" "${build_dir}/sbc.bst"
   # Uma segunda execução deixa o log final livre dos avisos normais da
   # primeira passagem, antes de BibTeX resolver as citações.
   "${tectonic_bin}" \
+    "${tectonic_flags[@]}" \
     -Z search-path="${docs_dir}" \
     -Z search-path="${docs_dir}/latex" \
     --chatter minimal \

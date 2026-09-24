@@ -66,6 +66,18 @@ Isso é compatível com adaptação ao domínio, não prova de generalização e
   faixa ou não finitos são descartados depois na construção das janelas.
   A política não foi modificada nem seu efeito reavaliado.
 
+## Relatórios de reanálise da revisão (24/09/2026)
+
+A rodada de revisão editorial adicionou análises sem retreino, registradas em
+`reports/paired_bootstrap.json` (bootstrap pareado por caso do ΔMAE/ΔPearson/ΔPk),
+`reports/calibration_analysis.json` (inclinação de calibração, Bland--Altman,
+ICC(2,1), fração $|erro|\leq10$), `reports/pk_audit.json` (pares informativos,
+empates e Pk por caso) e `reports/spectral_baseline_vitaldb.json` (RF espectral
+avaliado nos 15 casos VitalDB com o mesmo ajuste do checkpoint ativo). As
+predições por janela ficam em `tmp/reanalysis/` e não são versionadas. Números de
+manchete continuam os dos checkpoints históricos; o baseline espectral também não
+transporta para o VitalDB (MAE 13,62; Pk 0,502).
+
 ## Limites e próximos passos
 
 A CNN histórica e seu baseline bastam ao escopo do TCC; não são exigidos novas
