@@ -1,0 +1,923 @@
+{
+  "analysis": "prediction_probability_audit",
+  "benchmarks": {
+    "figshare_holdout": {
+      "arms": {
+        "cnn_active_figshare": {
+          "excluded_tie_fraction": 0.031456286027,
+          "informative_pairs": 14769326.0,
+          "n_cases": 5,
+          "n_windows": 5523,
+          "per_case": [
+            {
+              "case_id": "case19",
+              "excluded_tie_fraction": 0.027329037622,
+              "informative_pairs": 350964.0,
+              "n_windows": 850,
+              "pk": 0.810906531724,
+              "target_tie_pairs": 9861.0,
+              "total_pairs": 360825.0
+            },
+            {
+              "case_id": "case3",
+              "excluded_tie_fraction": 0.069828542384,
+              "informative_pairs": 2510836.0,
+              "n_windows": 2324,
+              "pk": 0.6704153517,
+              "target_tie_pairs": 188490.0,
+              "total_pairs": 2699326.0
+            },
+            {
+              "case_id": "case4",
+              "excluded_tie_fraction": 0.027633307974,
+              "informative_pairs": 281189.0,
+              "n_windows": 761,
+              "pk": 0.808488241005,
+              "target_tie_pairs": 7991.0,
+              "total_pairs": 289180.0
+            },
+            {
+              "case_id": "case5",
+              "excluded_tie_fraction": 0.029048378928,
+              "informative_pairs": 101613.0,
+              "n_windows": 458,
+              "pk": 0.799494159212,
+              "target_tie_pairs": 3040.0,
+              "total_pairs": 104653.0
+            },
+            {
+              "case_id": "case9",
+              "excluded_tie_fraction": 0.033084333383,
+              "informative_pairs": 616781.0,
+              "n_windows": 1130,
+              "pk": 0.790513974977,
+              "target_tie_pairs": 21104.0,
+              "total_pairs": 637885.0
+            }
+          ],
+          "per_case_pk_summary": {
+            "max": 0.810906531724,
+            "mean": 0.775963651723,
+            "median": 0.799494159212,
+            "min": 0.6704153517,
+            "n_defined": 5,
+            "n_undefined": 0
+          },
+          "pk": 0.772712275428,
+          "target_tie_pairs": 479677.0,
+          "total_pairs": 15249003.0
+        },
+        "cnn_mixed_figshare": {
+          "excluded_tie_fraction": 0.031456286027,
+          "informative_pairs": 14769326.0,
+          "n_cases": 5,
+          "n_windows": 5523,
+          "per_case": [
+            {
+              "case_id": "case19",
+              "excluded_tie_fraction": 0.027329037622,
+              "informative_pairs": 350964.0,
+              "n_windows": 850,
+              "pk": 0.812163070856,
+              "target_tie_pairs": 9861.0,
+              "total_pairs": 360825.0
+            },
+            {
+              "case_id": "case3",
+              "excluded_tie_fraction": 0.069828542384,
+              "informative_pairs": 2510836.0,
+              "n_windows": 2324,
+              "pk": 0.67461972825,
+              "target_tie_pairs": 188490.0,
+              "total_pairs": 2699326.0
+            },
+            {
+              "case_id": "case4",
+              "excluded_tie_fraction": 0.027633307974,
+              "informative_pairs": 281189.0,
+              "n_windows": 761,
+              "pk": 0.808321093642,
+              "target_tie_pairs": 7991.0,
+              "total_pairs": 289180.0
+            },
+            {
+              "case_id": "case5",
+              "excluded_tie_fraction": 0.029048378928,
+              "informative_pairs": 101613.0,
+              "n_windows": 458,
+              "pk": 0.850944268942,
+              "target_tie_pairs": 3040.0,
+              "total_pairs": 104653.0
+            },
+            {
+              "case_id": "case9",
+              "excluded_tie_fraction": 0.033084333383,
+              "informative_pairs": 616781.0,
+              "n_windows": 1130,
+              "pk": 0.803593982305,
+              "target_tie_pairs": 21104.0,
+              "total_pairs": 637885.0
+            }
+          ],
+          "per_case_pk_summary": {
+            "max": 0.850944268942,
+            "mean": 0.789928428799,
+            "median": 0.808321093642,
+            "min": 0.67461972825,
+            "n_defined": 5,
+            "n_undefined": 0
+          },
+          "pk": 0.773953699715,
+          "target_tie_pairs": 479677.0,
+          "total_pairs": 15249003.0
+        },
+        "rf_spectral_figshare": {
+          "excluded_tie_fraction": 0.031456286027,
+          "informative_pairs": 14769326.0,
+          "n_cases": 5,
+          "n_windows": 5523,
+          "per_case": [
+            {
+              "case_id": "case19",
+              "excluded_tie_fraction": 0.027329037622,
+              "informative_pairs": 350964.0,
+              "n_windows": 850,
+              "pk": 0.768799648967,
+              "target_tie_pairs": 9861.0,
+              "total_pairs": 360825.0
+            },
+            {
+              "case_id": "case3",
+              "excluded_tie_fraction": 0.069828542384,
+              "informative_pairs": 2510836.0,
+              "n_windows": 2324,
+              "pk": 0.614060416531,
+              "target_tie_pairs": 188490.0,
+              "total_pairs": 2699326.0
+            },
+            {
+              "case_id": "case4",
+              "excluded_tie_fraction": 0.027633307974,
+              "informative_pairs": 281189.0,
+              "n_windows": 761,
+              "pk": 0.773543773049,
+              "target_tie_pairs": 7991.0,
+              "total_pairs": 289180.0
+            },
+            {
+              "case_id": "case5",
+              "excluded_tie_fraction": 0.029048378928,
+              "informative_pairs": 101613.0,
+              "n_windows": 458,
+              "pk": 0.808115103382,
+              "target_tie_pairs": 3040.0,
+              "total_pairs": 104653.0
+            },
+            {
+              "case_id": "case9",
+              "excluded_tie_fraction": 0.033084333383,
+              "informative_pairs": 616781.0,
+              "n_windows": 1130,
+              "pk": 0.747169578829,
+              "target_tie_pairs": 21104.0,
+              "total_pairs": 637885.0
+            }
+          ],
+          "per_case_pk_summary": {
+            "max": 0.808115103382,
+            "mean": 0.742337704152,
+            "median": 0.768799648967,
+            "min": 0.614060416531,
+            "n_defined": 5,
+            "n_undefined": 0
+          },
+          "pk": 0.721975803094,
+          "target_tie_pairs": 479677.0,
+          "total_pairs": 15249003.0
+        }
+      },
+      "n_cases": 5,
+      "n_windows": 5523,
+      "target_distribution": {
+        "per_case": [
+          {
+            "case_id": "case19",
+            "fraction_0_40": 0.468235294118,
+            "fraction_40_60": 0.312941176471,
+            "fraction_60_80": 0.135294117647,
+            "fraction_80_100": 0.083529411765,
+            "median": 40.0,
+            "n_windows": 850,
+            "q1": 33.0,
+            "q3": 53.0
+          },
+          {
+            "case_id": "case3",
+            "fraction_0_40": 0.428571428571,
+            "fraction_40_60": 0.46256454389,
+            "fraction_60_80": 0.064974182444,
+            "fraction_80_100": 0.043889845095,
+            "median": 40.0,
+            "n_windows": 2324,
+            "q1": 37.0,
+            "q3": 42.0
+          },
+          {
+            "case_id": "case4",
+            "fraction_0_40": 0.34691195795,
+            "fraction_40_60": 0.34296977661,
+            "fraction_60_80": 0.197109067017,
+            "fraction_80_100": 0.113009198423,
+            "median": 43.0,
+            "n_windows": 761,
+            "q1": 38.0,
+            "q3": 66.0
+          },
+          {
+            "case_id": "case5",
+            "fraction_0_40": 0.148471615721,
+            "fraction_40_60": 0.384279475983,
+            "fraction_60_80": 0.316593886463,
+            "fraction_80_100": 0.150655021834,
+            "median": 58.0,
+            "n_windows": 458,
+            "q1": 48.0,
+            "q3": 64.0
+          },
+          {
+            "case_id": "case9",
+            "fraction_0_40": 0.041592920354,
+            "fraction_40_60": 0.713274336283,
+            "fraction_60_80": 0.027433628319,
+            "fraction_80_100": 0.217699115044,
+            "median": 52.0,
+            "n_windows": 1130,
+            "q1": 46.0,
+            "q3": 59.0
+          }
+        ],
+        "pooled": {
+          "fraction_0_40": 0.321021184139,
+          "fraction_40_60": 0.467861669383,
+          "fraction_60_80": 0.107188122397,
+          "fraction_80_100": 0.103929024081,
+          "median": 42.0,
+          "n_windows": 5523,
+          "q1": 38.0,
+          "q3": 55.0
+        }
+      }
+    },
+    "vitaldb_external": {
+      "arms": {
+        "cnn_active_vitaldb": {
+          "excluded_tie_fraction": 0.003356057791,
+          "informative_pairs": 747470085.0,
+          "n_cases": 15,
+          "n_windows": 38730,
+          "per_case": [
+            {
+              "case_id": "vitaldb_case1",
+              "excluded_tie_fraction": 0.004086539641,
+              "informative_pairs": 2637628.0,
+              "n_windows": 2302,
+              "pk": 0.40481713115,
+              "target_tie_pairs": 10823.0,
+              "total_pairs": 2648451.0
+            },
+            {
+              "case_id": "vitaldb_case10",
+              "excluded_tie_fraction": 0.000845351931,
+              "informative_pairs": 8739259.0,
+              "n_windows": 4183,
+              "pk": 0.478851639481,
+              "target_tie_pairs": 7394.0,
+              "total_pairs": 8746653.0
+            },
+            {
+              "case_id": "vitaldb_case12",
+              "excluded_tie_fraction": 0.000834186494,
+              "informative_pairs": 19387149.0,
+              "n_windows": 6230,
+              "pk": 0.706082080454,
+              "target_tie_pairs": 16186.0,
+              "total_pairs": 19403335.0
+            },
+            {
+              "case_id": "vitaldb_case13",
+              "excluded_tie_fraction": 0.05008002816,
+              "informative_pairs": 2061788.0,
+              "n_windows": 2084,
+              "pk": 0.393731799778,
+              "target_tie_pairs": 108698.0,
+              "total_pairs": 2170486.0
+            },
+            {
+              "case_id": "vitaldb_case14",
+              "excluded_tie_fraction": 0.023085961941,
+              "informative_pairs": 320081.0,
+              "n_windows": 810,
+              "pk": 0.452835376045,
+              "target_tie_pairs": 7564.0,
+              "total_pairs": 327645.0
+            },
+            {
+              "case_id": "vitaldb_case16",
+              "excluded_tie_fraction": 0.000572661464,
+              "informative_pairs": 2973876.0,
+              "n_windows": 2440,
+              "pk": 0.638408931643,
+              "target_tie_pairs": 1704.0,
+              "total_pairs": 2975580.0
+            },
+            {
+              "case_id": "vitaldb_case17",
+              "excluded_tie_fraction": 0.002263502093,
+              "informative_pairs": 8204926.0,
+              "n_windows": 4056,
+              "pk": 0.407764250403,
+              "target_tie_pairs": 18614.0,
+              "total_pairs": 8223540.0
+            },
+            {
+              "case_id": "vitaldb_case2",
+              "excluded_tie_fraction": 0.002883072983,
+              "informative_pairs": 4867177.0,
+              "n_windows": 3125,
+              "pk": 0.737667954134,
+              "target_tie_pairs": 14073.0,
+              "total_pairs": 4881250.0
+            },
+            {
+              "case_id": "vitaldb_case3",
+              "excluded_tie_fraction": 0.024546112009,
+              "informative_pairs": 362823.0,
+              "n_windows": 863,
+              "pk": 0.464386215868,
+              "target_tie_pairs": 9130.0,
+              "total_pairs": 371953.0
+            },
+            {
+              "case_id": "vitaldb_case4",
+              "excluded_tie_fraction": 0.001698589851,
+              "informative_pairs": 8544914.0,
+              "n_windows": 4138,
+              "pk": 0.46818148199,
+              "target_tie_pairs": 14539.0,
+              "total_pairs": 8559453.0
+            },
+            {
+              "case_id": "vitaldb_case5",
+              "excluded_tie_fraction": 0.00460639224,
+              "informative_pairs": 9204554.0,
+              "n_windows": 4301,
+              "pk": 0.510787106035,
+              "target_tie_pairs": 42596.0,
+              "total_pairs": 9247150.0
+            },
+            {
+              "case_id": "vitaldb_case6",
+              "excluded_tie_fraction": 0.00101931668,
+              "informative_pairs": 238152.0,
+              "n_windows": 691,
+              "pk": 0.568271524069,
+              "target_tie_pairs": 243.0,
+              "total_pairs": 238395.0
+            },
+            {
+              "case_id": "vitaldb_case7",
+              "excluded_tie_fraction": 0.006936725773,
+              "informative_pairs": 1034619.0,
+              "n_windows": 1444,
+              "pk": 0.56279847944,
+              "target_tie_pairs": 7227.0,
+              "total_pairs": 1041846.0
+            },
+            {
+              "case_id": "vitaldb_case8",
+              "excluded_tie_fraction": 0.01715009408,
+              "informative_pairs": 679051.0,
+              "n_windows": 1176,
+              "pk": 0.483113934005,
+              "target_tie_pairs": 11849.0,
+              "total_pairs": 690900.0
+            },
+            {
+              "case_id": "vitaldb_case9",
+              "excluded_tie_fraction": 0.028207797099,
+              "informative_pairs": 381857.0,
+              "n_windows": 887,
+              "pk": 0.476427039441,
+              "target_tie_pairs": 11084.0,
+              "total_pairs": 392941.0
+            }
+          ],
+          "per_case_pk_summary": {
+            "max": 0.737667954134,
+            "mean": 0.516941662929,
+            "median": 0.478851639481,
+            "min": 0.393731799778,
+            "n_defined": 15,
+            "n_undefined": 0
+          },
+          "pk": 0.515499184158,
+          "target_tie_pairs": 2517000.0,
+          "total_pairs": 749987085.0
+        },
+        "cnn_mixed_vitaldb": {
+          "excluded_tie_fraction": 0.003356057791,
+          "informative_pairs": 747470085.0,
+          "n_cases": 15,
+          "n_windows": 38730,
+          "per_case": [
+            {
+              "case_id": "vitaldb_case1",
+              "excluded_tie_fraction": 0.004086539641,
+              "informative_pairs": 2637628.0,
+              "n_windows": 2302,
+              "pk": 0.612302227608,
+              "target_tie_pairs": 10823.0,
+              "total_pairs": 2648451.0
+            },
+            {
+              "case_id": "vitaldb_case10",
+              "excluded_tie_fraction": 0.000845351931,
+              "informative_pairs": 8739259.0,
+              "n_windows": 4183,
+              "pk": 0.47504113335,
+              "target_tie_pairs": 7394.0,
+              "total_pairs": 8746653.0
+            },
+            {
+              "case_id": "vitaldb_case12",
+              "excluded_tie_fraction": 0.000834186494,
+              "informative_pairs": 19387149.0,
+              "n_windows": 6230,
+              "pk": 0.757990563749,
+              "target_tie_pairs": 16186.0,
+              "total_pairs": 19403335.0
+            },
+            {
+              "case_id": "vitaldb_case13",
+              "excluded_tie_fraction": 0.05008002816,
+              "informative_pairs": 2061788.0,
+              "n_windows": 2084,
+              "pk": 0.711204304225,
+              "target_tie_pairs": 108698.0,
+              "total_pairs": 2170486.0
+            },
+            {
+              "case_id": "vitaldb_case14",
+              "excluded_tie_fraction": 0.023085961941,
+              "informative_pairs": 320081.0,
+              "n_windows": 810,
+              "pk": 0.67342328973,
+              "target_tie_pairs": 7564.0,
+              "total_pairs": 327645.0
+            },
+            {
+              "case_id": "vitaldb_case16",
+              "excluded_tie_fraction": 0.000572661464,
+              "informative_pairs": 2973876.0,
+              "n_windows": 2440,
+              "pk": 0.628400948795,
+              "target_tie_pairs": 1704.0,
+              "total_pairs": 2975580.0
+            },
+            {
+              "case_id": "vitaldb_case17",
+              "excluded_tie_fraction": 0.002263502093,
+              "informative_pairs": 8204926.0,
+              "n_windows": 4056,
+              "pk": 0.674449897537,
+              "target_tie_pairs": 18614.0,
+              "total_pairs": 8223540.0
+            },
+            {
+              "case_id": "vitaldb_case2",
+              "excluded_tie_fraction": 0.002883072983,
+              "informative_pairs": 4867177.0,
+              "n_windows": 3125,
+              "pk": 0.81114463271,
+              "target_tie_pairs": 14073.0,
+              "total_pairs": 4881250.0
+            },
+            {
+              "case_id": "vitaldb_case3",
+              "excluded_tie_fraction": 0.024546112009,
+              "informative_pairs": 362823.0,
+              "n_windows": 863,
+              "pk": 0.787415626903,
+              "target_tie_pairs": 9130.0,
+              "total_pairs": 371953.0
+            },
+            {
+              "case_id": "vitaldb_case4",
+              "excluded_tie_fraction": 0.001698589851,
+              "informative_pairs": 8544914.0,
+              "n_windows": 4138,
+              "pk": 0.66938754445,
+              "target_tie_pairs": 14539.0,
+              "total_pairs": 8559453.0
+            },
+            {
+              "case_id": "vitaldb_case5",
+              "excluded_tie_fraction": 0.00460639224,
+              "informative_pairs": 9204554.0,
+              "n_windows": 4301,
+              "pk": 0.606463496222,
+              "target_tie_pairs": 42596.0,
+              "total_pairs": 9247150.0
+            },
+            {
+              "case_id": "vitaldb_case6",
+              "excluded_tie_fraction": 0.00101931668,
+              "informative_pairs": 238152.0,
+              "n_windows": 691,
+              "pk": 0.578521280527,
+              "target_tie_pairs": 243.0,
+              "total_pairs": 238395.0
+            },
+            {
+              "case_id": "vitaldb_case7",
+              "excluded_tie_fraction": 0.006936725773,
+              "informative_pairs": 1034619.0,
+              "n_windows": 1444,
+              "pk": 0.702627730595,
+              "target_tie_pairs": 7227.0,
+              "total_pairs": 1041846.0
+            },
+            {
+              "case_id": "vitaldb_case8",
+              "excluded_tie_fraction": 0.01715009408,
+              "informative_pairs": 679051.0,
+              "n_windows": 1176,
+              "pk": 0.683995752896,
+              "target_tie_pairs": 11849.0,
+              "total_pairs": 690900.0
+            },
+            {
+              "case_id": "vitaldb_case9",
+              "excluded_tie_fraction": 0.028207797099,
+              "informative_pairs": 381857.0,
+              "n_windows": 887,
+              "pk": 0.684201153835,
+              "target_tie_pairs": 11084.0,
+              "total_pairs": 392941.0
+            }
+          ],
+          "per_case_pk_summary": {
+            "max": 0.81114463271,
+            "mean": 0.670437972209,
+            "median": 0.674449897537,
+            "min": 0.47504113335,
+            "n_defined": 15,
+            "n_undefined": 0
+          },
+          "pk": 0.672122026797,
+          "target_tie_pairs": 2517000.0,
+          "total_pairs": 749987085.0
+        },
+        "rf_spectral_vitaldb": {
+          "excluded_tie_fraction": 0.003356057791,
+          "informative_pairs": 747470085.0,
+          "n_cases": 15,
+          "n_windows": 38730,
+          "per_case": [
+            {
+              "case_id": "vitaldb_case1",
+              "excluded_tie_fraction": 0.004086539641,
+              "informative_pairs": 2637628.0,
+              "n_windows": 2302,
+              "pk": 0.42578710872,
+              "target_tie_pairs": 10823.0,
+              "total_pairs": 2648451.0
+            },
+            {
+              "case_id": "vitaldb_case10",
+              "excluded_tie_fraction": 0.000845351931,
+              "informative_pairs": 8739259.0,
+              "n_windows": 4183,
+              "pk": 0.497136599339,
+              "target_tie_pairs": 7394.0,
+              "total_pairs": 8746653.0
+            },
+            {
+              "case_id": "vitaldb_case12",
+              "excluded_tie_fraction": 0.000834186494,
+              "informative_pairs": 19387149.0,
+              "n_windows": 6230,
+              "pk": 0.637179943271,
+              "target_tie_pairs": 16186.0,
+              "total_pairs": 19403335.0
+            },
+            {
+              "case_id": "vitaldb_case13",
+              "excluded_tie_fraction": 0.05008002816,
+              "informative_pairs": 2061788.0,
+              "n_windows": 2084,
+              "pk": 0.432045874746,
+              "target_tie_pairs": 108698.0,
+              "total_pairs": 2170486.0
+            },
+            {
+              "case_id": "vitaldb_case14",
+              "excluded_tie_fraction": 0.023085961941,
+              "informative_pairs": 320081.0,
+              "n_windows": 810,
+              "pk": 0.464285602707,
+              "target_tie_pairs": 7564.0,
+              "total_pairs": 327645.0
+            },
+            {
+              "case_id": "vitaldb_case16",
+              "excluded_tie_fraction": 0.000572661464,
+              "informative_pairs": 2973876.0,
+              "n_windows": 2440,
+              "pk": 0.541201280753,
+              "target_tie_pairs": 1704.0,
+              "total_pairs": 2975580.0
+            },
+            {
+              "case_id": "vitaldb_case17",
+              "excluded_tie_fraction": 0.002263502093,
+              "informative_pairs": 8204926.0,
+              "n_windows": 4056,
+              "pk": 0.463771824389,
+              "target_tie_pairs": 18614.0,
+              "total_pairs": 8223540.0
+            },
+            {
+              "case_id": "vitaldb_case2",
+              "excluded_tie_fraction": 0.002883072983,
+              "informative_pairs": 4867177.0,
+              "n_windows": 3125,
+              "pk": 0.669798940947,
+              "target_tie_pairs": 14073.0,
+              "total_pairs": 4881250.0
+            },
+            {
+              "case_id": "vitaldb_case3",
+              "excluded_tie_fraction": 0.024546112009,
+              "informative_pairs": 362823.0,
+              "n_windows": 863,
+              "pk": 0.445476168821,
+              "target_tie_pairs": 9130.0,
+              "total_pairs": 371953.0
+            },
+            {
+              "case_id": "vitaldb_case4",
+              "excluded_tie_fraction": 0.001698589851,
+              "informative_pairs": 8544914.0,
+              "n_windows": 4138,
+              "pk": 0.512682222431,
+              "target_tie_pairs": 14539.0,
+              "total_pairs": 8559453.0
+            },
+            {
+              "case_id": "vitaldb_case5",
+              "excluded_tie_fraction": 0.00460639224,
+              "informative_pairs": 9204554.0,
+              "n_windows": 4301,
+              "pk": 0.481418545646,
+              "target_tie_pairs": 42596.0,
+              "total_pairs": 9247150.0
+            },
+            {
+              "case_id": "vitaldb_case6",
+              "excluded_tie_fraction": 0.00101931668,
+              "informative_pairs": 238152.0,
+              "n_windows": 691,
+              "pk": 0.554704558433,
+              "target_tie_pairs": 243.0,
+              "total_pairs": 238395.0
+            },
+            {
+              "case_id": "vitaldb_case7",
+              "excluded_tie_fraction": 0.006936725773,
+              "informative_pairs": 1034619.0,
+              "n_windows": 1444,
+              "pk": 0.544415867097,
+              "target_tie_pairs": 7227.0,
+              "total_pairs": 1041846.0
+            },
+            {
+              "case_id": "vitaldb_case8",
+              "excluded_tie_fraction": 0.01715009408,
+              "informative_pairs": 679051.0,
+              "n_windows": 1176,
+              "pk": 0.4459782844,
+              "target_tie_pairs": 11849.0,
+              "total_pairs": 690900.0
+            },
+            {
+              "case_id": "vitaldb_case9",
+              "excluded_tie_fraction": 0.028207797099,
+              "informative_pairs": 381857.0,
+              "n_windows": 887,
+              "pk": 0.493200334157,
+              "target_tie_pairs": 11084.0,
+              "total_pairs": 392941.0
+            }
+          ],
+          "per_case_pk_summary": {
+            "max": 0.669798940947,
+            "mean": 0.50727221039,
+            "median": 0.493200334157,
+            "min": 0.42578710872,
+            "n_defined": 15,
+            "n_undefined": 0
+          },
+          "pk": 0.502444132597,
+          "target_tie_pairs": 2517000.0,
+          "total_pairs": 749987085.0
+        }
+      },
+      "n_cases": 15,
+      "n_windows": 38730,
+      "target_distribution": {
+        "per_case": [
+          {
+            "case_id": "vitaldb_case1",
+            "fraction_0_40": 0.293223284101,
+            "fraction_40_60": 0.620330147698,
+            "fraction_60_80": 0.069070373588,
+            "fraction_80_100": 0.017376194613,
+            "median": 47.92799949646,
+            "n_windows": 2302,
+            "q1": 33.081000328064,
+            "q3": 53.586000442505
+          },
+          {
+            "case_id": "vitaldb_case10",
+            "fraction_0_40": 0.067415730337,
+            "fraction_40_60": 0.905092039206,
+            "fraction_60_80": 0.01147501793,
+            "fraction_80_100": 0.016017212527,
+            "median": 46.131999969482,
+            "n_windows": 4183,
+            "q1": 43.961498260498,
+            "q3": 48.298500061035
+          },
+          {
+            "case_id": "vitaldb_case12",
+            "fraction_0_40": 0.12455858748,
+            "fraction_40_60": 0.84911717496,
+            "fraction_60_80": 0.02632423756,
+            "fraction_80_100": 0.0,
+            "median": 46.870000839233,
+            "n_windows": 6230,
+            "q1": 42.555500030518,
+            "q3": 51.377501487732
+          },
+          {
+            "case_id": "vitaldb_case13",
+            "fraction_0_40": 0.840690978887,
+            "fraction_40_60": 0.099328214971,
+            "fraction_60_80": 0.024472168906,
+            "fraction_80_100": 0.035508637236,
+            "median": 29.209001541138,
+            "n_windows": 2084,
+            "q1": 24.60000038147,
+            "q3": 34.061747550964
+          },
+          {
+            "case_id": "vitaldb_case14",
+            "fraction_0_40": 0.459259259259,
+            "fraction_40_60": 0.311111111111,
+            "fraction_60_80": 0.197530864198,
+            "fraction_80_100": 0.032098765432,
+            "median": 41.715999603271,
+            "n_windows": 810,
+            "q1": 29.512000083923,
+            "q3": 57.303149223328
+          },
+          {
+            "case_id": "vitaldb_case16",
+            "fraction_0_40": 0.608606557377,
+            "fraction_40_60": 0.325819672131,
+            "fraction_60_80": 0.048360655738,
+            "fraction_80_100": 0.017213114754,
+            "median": 38.40350151062,
+            "n_windows": 2440,
+            "q1": 34.047749519348,
+            "q3": 42.922498703003
+          },
+          {
+            "case_id": "vitaldb_case17",
+            "fraction_0_40": 0.716715976331,
+            "fraction_40_60": 0.230522682446,
+            "fraction_60_80": 0.034023668639,
+            "fraction_80_100": 0.018737672584,
+            "median": 35.446451187134,
+            "n_windows": 4056,
+            "q1": 27.799999237061,
+            "q3": 40.299999237061
+          },
+          {
+            "case_id": "vitaldb_case2",
+            "fraction_0_40": 0.05824,
+            "fraction_40_60": 0.84256,
+            "fraction_60_80": 0.08672,
+            "fraction_80_100": 0.01248,
+            "median": 46.916000366211,
+            "n_windows": 3125,
+            "q1": 43.700000762939,
+            "q3": 51.599998474121
+          },
+          {
+            "case_id": "vitaldb_case3",
+            "fraction_0_40": 0.717265353418,
+            "fraction_40_60": 0.165701042874,
+            "fraction_60_80": 0.032444959444,
+            "fraction_80_100": 0.084588644264,
+            "median": 34.209999084473,
+            "n_windows": 863,
+            "q1": 29.87380027771,
+            "q3": 41.140998840332
+          },
+          {
+            "case_id": "vitaldb_case4",
+            "fraction_0_40": 0.662638956017,
+            "fraction_40_60": 0.22909618173,
+            "fraction_60_80": 0.046157564041,
+            "fraction_80_100": 0.062107298212,
+            "median": 34.200000762939,
+            "n_windows": 4138,
+            "q1": 30.164999961853,
+            "q3": 42.457498550415
+          },
+          {
+            "case_id": "vitaldb_case5",
+            "fraction_0_40": 0.078353871193,
+            "fraction_40_60": 0.833759590793,
+            "fraction_60_80": 0.087189025808,
+            "fraction_80_100": 0.000697512206,
+            "median": 48.020000457764,
+            "n_windows": 4301,
+            "q1": 42.765998840332,
+            "q3": 53.700000762939
+          },
+          {
+            "case_id": "vitaldb_case6",
+            "fraction_0_40": 0.369030390738,
+            "fraction_40_60": 0.415340086831,
+            "fraction_60_80": 0.189580318379,
+            "fraction_80_100": 0.026049204052,
+            "median": 45.270000457764,
+            "n_windows": 691,
+            "q1": 36.200000762939,
+            "q3": 57.998798370361
+          },
+          {
+            "case_id": "vitaldb_case7",
+            "fraction_0_40": 0.490997229917,
+            "fraction_40_60": 0.439750692521,
+            "fraction_60_80": 0.065096952909,
+            "fraction_80_100": 0.004155124654,
+            "median": 40.155000686646,
+            "n_windows": 1444,
+            "q1": 34.357000350952,
+            "q3": 45.480000495911
+          },
+          {
+            "case_id": "vitaldb_case8",
+            "fraction_0_40": 0.593537414966,
+            "fraction_40_60": 0.315476190476,
+            "fraction_60_80": 0.090986394558,
+            "fraction_80_100": 0.0,
+            "median": 37.758399963379,
+            "n_windows": 1176,
+            "q1": 26.983099937439,
+            "q3": 43.602999687195
+          },
+          {
+            "case_id": "vitaldb_case9",
+            "fraction_0_40": 0.360766629087,
+            "fraction_40_60": 0.320180383315,
+            "fraction_60_80": 0.201803833145,
+            "fraction_80_100": 0.117249154453,
+            "median": 48.284000396729,
+            "n_windows": 887,
+            "q1": 35.552499771118,
+            "q3": 62.182100296021
+          }
+        ],
+        "pooled": {
+          "fraction_0_40": 0.364342886651,
+          "fraction_40_60": 0.557190808159,
+          "fraction_60_80": 0.057164988381,
+          "fraction_80_100": 0.021301316809,
+          "median": 43.386001586914,
+          "n_windows": 38730,
+          "q1": 34.750499725342,
+          "q3": 49.530002593994
+        }
+      }
+    }
+  },
+  "pair_definition": "total de pares = n(n-1)/2; pares empatados no alvo são excluídos por não carregarem informação de ordem (Smith et al., 1996)",
+  "raw_eeg_in_report": false,
+  "retrained": false,
+  "scope": "research_only"
+}
