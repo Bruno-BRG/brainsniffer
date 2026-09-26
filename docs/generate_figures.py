@@ -1537,6 +1537,50 @@ def figure_training_panels(reports, calibration, ewma):
     )
 
 
+def figure_eeg_windows():
+    """Janelas brutas do caso 19: trecho limpo e trecho com pico (antes/depois).
+
+    Le ``tmp/eeg_fig_raw.npz`` (segmentos auditados do caso 19, sem inferencia)
+    e desenha cada janela antes e depois do pipeline causal (winsor desligado,
+    clip +-100 uV, banda 0,5--45 Hz, notch 50 Hz, escala /50 uV). Sem retreino.
+    """
+    import numpy as np
+
+    from brainsniffer.config import PreprocessConfig
+    from brainsniffer.data.preprocess import StreamingPreprocessor
+
+    saved = np.load(ROOT / "tmp" / "eeg_fig_raw.npz", allow_pickle=False)
+    config = PreprocessConfig()
+    ensure(float(saved["fs"]) == float(config.sampling_rate), "taxa inesperada")
+    time = np.arange(config.window_samples) / config.sampling_rate
+    panels = (
+        ("clean", "janela limpa", float(saved["clean_s"]), float(saved["bis_clean"])),
+        ("art", "janela com pico", float(saved["art_s"]), float(saved["bis_clean"] * 0 + saved["bis_art"])),
+    )
+    fig, grid = plt.subplots(2, 2, figsize=(WIDTH, 3.6), layout="constrained", sharex=True)
+    for row, (key, title, start, bis) in enumerate(panels):
+        raw = np.asarray(saved[key], dtype=np.float64)
+        processed = StreamingPreprocessor(config).process(raw) * float(config.amplitude_scale_uv)
+        for column, (values, ylabel) in enumerate(
+            ((raw, "bruto ($\\mu V$)"), (processed, "processado ($\\mu V$)"))
+        ):
+            ax = grid[row, column]
+            ax.plot(time, values, color="black", linewidth=0.7)
+            ax.set(
+                title=f"({chr(97 + 2 * row + column)}) {title} · BIS {bis:.0f}".replace(".", ","),
+                xlim=(0, 5),
+                xlabel="Tempo na janela (s)" if row == 1 else None,
+                ylabel=ylabel if column == 0 else None,
+            )
+            ax.grid(color=".9", linewidth=0.5)
+            ax.text(
+                0.98, 0.94, f"t = {start / 60:.1f} min".replace(".", ","),
+                transform=ax.transAxes, ha="right", va="top", fontsize=7, color=".3",
+                bbox={"facecolor": "white", "edgecolor": "none", "pad": 1.0, "alpha": 0.85},
+            )
+    save_figure(fig, "eeg_windows", ["data/raw/case19.mat", "tmp/eeg_fig_raw.npz"])
+
+
 def main():
 
 
@@ -1560,6 +1604,7 @@ def main():
     figure_pk(pk_reports, ewma)
     figure_corpus_panels(reports)
     figure_training_panels(reports, calibration, ewma)
+    figure_eeg_windows()
     figure_ewma_sweep(ewma)
     if args.infer_trajectory:
         infer_trajectory()

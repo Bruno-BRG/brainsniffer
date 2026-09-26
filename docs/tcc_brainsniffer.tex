@@ -113,7 +113,14 @@ Os mesmos cinco Figshare (casos 3, 4, 5, 9 e 19) servem aos dois checkpoints. Pa
 
 \subsection{Tarefa, pré-processamento e qualidade}
 
-Cada exemplo é um trecho curto de EEG: 640 amostras, isto é, uma janela de 5 segundos amostrada a 128 Hz, com passo de 5 s na construção offline. Para cada início $t$, o alvo corresponde a $t+\mathrm{offset}$ (offset padrão 0 s), arredondado ao intervalo do BIS do caso. O pipeline mantém a banda de 0,5--45 Hz, notch de 50 Hz de quarta ordem e a escala registrada; o filtro usa só passado e presente (estado causal por caso), com rota de fase zero apenas para análise offline \cite{ma2017,nsugbe2022}.
+Cada exemplo é um trecho curto de EEG frontal em microvolts: 640 amostras, isto é, uma janela de 5 segundos amostrada a 128 Hz, com passo de 5 s na construção offline. Para cada início $t$, o alvo corresponde a $t+\mathrm{offset}$ (offset padrão 0 s), arredondado ao intervalo do BIS do caso. A Figura~\ref{fig:eeg} mostra duas janelas reais do caso 19 antes e depois do pipeline causal: um trecho limpo (pico de 38 $\mu V$, BIS 30) quase não muda (pico processado de 36 $\mu V$), enquanto um trecho com pico de 125 $\mu V$ (BIS 75) é contido para 88 $\mu V$ pelo clip, filtro e escala. O pipeline mantém a banda de 0,5--45 Hz, notch de 50 Hz de quarta ordem e a escala registrada (clip $\pm100\,\mu V$, divisor $50\,\mu V$); o filtro usa só passado e presente (estado causal por caso), com rota de fase zero apenas para análise offline \cite{ma2017,nsugbe2022}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.70\columnwidth]{figures/eeg_windows.pdf}
+\caption{Janelas reais do caso 19 antes (bruto, em $\mu V$) e depois do pipeline causal; a janela com pico mostra o efeito do clip, filtro e escala.}
+\label{fig:eeg}
+\end{figure}
 
 Os gates exigem 90\% de EEG finito, lacuna máxima de 2 s, qualidade global 0,35, 80\% de BIS válido e 0,20 por janela (heurísticas sem calibração clínica; o Figshare 24 está em quarentena). Nos 15 VitalDB do benchmark, a construção offline interpola não finitos (podendo usar amostras futuras) e interpola o BIS para grade de 1 s sem máscara persistida: difere da rejeição do replay e limita a interpretação, mas foi mantida por fidelidade histórica.
 
