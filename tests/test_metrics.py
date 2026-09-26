@@ -55,6 +55,23 @@ def test_compute_metrics_empty_finite_support(target, prediction):
 def test_constant_target_correlation_is_undefined():
     result = compute_metrics(np.asarray([40, 40]), np.asarray([40, 41]))
     assert np.isnan(result["pearson_r"])
+    # Sem covariancia o CCC e 0 (sem acordo), nao indefinido.
+    assert result["ccc"] == 0.0
+
+
+def test_concordance_matches_reference_and_penalizes_bias():
+    from brainsniffer.pipeline.metrics import concordance_correlation
+
+    target = np.asarray([30.0, 40.0, 50.0, 60.0, 70.0])
+    assert concordance_correlation(target, target.copy()) == 1.0
+    # Mesmo Pearson 1, o CCC cai com vies sistematico.
+    shifted = target + 10.0
+    assert concordance_correlation(target, shifted) < 1.0
+    assert concordance_correlation(target, shifted) > 0.5
+    assert np.isnan(concordance_correlation(np.asarray([40.0]), np.asarray([41.0])))
+    assert np.isnan(
+        concordance_correlation(np.asarray([40.0, 40.0]), np.asarray([40.0, 40.0]))
+    )
 
 
 def test_compute_metrics_rejects_misaligned_vectors():
@@ -83,6 +100,7 @@ def test_bootstrap_case_metrics_resamples_groups():
         "rmse",
         "bias",
         "pearson_r",
+        "ccc",
         "stage_accuracy",
         "stage_macro_f1",
     }
