@@ -1554,36 +1554,26 @@ def figure_eeg_windows():
     ensure(float(saved["fs"]) == float(config.sampling_rate), "taxa inesperada")
     time = np.arange(config.window_samples) / config.sampling_rate
     panels = (
-        ("clean", "janela limpa", float(saved["clean_s"]), float(saved["bis_clean"])),
-        ("art", "janela com pico", float(saved["art_s"]), float(saved["bis_clean"] * 0 + saved["bis_art"])),
+        ("clean", "Trecho limpo", float(saved["bis_clean"])),
+        ("art", "Trecho com pico", float(saved["bis_art"])),
     )
-    fig, grid = plt.subplots(2, 2, figsize=(WIDTH, 4.1), layout="constrained", sharex=True)
-    for row, (key, title, start, bis) in enumerate(panels):
+    fig, grid = plt.subplots(
+        2, 2, figsize=(WIDTH, 3.9), layout="constrained", sharex=True, sharey="row"
+    )
+    column_titles = ("(a) EEG bruto", "(b) após filtro, clip e escala")
+    for row, (key, row_label, bis) in enumerate(panels):
         raw = np.asarray(saved[key], dtype=np.float64)
         processed = StreamingPreprocessor(config).process(raw) * float(config.amplitude_scale_uv)
-        peak_raw = float(np.abs(raw).max())
-        peak_proc = float(np.abs(processed).max())
-        for column, (values, ylabel, note) in enumerate(
-            (
-                (raw, "EEG bruto ($\\mu V$)", f"pico {peak_raw:.0f} $\\mu V$"),
-                (processed, "EEG processado ($\\mu V$)", f"pico {peak_proc:.0f} $\\mu V$"),
-            )
-        ):
+        for column, values in enumerate((raw, processed)):
             ax = grid[row, column]
             ax.plot(time, values, color="black", linewidth=0.7)
             ax.set(
-                title=f"({chr(97 + 2 * row + column)}) {title}: {ylabel.lower()} · BIS {bis:.0f}".replace(".", ","),
-                xlim=(0, 5),
                 xlabel="Tempo na janela (s)" if row == 1 else None,
-                ylabel="Amplitude ($\\mu V$)" if column == 0 else None,
+                ylabel=f"{row_label} (BIS {bis:.0f})" if column == 0 else None,
             )
             ax.grid(color=".9", linewidth=0.5)
-            ax.text(
-                0.02, 0.94,
-                f"t = {start / 60:.1f} min · {note}".replace(".", ","),
-                transform=ax.transAxes, ha="left", va="top", fontsize=7, color=".3",
-                bbox={"facecolor": "white", "edgecolor": "none", "pad": 1.0, "alpha": 0.85},
-            )
+            if row == 0:
+                ax.set_title(column_titles[column], fontsize=9)
     save_figure(fig, "eeg_windows", ["data/raw/case19.mat", "tmp/eeg_fig_raw.npz"])
 
 
