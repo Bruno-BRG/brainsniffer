@@ -238,25 +238,29 @@ O baseline espectral também foi reavaliado nos 15 casos VitalDB, com o mesmo aj
 
 \subsection{Ordenação, incerteza e alinhamento}
 
-No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835): o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818) sem mudar a ordenação, e as diferenças são pequenas frente aos intervalos. No VitalDB, o ativo fica no acaso (0,515) e o misto em 0,672; por caso, medianas 0,48 e 0,67 (no Figshare, 0,80 e 0,81) \cite{smith1996}. A Figura~\ref{fig:bootstrap} reúne os intervalos de 95\% (barras: réplicas; marcadores: observados). Na grade de offset ($-20$ a $+20$ s, sem retreino), o MAE variou de 7,22 a 6,76 (Figura~\ref{fig:offset}): tendência pós-hoc, sem valor causal e sem mudar o offset zero \cite{pilge2006}.
+No Figshare, o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835): o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818) sem mudar a ordenação, e as diferenças são pequenas frente aos intervalos. No VitalDB, o ativo fica no acaso (0,515) e o misto em 0,672. Por caso, as medianas são 0,48 e 0,67 no VitalDB e 0,80 e 0,81 no Figshare (Figura~\ref{fig:pk}) \cite{smith1996}.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.66\columnwidth]{figures/pk_prediction.pdf}
+\includegraphics[width=0.60\columnwidth]{figures/pk_prediction.pdf}
 \caption{Probabilidade de predição $P_K$, ativo vs.\ misto.}
 \label{fig:pk}
 \end{figure}
 
+A incerteza desses agregados vem do bootstrap agrupado por caso (barras: réplicas; marcadores: métricas observadas na Figura~\ref{fig:bootstrap}). O intervalo do ativo no VitalDB cobre 0,5 em Pearson, coerente com a perda de ordenação já descrita; no Figshare, os intervalos de MAE do ativo e do misto se sobrepõem, o que sustenta a leitura de que a diferença entre eles ali não é sustentada.
+
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.64\columnwidth]{figures/bootstrap_intervals.pdf}
+\includegraphics[width=0.60\columnwidth]{figures/bootstrap_intervals.pdf}
 \caption{Bootstrap agrupado por caso.}
 \label{fig:bootstrap}
 \end{figure}
 
+Como última análise de método, a grade de offset ($-20$ a $+20$ s, sem retreino) mostrou o MAE variar de 7,22 a 6,76 (Figura~\ref{fig:offset}): tendência pós-hoc, sem valor causal e sem mudar o offset zero \cite{pilge2006}.
+
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.64\columnwidth]{figures/offset_sensitivity.pdf}
+\includegraphics[width=0.60\columnwidth]{figures/offset_sensitivity.pdf}
 \caption{Sensibilidade ao offset do rótulo; eixos ampliados (variação total $\leq 0{,}5$ ponto de MAE e $0{,}04$ de Pearson).}
 \label{fig:offset}
 \end{figure}
@@ -264,7 +268,9 @@ No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o
 \subsection{Experimento fatorial inspirado no modelo contemporâneo}
 \label{sec:fatorial}
 
-Para testar se as escolhas do modelo contemporâneo transferem ganho para esta cadeia, quatro braços foram treinados do zero no Figshare (mesmo split 13/5/5 por caso, seed 42, checkpoints novos sem tocar nos históricos): A (baseline reproduzido: Smooth L1, dez épocas, batch 128, clip $\pm100\,\mu V$, sem winsor); B (A com winsorização causal $\pm200\,\mu V$ e clip elevado a $\pm300\,\mu V$, para o winsor ter efeito próprio); C (B com perda de Huber $\delta=5$, até 120 épocas com paciência 18, batch 64 e paciência 6 no agendador); e D (C com z-score por sujeito, com média e desvio estimados somente no split de treino, congelados no checkpoint e fallback global para sujeito novo). Cada braço foi avaliado nos mesmos benchmarks (cinco Figshare e 15 VitalDB congelados), com CCC de Lin e média por caso ao lado do agregado por janela. A Tabela~\ref{tab:fatorial} resume os números brutos, sem EWMA. O braço A reproduziu o histórico (Figshare 7,03/0,780/0,777 de CCC/0,773 de $P_K$; VitalDB 12,64/0,056/0,051/0,524), validando o harness. O winsor isolado (B) piorou o Figshare (8,19; IC 95\% 6,78--10,01) com viés $-3{,}17$, sem mover o VitalDB (12,04). O treino longo com Huber (C) foi o único ganho real no Figshare: 6,63 (IC 95\% 6,03--7,67), Pearson 0,824, CCC 0,820 e $P_K$ 0,780, com 46 épocas efetivas (parada na 28 por paciência); no VitalDB, porém, ficou em 12,61. O z-score por sujeito (D) elevou Pearson (0,833) e CCC (0,830) no Figshare sem reduzir o MAE (7,14; IC 95\% 5,75--7,86), e no VitalDB ficou em 12,41. Nenhum braço novo foi submetido ao EWMA; a comparação com os números suavizados da Seção~\ref{sec:ewma} é entre bruto novo e suavizado histórico, sem inferência direta.
+Para testar se as escolhas do modelo contemporâneo transferem ganho para esta cadeia, quatro braços foram treinados do zero no Figshare (mesmo split 13/5/5 por caso, seed 42, checkpoints novos sem tocar nos históricos): A (baseline reproduzido: Smooth L1, dez épocas, batch 128, clip $\pm100\,\mu V$, sem winsor); B (A com winsorização causal $\pm200\,\mu V$ e clip elevado a $\pm300\,\mu V$, para o winsor ter efeito próprio); C (B com perda de Huber $\delta=5$, até 120 épocas com paciência 18, batch 64 e paciência 6 no agendador); e D (C com z-score por sujeito, com média e desvio estimados somente no split de treino, congelados no checkpoint e fallback global para sujeito novo). Cada braço foi avaliado nos mesmos benchmarks (cinco Figshare e 15 VitalDB congelados), com CCC de Lin e média por caso ao lado do agregado por janela. A Tabela~\ref{tab:fatorial} resume os números brutos, sem EWMA.
+
+O braço A reproduziu o histórico (Figshare 7,03/0,780/0,777 de CCC/0,773 de $P_K$; VitalDB 12,64/0,056/0,051/0,524), validando o harness. O winsor isolado (B) piorou o Figshare (8,19; IC 95\% 6,78--10,01) com viés $-3{,}17$, sem mover o VitalDB (12,04). O treino longo com Huber (C) foi o único ganho real no Figshare: 6,63 (IC 95\% 6,03--7,67), Pearson 0,824, CCC 0,820 e $P_K$ 0,780, com 46 épocas efetivas (parada na 28 por paciência); no VitalDB, porém, ficou em 12,61. O z-score por sujeito (D) elevou Pearson (0,833) e CCC (0,830) no Figshare sem reduzir o MAE (7,14; IC 95\% 5,75--7,86), e no VitalDB ficou em 12,41. Nenhum braço novo foi submetido ao EWMA; a comparação com os números suavizados da Seção~\ref{sec:ewma} é entre bruto novo e suavizado histórico, sem inferência direta.
 
 \begin{table}[H]
 \centering
