@@ -596,6 +596,43 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="deslocamento do rótulo BIS em relação ao início da janela (positivo=futuro)",
     )
+    train.add_argument(
+        "--loss",
+        type=str,
+        default=TrainingConfig.loss_name,
+        choices=("smooth_l1", "huber"),
+        help="função de perda do treino experimental",
+    )
+    train.add_argument(
+        "--huber-delta",
+        type=float,
+        default=TrainingConfig.loss_huber_delta,
+        help="delta da perda de Huber",
+    )
+    train.add_argument(
+        "--patience",
+        type=int,
+        default=TrainingConfig.early_stopping_patience,
+        help="paciência do early stopping (use 0 para desativar)",
+    )
+    train.add_argument(
+        "--scheduler-patience",
+        type=int,
+        default=TrainingConfig.scheduler_patience,
+        help="paciência do ReduceLROnPlateau",
+    )
+    train.add_argument(
+        "--winsor-uv",
+        type=float,
+        default=None,
+        help="winsorização causal em microvolts (None desliga)",
+    )
+    train.add_argument(
+        "--clip-uv",
+        type=float,
+        default=None,
+        help="sobrescreve o clip de amplitude em microvolts",
+    )
 
     evaluate = subparsers.add_parser(
         "evaluate", help="recalcular as métricas do checkpoint em casos de teste salvos"
@@ -983,10 +1020,23 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(
                 f"Nenhum case*.mat encontrado em {args.data_dir}. Rode download-data primeiro."
             )
-        preprocess_config = PreprocessConfig(label_offset_seconds=args.label_offset_seconds)
+        preprocess_config = PreprocessConfig(
+            label_offset_seconds=args.label_offset_seconds,
+            winsor_uv=args.winsor_uv,
+            clip_uv=float(args.clip_uv)
+            if args.clip_uv is not None
+            else PreprocessConfig.clip_uv,
+        )
         windows = load_windows(paths, preprocess_config, min_quality=args.min_quality)
         windows = subset_windows(windows, args.max_windows)
-        config = TrainingConfig(epochs=args.epochs, batch_size=args.batch_size)
+        config = TrainingConfig(
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            loss_name=args.loss,
+            loss_huber_delta=args.huber_delta,
+            early_stopping_patience=None if args.patience == 0 else args.patience,
+            scheduler_patience=args.scheduler_patience,
+        )
         result = train_model(
             windows,
             preprocess_config=preprocess_config,

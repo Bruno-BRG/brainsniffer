@@ -363,7 +363,15 @@ def train_model(
         patience=training_config.scheduler_patience,
         min_lr=training_config.scheduler_min_lr,
     )
-    criterion = nn.SmoothL1Loss()
+    loss_name = str(getattr(training_config, "loss_name", "smooth_l1") or "smooth_l1")
+    loss_delta = float(getattr(training_config, "loss_huber_delta", 5.0) or 5.0)
+    if loss_name == "huber":
+        criterion = nn.HuberLoss(delta=loss_delta)
+    elif loss_name == "smooth_l1":
+        criterion = nn.SmoothL1Loss()
+    else:
+        raise ValueError("loss_name deve ser 'smooth_l1' ou 'huber'")
+    loss_label = f"HuberLoss(delta={loss_delta:g})" if loss_name == "huber" else "SmoothL1Loss"
     train_loader = _loader(
         windows.signals,
         windows.bis,
@@ -467,7 +475,7 @@ def train_model(
             "effective_training": {
                 "device": str(device),
                 "optimizer": "AdamW",
-                "loss": "SmoothL1Loss",
+                "loss": loss_label,
                 "scheduler": {
                     "name": "ReduceLROnPlateau",
                     "mode": "min",
@@ -636,7 +644,7 @@ def load_checkpoint(
     for key, value in asdict(preprocess).items():
         if key == "causal":
             valid = type(value) is bool
-        elif key == "notch_hz" and value is None:
+        elif key in ("notch_hz", "winsor_uv") and value is None:
             valid = True
         else:
             valid = type(value) in (int, float) and math.isfinite(value)
@@ -654,6 +662,7 @@ def load_checkpoint(
         or preprocess.amplitude_scale_uv <= 0
         or preprocess.clip_uv <= 0
         or (preprocess.notch_hz is not None and preprocess.notch_hz <= 0)
+        or (preprocess.winsor_uv is not None and preprocess.winsor_uv <= 0)
     ):
         raise ValueError("preprocess_config fora dos limites suportados")
     model = Conv1DDepthEstimator()
