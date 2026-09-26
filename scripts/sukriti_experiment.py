@@ -12,9 +12,11 @@ Bracos (seed 42 em todos, split 13/5/5 por caso herdado do treino Figshare-only)
   checkpoint; fallback = media global do treino para sujeito unseen).
 
 Uso:
-    .venv/Scripts/python.exe scripts/sukriti_experiment.py --arm A   # treina + avalia
-    .venv/Scripts/python.exe scripts/sukriti_experiment.py --arm B --max-windows 2000  # smoke
-    .venv/Scripts/python.exe scripts/sukriti_experiment.py --arm C --skip-train --checkpoint models/brainsniffer_expC_huber.pt  # so avalia
+    python scripts/sukriti_experiment.py --arm A   # treina + avalia
+    python scripts/sukriti_experiment.py --arm B --max-windows 2000  # smoke
+    # so avalia um checkpoint existente:
+    # python scripts/sukriti_experiment.py --arm C --skip-train \
+    #   --checkpoint models/brainsniffer_expC_huber.pt
 
 Requer torch instalado e dados locais (data/raw + data/vitaldb).
 """
@@ -44,7 +46,6 @@ from brainsniffer.pipeline.metrics import (  # noqa: E402
 )
 from brainsniffer.pipeline.training import (  # noqa: E402
     load_checkpoint,
-    predict_model,
     sha256_file,
     train_model,
     verify_file_manifest,
