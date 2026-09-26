@@ -47,9 +47,9 @@ Este artigo descreve o BrainSniffer, protótipo de engenharia reproduzível que 
 
 Na anestesia geral, é preciso saber se o paciente está suficientemente hipnotizado sem exagerar na dose, e para isso usam-se referências objetivas de profundidade. O Índice Bispectral (Bispectral Index, BIS), calculado a partir da eletroencefalografia (EEG) frontal, é a referência mais usada à beira do leito, mas é uma saída proprietária: sua regra de combinação não é publicada e não pode ser reproduzida exatamente a partir do sinal. Modelos que tentam aproximar esse rótulo enfrentam ainda um risco metodológico silencioso: janelas vizinhas da mesma cirurgia são quase idênticas, então uma partição aleatória entre treino e teste mede o reconhecimento de casos já vistos, não a generalização. Falta um protótipo reproduzível com partições por caso, controle espectral e avaliação entre fontes: este trabalho apresenta o BrainSniffer.
 
-A pesquisa responde a duas perguntas. (i) Quanto uma rede neural convolucional unidimensional compacta (1-D CNN) aproxima o rótulo BIS em casos não usados no ajuste, comparada a um controle mais simples baseado em medidas espectrais (baseline espectral)? (ii) Esse desempenho se mantém ao trocar a fonte dos dados, do Figshare para o VitalDB, com outro equipamento, montagem e população? O objetivo geral é avaliar essa aproximação de forma reproduzível. Os objetivos específicos são: comparar a CNN ao baseline no holdout Figshare; quantificar a queda no VitalDB; testar se o candidato misto reduz o erro; e caracterizar ordenação ($P_K$) e incerteza (bootstrap por caso), além do efeito da suavização causal (EWMA).
+A pesquisa responde a duas perguntas. (i) Quanto uma rede neural convolucional unidimensional compacta (1-D CNN) aproxima o rótulo BIS em casos não usados no ajuste, comparada a um controle mais simples baseado em medidas espectrais (baseline espectral)? (ii) Esse desempenho se mantém ao trocar a fonte dos dados, do Figshare para o VitalDB, com outro equipamento, montagem e população? O objetivo geral é avaliar essa aproximação de forma reproduzível. Os objetivos específicos são: comparar a CNN ao baseline no holdout Figshare; quantificar a queda no VitalDB; testar se incorporar parte do VitalDB ao treino (candidato misto) reduz o erro; caracterizar a ordenação das estimativas (probabilidade de predição $P_K$) e a incerteza da avaliação (bootstrap agrupado de casos); e testar o efeito de uma suavização causal (EWMA) sobre as predições congeladas, além de um experimento fatorial com as escolhas de um modelo contemporâneo (Seção~\ref{sec:fatorial}).
 
-Vale fixar o vocabulário: o modelo estima um rótulo de referência derivado do BIS, não o BIS como grandeza independente, porque o próprio BIS é a saída de um monitor sobre o mesmo sinal. A contribuição é uma cadeia com partições por grupo, controle espectral, comparação entre fontes, incerteza e suavização causal exploratória. O escopo é avaliar essa cadeia, não desenvolver um dispositivo médico. A Seção~2 fundamenta o BIS e o vazamento; a Seção~3 descreve os métodos; a Seção~4 traz os resultados; a Seção~5 discute limitações; e a Seção~6 conclui.
+Vale fixar o vocabulário: o modelo estima um rótulo de referência derivado do BIS, não o BIS como grandeza independente, porque o próprio BIS é a saída de um monitor sobre o mesmo sinal. A contribuição é uma cadeia com partições por grupo, controle espectral, comparação entre fontes, análise de incerteza, suavização causal exploratória e um experimento fatorial com braços novos. O escopo deste trabalho é avaliar essa cadeia, não desenvolver um dispositivo médico. A Seção~2 fundamenta o índice BIS e o problema do vazamento entre janelas; a Seção~3 descreve materiais e métodos; a Seção~4 apresenta os resultados; a Seção~5 discute limitações; e a Seção~6 conclui.
 
 
 
@@ -94,9 +94,9 @@ Modelo B -- misto & Figshare + parte do VitalDB & Figshare (benchmark histórico
 
 A Figura~\ref{fig:pipeline} resume esse fluxo retrospectivo, da composição do pool à avaliação sem reajuste.
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.84\columnwidth]{figures/pipeline.pdf}
+\includegraphics[width=0.78\columnwidth]{figures/pipeline.pdf}
 \caption{Fluxo retrospectivo auditável do BrainSniffer.}
 \label{fig:pipeline}
 \end{figure}
@@ -117,7 +117,7 @@ Os gates exigem 90\% de EEG finito, lacuna máxima de 2 s, qualidade global 0,35
 
 \subsection{Modelos e treinamento}
 
-A CNN histórica recebe a janela de 640 amostras em um canal, é treinada com perda Smooth L1 (os braços novos do experimento fatorial usam Huber com $\delta=5$) e tem saída sigmoidal escalada para $[0,100]$. A Tabela~\ref{tab:config} explicita a arquitetura e os parâmetros registrados no protocolo, sem carregar pesos. Recursos posteriores do treinador e arquiteturas opcionais não são atribuídos retroativamente a esses pesos.
+A CNN histórica recebe a janela de 640 amostras em um canal, é treinada com perda Smooth L1 e tem saída sigmoidal escalada para $[0,100]$. Os braços novos do experimento fatorial (Seção~\ref{sec:fatorial}) usam perda de Huber com $\delta=5$, treino de até 120 épocas e normalização por sujeito, mantida a mesma arquitetura. A Tabela~\ref{tab:config} explicita a arquitetura e os parâmetros registrados no protocolo, sem carregar pesos. Recursos posteriores do treinador e arquiteturas opcionais não são atribuídos retroativamente a esses pesos.
 
 \begin{table}[htbp]
 \centering
@@ -138,9 +138,9 @@ Amplitude e \textit{notch} & \textit{Clip} $\pm100\,\mu V$, divisor de escala $5
 \end{tabular}
 \end{table}
 
-A arquitetura compacta permite replay em CPU, sem implicar superioridade sobre alternativas temporais \cite{park2020,shi2023}.
+A arquitetura compacta permite replay em CPU, sem superioridade presumida sobre alternativas \cite{park2020,shi2023}.
 
-Como controle, o baseline espectral resume cada janela em 14 atributos clássicos (potências absoluta e relativa de delta a gama, SEF90, entropia, RMS e \textit{line length}) com floresta aleatória (Tabela~\ref{tab:config}), nas mesmas janelas e partição do holdout: se o espectro já alcança erro parecido, a CNN precisa se justificar.
+Como controle, o baseline espectral resume cada janela em 14 atributos (potências de delta a gama, SEF90, entropia, RMS e \textit{line length}) com floresta aleatória (Tabela~\ref{tab:config}), nas mesmas janelas e partição do holdout: se o espectro já alcança erro parecido, a CNN precisa se justificar.
 
 \subsection{Métricas, incerteza e análises exploratórias}
 
@@ -182,11 +182,11 @@ Baseline espectral & 8,86 & 13,23 & 0,667 & 0,540 & 0,480\\
 \end{tabular}
 \end{table}
 
-A Figura~\ref{fig:trajectory} mostra que a CNN superestima o patamar intermediário (850 janelas: MAE 8,72, viés $+4{,}79$, Pearson 0,910): associação alta não elimina erro sistemático; é ilustração, não evidência de generalização.
+A Figura~\ref{fig:trajectory} mostra queda inicial e elevação final em ambas as curvas, mas a CNN superestima o patamar intermediário e não reproduz várias oscilações da referência. Nas 850 janelas aceitas, MAE 8,72, RMSE 10,21, viés $+4{,}79$ e Pearson intra-caso 0,910: associação alta não elimina erro sistemático; é exemplo ilustrativo, não evidência de generalização. Das 871 janelas completas, 21 foram rejeitadas por qualidade e 56 posições ficaram sem previsão (NaN).
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.78\columnwidth]{figures/bis_trajectory.pdf}
+\includegraphics[width=0.72\columnwidth]{figures/bis_trajectory.pdf}
 \caption{Trajetória offline do caso 19 do Figshare: referência e predição bruta (topo) e erro por janela (base).}
 \label{fig:trajectory}
 \end{figure}
@@ -216,22 +216,22 @@ VitalDB & RF espectral & 13,62 (11,98--16,01) & $-0,036$ ($-0,162$--0,111) & 0,5
 
 O baseline espectral também foi reavaliado nos 15 casos VitalDB, com o mesmo ajuste e protocolo: MAE 13,62 (11,98--16,01), Pearson $-0,04$ e $P_K$ 0,502, no nível do acaso, e a CNN ativa ainda o supera ($\Delta$MAE $-1,19$; IC $-2,13$--$-0,34$); o colapso no transporte não é específico da CNN. No bootstrap pareado por caso ($\Delta$ $=$ ativo $-$ misto), o misto melhora o VitalDB ($\Delta$MAE $+3,83$, IC $2,95$--$4,94$; $\Delta P_K$ $-0,157$, IC $-0,216$--$-0,083$; 14/15 casos, $p<0{,}001$), enquanto no Figshare MAE e $P_K$ não sustentam ganho ($\Delta$MAE $0,34$, IC $-0,28$--$0,81$; $\Delta P_K$ IC $-0,013$--$0,007$).
 
-No VitalDB, o misto venceu em 14 dos 15 casos pareados (piora de 0,67 ponto só no caso 16; Figura~\ref{fig:comparison}c): ganho heterogêneo, que descreve adaptação após exposição ao domínio, não transporte.
+No VitalDB, o MAE do candidato caiu em 14 dos 15 casos pareados (sinal exato bilateral $p=0{,}001$; leitura descritiva, sem valor confirmatório); no caso 16 do VitalDB, subiu cerca de 0,67 ponto BIS. Na Figura~\ref{fig:comparison}c, cada linha é um caso, ordenado pela diferença misto menos ativo; linhas à esquerda indicam menor MAE do misto. A leitura é pareada de propósito, para que um grupo de casos longos não domine a comparação, e revela a heterogeneidade: o ganho não é uniforme, e 14 acertos contra 1 piora convivem com margens pequenas. Como os agregados são calculados por janela, a média pode não corresponder à de um caso típico; essa comparação descreve adaptação após exposição ao VitalDB, não transporte para nova fonte.
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.76\columnwidth]{figures/comparison.pdf}
+\includegraphics[width=0.70\columnwidth]{figures/comparison.pdf}
 \caption{Agregados por janela e MAE pareado por caso; em (c), cada ponto é um caso e linhas à esquerda indicam menor MAE do misto.}
 \label{fig:comparison}
 \end{figure}
 
 \subsection{Probabilidade de predição $P_K$}
 
-No Figshare, ativo e misto têm $P_K$ idêntico (0,773 contra 0,774): o misto reduz MAE e eleva Pearson sem mudar a ordenação (Tabela~\ref{tab:benchmarks}, Figura~\ref{fig:pk}). No VitalDB, o ativo fica no acaso (0,515) e o misto em 0,672; por caso, medianas 0,48 e 0,67 \cite{smith1996}.
+No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico (0,773 para 0,774): não há evidência de mudança na ordenação, e as diferenças são pequenas frente à incerteza dos intervalos. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996}. Por caso, o $P_K$ do ativo no VitalDB varia de 0,39 a 0,74 (mediana 0,48) e o do misto, de 0,48 a 0,81 (mediana 0,67); no Figshare, as medianas por caso são 0,80 (ativo) e 0,81 (misto), próximas aos agregados 0,773 e 0,774.
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.72\columnwidth]{figures/pk_prediction.pdf}
+\includegraphics[width=0.66\columnwidth]{figures/pk_prediction.pdf}
 \caption{Probabilidade de predição $P_K$, ativo vs.\ misto.}
 \label{fig:pk}
 \end{figure}
@@ -241,18 +241,18 @@ No Figshare, ativo e misto têm $P_K$ idêntico (0,773 contra 0,774): o misto re
 
 A Tabela~\ref{tab:benchmarks} reúne os intervalos de 95\%; na Figura~\ref{fig:bootstrap}, as barras são réplicas e os marcadores, as métricas observadas.
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.70\columnwidth]{figures/bootstrap_intervals.pdf}
+\includegraphics[width=0.64\columnwidth]{figures/bootstrap_intervals.pdf}
 \caption{Bootstrap agrupado por caso.}
 \label{fig:bootstrap}
 \end{figure}
 
-Na grade de offset ($-20$ a $+20$ s, sem retreino), o MAE variou de 7,22 a 6,76 (Figura~\ref{fig:offset}): tendência pós-hoc, sem valor causal e sem mudar o offset zero \cite{pilge2006}.
+Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,03/0,784 em 0 s e 6,76/0,799 em $+20$ s. Um offset positivo associa a janela EEG a um BIS posterior. A Figura~\ref{fig:offset} mostra essa grade. A tendência foi observada pós-hoc, sem retreino, e não identifica causalmente atraso do monitor nem autoriza mudar o offset padrão. Contexto sobre atraso de índices processados em \cite{pilge2006}.
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.70\columnwidth]{figures/offset_sensitivity.pdf}
+\includegraphics[width=0.64\columnwidth]{figures/offset_sensitivity.pdf}
 \caption{Sensibilidade ao offset do rótulo; eixos ampliados (variação total $\leq 0{,}5$ ponto de MAE e $0{,}04$ de Pearson).}
 \label{fig:offset}
 \end{figure}
@@ -260,7 +260,7 @@ Na grade de offset ($-20$ a $+20$ s, sem retreino), o MAE variou de 7,22 a 6,76 
 \subsection{Experimento fatorial inspirado no modelo contemporâneo}
 \label{sec:fatorial}
 
-Quatro braços novos foram treinados do zero no Figshare (mesmo split, seed 42): A (reprodução); B (A com winsor $\pm200\,\mu V$ e clip $\pm300\,\mu V$); C (B com Huber $\delta=5$, até 120 épocas, batch 64); D (C com z-score por sujeito, split-safe). Avaliados nos mesmos benchmarks, A reproduziu o histórico (7,03/12,64), B piorou o Figshare (8,19, viés $-3{,}17$), C foi o único ganho real (6,63; IC 6,03--7,67; CCC 0,820) sem mover o VitalDB (12,61), e D elevou Pearson/CCC (0,833/0,830) sem reduzir o MAE (7,14; VitalDB 12,41). Nenhum braço restaurou o transporte (Tabela~\ref{tab:fatorial}).
+Para testar se as escolhas do modelo contemporâneo transferem ganho para esta cadeia, quatro braços foram treinados do zero no Figshare (mesmo split 13/5/5 por caso, seed 42, checkpoints novos sem tocar nos históricos): A (baseline reproduzido: Smooth L1, dez épocas, batch 128, clip $\pm100\,\mu V$, sem winsor); B (A com winsorização causal $\pm200\,\mu V$ e clip elevado a $\pm300\,\mu V$, para o winsor ter efeito próprio); C (B com perda de Huber $\delta=5$, até 120 épocas com paciência 18, batch 64 e paciência 6 no agendador); e D (C com z-score por sujeito, com média e desvio estimados somente no split de treino, congelados no checkpoint e fallback global para sujeito novo). Cada braço foi avaliado nos mesmos benchmarks (cinco Figshare e 15 VitalDB congelados), com CCC de Lin e média por caso ao lado do agregado por janela. A Tabela~\ref{tab:fatorial} resume os números brutos, sem EWMA. O braço A reproduziu o histórico (Figshare 7,03/0,780/0,777 de CCC/0,773 de $P_K$; VitalDB 12,64/0,056/0,051/0,524), validando o harness. O winsor isolado (B) piorou o Figshare (8,19; IC 95\% 6,78--10,01) com viés $-3{,}17$, sem mover o VitalDB (12,04). O treino longo com Huber (C) foi o único ganho real no Figshare: 6,63 (IC 95\% 6,03--7,67), Pearson 0,824, CCC 0,820 e $P_K$ 0,780, com 46 épocas efetivas (parada na 28 por paciência); no VitalDB, porém, ficou em 12,61. O z-score por sujeito (D) elevou Pearson (0,833) e CCC (0,830) no Figshare sem reduzir o MAE (7,14; IC 95\% 5,75--7,86), e no VitalDB ficou em 12,41. Nenhum braço novo foi submetido ao EWMA; a comparação com os números suavizados da Seção~\ref{sec:ewma} é entre bruto novo e suavizado histórico, sem inferência direta.
 
 \begin{table}[htbp]
 \centering
@@ -289,7 +289,7 @@ O treino longo aproxima esta cadeia da faixa publicada (6,63 contra 6,03 $\pm$ 0
 \subsection{Suavização EWMA das predições}
 \label{sec:ewma}
 
-O EWMA reduz o MAE no Figshare (ativo 7,03 para 5,91; misto 6,69 para 5,68; span 10 como referência, lag médio de 22 s) e, no VitalDB, só o misto responde (8,60 para 7,89; IC 6,86--9,38; $P_K$ 0,703): onde a ordenação morreu (ativo), suavizar não ressuscita (Tabela~\ref{tab:ewma}, Figura~\ref{fig:ewma}). Parte do ganho é esperada (alvo autocorrelacionado; o baseline também melhora), e o ICC do misto sobe de 0,81 para 0,86 no Figshare e de 0,67 para 0,71 no VitalDB. O misto suavizado (5,68--5,84) situa-se na faixa dos trabalhos no corpus \cite{liu2018,sukriti2026}, com 0,15M parâmetros e sem ranking.
+A Tabela~\ref{tab:ewma} e a Figura~\ref{fig:ewma} mostram a varredura de spans. No Figshare, o EWMA reduz o MAE do ativo (7,03 para 5,91 no span 15; IC 95\% no span 10: 5,27--7,37) e do misto (6,69 para 5,68; IC 95\% no span 10: 4,56--7,62), elevando Pearson (0,784/0,818 para 0,850/0,873) e $P_K$ (0,773/0,774 para 0,803/0,793); o span 10 é adotado como referência por equilibrar ganho e memória (nominal de 50 s; lag médio de cerca de 22 s), com o misto em 5,84. No VitalDB, o ativo quase não muda (12,43 para 12,06; $P_K$ 0,515 para 0,511), enquanto o misto vai de 8,60 para 7,89 (span 10; IC 95\% 6,86--9,38), com Pearson 0,755, $P_K$ 0,703 e 72,9\% das janelas com $|erro|\leq10$; o ganho pequeno do ativo reforça que ali a perda é de ordenação, não de ruído. Parte do ganho é esperada: o BIS de referência é autocorrelacionado e lento, de modo que suavizar qualquer predição ruidosa aproxima da referência (o baseline espectral também melhora, de 8,86 para 7,56 no Figshare e de 13,62 para 12,62 no VitalDB); o reinício do estado no primeiro valor de cada caso ainda vicia as primeiras janelas. O ICC(2,1) do misto sobe de 0,81 para 0,86 no Figshare e de 0,67 para 0,71 no VitalDB (span 10), enquanto o ativo no VitalDB vai de 0,02 para 0,03. Para situar: com a mesma família de suavização, o misto alcança 5,68--5,84 no Figshare agrupado (próximo dos 5,22 da entropia amostral \cite{liu2018} e na faixa dos 6,03 $\pm$ 0,38 do modelo contemporâneo \cite{sukriti2026}), com 0,15 milhão de parâmetros e sem ranking.
 
 \begin{table}[htbp]
 \centering
@@ -311,9 +311,9 @@ VitalDB & RF espectral & 13,62 & 12,75 & 12,62 & 12,58\\
 \end{tabular}
 \end{table}
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.74\columnwidth]{figures/ewma_sweep.pdf}
+\includegraphics[width=0.68\columnwidth]{figures/ewma_sweep.pdf}
 \caption{Varredura de spans do EWMA causal por braço: MAE e $P_K$ no Figshare e no VitalDB.}
 \label{fig:ewma}
 \end{figure}
@@ -321,18 +321,18 @@ VitalDB & RF espectral & 13,62 & 12,75 & 12,62 & 12,58\\
 \FloatBarrier
 \subsection{Corpus e calibração}
 
-O corpus tem 59 casos: 33 elegíveis (23 Figshare e dez VitalDB), 11 em quarentena e 15 VitalDB congelados para o benchmark, dos quais 9 reprovam nos gates internos por desenho (Figura~\ref{fig:corpus}). No treino do ativo, a perda cai de 6,2 para 4,7 em dez épocas (melhor validação na época 3); a inclinação predito--referência cai de 0,72 no Figshare ativo para 0,02 no VitalDB ativo, com o misto recuperando 0,55 (Figura~\ref{fig:training}).
+A Figura~\ref{fig:corpus}a separa os 59 casos em três estados mutuamente exclusivos por fonte: 33 elegíveis de desenvolvimento (23 Figshare e 10 VitalDB), 11 em quarentena de desenvolvimento (1 Figshare e 10 VitalDB, como o Figshare 24, de escala incompatível) e 15 do benchmark histórico congelado, todos do VitalDB e fora do pool; 9 desses 15 reprovam nos gates internos, mas permanecem no benchmark por desenho. A Figura~\ref{fig:corpus}b cruza a fração de amostras finitas com a fração de janelas aceitas e mostra por que os gates não são redundantes. A Figura~\ref{fig:training}a acompanha o treino: a perda cai de 6,2 para 4,7 em dez épocas, o MAE de validação oscila entre 5,49 e 6,38, e o checkpoint salvo é o de melhor validação (época 3). O painel (b) traz a calibração medida: a inclinação predito--referência cai de 0,72 (0,61--0,80) no Figshare ativo para 0,02 ($-0,08$--0,13) no VitalDB ativo, com ICC(2,1) 0,02 e 57,2\% das janelas com $|erro|\leq10$; o misto recupera 0,55 (0,46--0,64), ICC 0,67 e 68,9\%, ainda abaixo do Figshare (misto: 0,82, ICC 0,81 e 80,6\%).
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.76\columnwidth]{figures/corpus_panels.pdf}
+\includegraphics[width=0.62\columnwidth]{figures/corpus_panels.pdf}
 \caption{Composição e qualidade do corpus (59 casos).}
 \label{fig:corpus}
 \end{figure}
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.74\columnwidth]{figures/training_panels.pdf}
+\includegraphics[width=0.60\columnwidth]{figures/training_panels.pdf}
 \caption{Treinamento do ativo e calibração por braço.}
 \label{fig:training}
 \end{figure}
@@ -342,17 +342,17 @@ O corpus tem 59 casos: 33 elegíveis (23 Figshare e dez VitalDB), 11 em quarente
 
 A degradação do ativo do Figshare para o VitalDB é evidência interna de sensibilidade à troca de fonte, não prova de qual diferença (equipamento, ganho, montagem, população ou BIS) a causou. A redução de erro do misto é compatível com adaptação após incorporar participantes VitalDB; como o benchmark é da mesma fonte e já havia sido observado, ele gera hipótese para uma nova coorte travada, não generalização externa \cite{lee2022,tripodai,imdrfn88}.
 
-Os agregados por janela privilegiam cirurgias longas (medianas por caso acima do agregado em todos os braços); a referência de 10 unidades é escala de concordância do monitor, não limiar para MAE \cite{harada2021}. Concordância e calibração são exploratórias \cite{tripodai,archer2021}.
+A melhora em 14/15 casos convive com piora no caso 16, e os agregados por janela privilegiam cirurgias longas: no VitalDB, a mediana do MAE por caso é 12,96 no ativo e 9,60 no misto, contra 12,43 e 8,60 agregados (nos braços novos, a média por caso supera o agregado em 1,0--1,5 ponto); Pearson pode aumentar mesmo com viés relevante. A referência de 10 unidades é escala de concordância entre medições do monitor, não limiar para MAE \cite{harada2021}. As análises de concordância e calibração são exploratórias; validação com mais casos segue necessária \cite{tripodai,archer2021}.
 
-O bootstrap cobre só a reamostragem dos casos disponíveis; $n$ pequeno e reuso do benchmark impedem leitura confirmatória \cite{field2007,archer2021,probastai}; a avaliação é pré-clínica \cite{decideai}.
+O bootstrap cobre só a variabilidade de reamostrar os casos disponíveis sob o algoritmo escolhido; não cobre incerteza de treinamento, seleção de checkpoint, hiperparâmetros, mudança de centro ou erro do rótulo. O pequeno $n$ Figshare e o reaproveitamento do benchmark VitalDB impedem leitura confirmatória e elevam o risco de viés do relato \cite{field2007,archer2021,probastai}; a avaliação é pré-clínica \cite{decideai}.
 
-O alvo BIS é sensível a EMG, fármacos e atrasos; baixo erro não equivale a medir consciência \cite{schuller2015,hans2005,pilge2006}. A banda inclui gama frontal e o \textit{notch} fixo pode não valer para cada centro; gates e faixas são heurísticas sem validação clínica \cite{dosei}.
+O alvo é a saída BIS, sensível a EMG, bloqueio neuromuscular, cetamina e atrasos; baixo erro contra o monitor não equivale a medir consciência ou efeito farmacológico \cite{schuller2015,hans2005,pilge2006}. O modelo usa a banda de 0,5--45 Hz, que inclui gama frontal sensível a EMG, e o \textit{notch} fixo em 50 Hz não corresponde obrigatoriamente à rede de cada centro (o VitalDB é de Seul); nenhuma dessas sensibilidades foi medida. Faixas e limiares de qualidade são heurísticas de engenharia, sem validação clínica; DOSE-I permanece tarefa separada para MOAA/S \cite{dosei}.
 
-A leitura ordinal separa dois diagnósticos: no VitalDB o ativo tem $P_K$ no acaso e o misto eleva o Pearson sem mover o $P_K$ no Figshare, o que não caracteriza ganho de ordenação \cite{smith1996}. O EWMA é pós-hoc e não substitui os números brutos; a comparação com publicados situa ordem de grandeza, sem ranking. A amostragem do ativo não foi registrada, limitação histórica \cite{tripodai}.
+A leitura ordinal separa dois diagnósticos: no VitalDB o ativo tem $P_K$ 0,515, quase acaso; no Figshare alcança 0,773, e o misto eleva o Pearson sem mover $P_K$, o que não caracteriza ganho de ordenação. Como a escala é o BIS de referência, não um desfecho de resposta ao estímulo, esses valores não substituem validação clínica \cite{smith1996}. A suavização EWMA é pós-hoc, com span de referência escolhido após os resultados, aumenta a memória nominal (lag médio de cerca de 22 s no span 10) e o viés no Figshare, e não substitui os números brutos da Tabela~\ref{tab:benchmarks}; no VitalDB ativo ela quase não altera o erro, separando ruído de perda de ordenação. A comparação com trabalhos publicados mantém as ressalvas de partição e alvo: os valores situam a ordem de grandeza, não ranqueiam modelos. Em engenharia, a cadeia registra hashes, partições, pré-processamento e replay; a política de amostragem do checkpoint ativo não foi registrada, limitação histórica \cite{tripodai}.
 
 \section{Conclusão}
 
-O BrainSniffer estima uma referência BIS a partir de EEG frontal de forma reproduzível. O ativo superou o baseline internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição ao domínio, sem independência confirmatória. Com EWMA exploratório, o misto alcança 5,68--5,84 no Figshare (dentro das 10 unidades do monitor \cite{harada2021}), e o treino longo com Huber chega a 6,63 brutos com 0,15M parâmetros. Resultados retrospectivos, limitados por rótulo, casos, reuso de benchmarks e imputação.
+O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição a esse domínio, sem independência confirmatória e sem diferença sustentada no Figshare. Com a suavização causal exploratória, o misto alcança 5,68--5,84 no Figshare agrupado (5,84 com IC 95\% 4,56--7,62 no span de referência 10), dentro das 10 unidades de variabilidade do próprio monitor \cite{harada2021} e na faixa do modelo contemporâneo sob validação agrupada \cite{sukriti2026}, com 0,15 milhão de parâmetros (cerca de sete vezes menos) e dez épocas; o treino longo com Huber chega a 6,63 brutos. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelos casos, pelo reuso dos benchmarks e pela imputação offline.
 
 A contribuição defensável é uma base auditável para formular e testar hipóteses, não um sistema clínico. O software não mede consciência, não prescreve dose, não controla bomba e não deve acionar alarme ou conduta; uma futura alegação de generalização exigiria avaliação independente \cite{tripodai}.
 
