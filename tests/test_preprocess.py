@@ -102,6 +102,36 @@ def test_window_builder_rejects_nonfinite_label_offset():
         make_windows(case, config)
 
 
+def test_winsor_clips_extremes_before_scale_on_both_paths():
+    # Offline (zero-phase) e streaming (causal) divergem por desenho no filtro
+    # e na remocao de mediana; o que o winsor precisa garantir em cada caminho
+    # e saida finita, limitada e sensivel ao limiar (efeito real, nao no-op).
+    config = PreprocessConfig(winsor_uv=200.0, clip_uv=200.0)
+    plain = PreprocessConfig(winsor_uv=None, clip_uv=200.0)
+    rng = np.random.default_rng(42)
+    raw = rng.normal(0, 30, size=config.window_samples).astype(np.float64)
+    raw[::53] = 1500.0
+    raw[::97] -= 1500.0
+    offline = preprocess_window(raw, config)
+    offline_plain = preprocess_window(raw, plain)
+    assert np.isfinite(offline).all()
+    assert np.max(np.abs(offline)) <= 5.0
+    assert not np.array_equal(offline, offline_plain)
+    streamed = StreamingPreprocessor(config).process(raw)
+    streamed_plain = StreamingPreprocessor(plain).process(raw)
+    assert np.isfinite(streamed).all()
+    assert np.max(np.abs(streamed)) <= 5.0
+    assert not np.array_equal(streamed, streamed_plain)
+
+
+def test_winsor_none_preserves_historical_behavior():
+    config = PreprocessConfig()
+    assert config.winsor_uv is None
+    raw = np.full(config.window_samples, 150.0, dtype=np.float64)
+    processed = preprocess_window(raw, config)
+    assert np.isfinite(processed).all()
+
+
 def test_default_quality_gate_rejects_saturated_offset_signal():
     config = PreprocessConfig()
     case = EEGCase(

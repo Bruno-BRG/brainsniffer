@@ -26,6 +26,7 @@ class PreprocessConfig:
     filter_order: int = 4
     amplitude_scale_uv: float = 50.0
     clip_uv: float = 100.0
+    winsor_uv: float | None = None
     causal: bool = True
     label_offset_seconds: float = 0.0
 
@@ -42,6 +43,8 @@ class TrainingConfig:
     batch_size: int = 128
     learning_rate: float = 1e-3
     weight_decay: float = 1e-4
+    loss_name: str = "smooth_l1"
+    loss_huber_delta: float = 5.0
     validation_fraction: float = 0.2
     test_fraction: float = 0.2
     seed: int = 42

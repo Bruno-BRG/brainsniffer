@@ -18,6 +18,31 @@ def _correlation(left: np.ndarray, right: np.ndarray) -> float:
     return float(np.corrcoef(left, right)[0, 1])
 
 
+def concordance_correlation(target: np.ndarray, prediction: np.ndarray) -> float:
+    """Coeficiente de concordância de Lin (CCC): acordo, não só associação.
+
+    CCC = 2*cov(t,p) / (var(t) + var(p) + (mean(t)-mean(p))^2). Vale 1 no
+    acordo perfeito e cai com perda de correlação ou com viés/escala.
+    """
+
+    target = np.asarray(target, dtype=np.float64).reshape(-1)
+    prediction = np.asarray(prediction, dtype=np.float64).reshape(-1)
+    valid = np.isfinite(target) & np.isfinite(prediction)
+    target = target[valid]
+    prediction = prediction[valid]
+    if target.size < 2:
+        return float("nan")
+    mean_t = float(np.mean(target))
+    mean_p = float(np.mean(prediction))
+    var_t = float(np.var(target))
+    var_p = float(np.var(prediction))
+    cov = float(np.mean((target - mean_t) * (prediction - mean_p)))
+    denominator = var_t + var_p + (mean_t - mean_p) ** 2
+    if denominator == 0:
+        return float("nan")
+    return float(2.0 * cov / denominator)
+
+
 
 
 def compute_metrics(target: np.ndarray, prediction: np.ndarray) -> dict[str, float]:
@@ -50,6 +75,7 @@ def compute_metrics(target: np.ndarray, prediction: np.ndarray) -> dict[str, flo
         "rmse": float(np.sqrt(np.mean((target - prediction) ** 2))),
         "bias": float(np.mean(prediction - target)),
         "pearson_r": _correlation(target, prediction),
+        "ccc": concordance_correlation(target, prediction),
         "stage_accuracy": float(accuracy_score(target_stage, prediction_stage)),
         "stage_macro_f1": float(
             f1_score(
@@ -109,6 +135,7 @@ def bootstrap_case_metrics(
         "rmse",
         "bias",
         "pearson_r",
+        "ccc",
         "stage_accuracy",
         "stage_macro_f1",
     ]

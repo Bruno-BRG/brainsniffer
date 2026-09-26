@@ -121,6 +121,8 @@ def preprocess_window(
 
     config = config or PreprocessConfig()
     cleaned = _fill_nonfinite(signal)
+    if config.winsor_uv is not None:
+        cleaned = np.clip(cleaned, -config.winsor_uv, config.winsor_uv)
     cleaned = cleaned - np.median(cleaned)
     cleaned = np.clip(cleaned, -config.clip_uv, config.clip_uv)
 
@@ -185,7 +187,10 @@ class StreamingPreprocessor:
         samples = np.asarray(samples, dtype=np.float64).reshape(-1)
         if samples.size == 0:
             return np.empty(0, dtype=np.float32)
-        cleaned = np.clip(_fill_nonfinite(samples), -self.config.clip_uv, self.config.clip_uv)
+        cleaned = _fill_nonfinite(samples)
+        if self.config.winsor_uv is not None:
+            cleaned = np.clip(cleaned, -self.config.winsor_uv, self.config.winsor_uv)
+        cleaned = np.clip(cleaned, -self.config.clip_uv, self.config.clip_uv)
         filtered, self._band_state = sosfilt(self._band_sos, cleaned, zi=self._band_state)
         if self._notch_sos is not None and self._notch_state is not None:
             filtered, self._notch_state = sosfilt(
