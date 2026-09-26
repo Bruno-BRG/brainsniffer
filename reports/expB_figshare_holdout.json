@@ -1,0 +1,160 @@
+{
+  "analysis": "experimento Sukriti-inspired (braco novo, sem retreino historico)",
+  "arm": "B",
+  "benchmark": "figshare_holdout",
+  "benchmark_case_ids": [
+    "case19",
+    "case3",
+    "case4",
+    "case5",
+    "case9"
+  ],
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "case_bootstrap": {
+    "bias": {
+      "lower_95": -8.177994967409,
+      "mean": -3.53702967437,
+      "upper_95": -0.311664891544
+    },
+    "ccc": {
+      "lower_95": 0.621059463629,
+      "mean": 0.656000151687,
+      "upper_95": 0.692346106841
+    },
+    "mae": {
+      "lower_95": 6.776570245375,
+      "mean": 8.416682673966,
+      "upper_95": 10.009377830338
+    },
+    "pearson_r": {
+      "lower_95": 0.640843564617,
+      "mean": 0.709828922134,
+      "upper_95": 0.793746729208
+    },
+    "rmse": {
+      "lower_95": 11.546835209717,
+      "mean": 12.959869396126,
+      "upper_95": 14.728103154209
+    },
+    "stage_accuracy": {
+      "lower_95": 0.466921493678,
+      "mean": 0.518862944336,
+      "upper_95": 0.5665792316
+    },
+    "stage_macro_f1": {
+      "lower_95": 0.376027383606,
+      "mean": 0.417845001755,
+      "upper_95": 0.446616541321
+    }
+  },
+  "checkpoint": "models/brainsniffer_expB_winsor.pt",
+  "checkpoint_sha256": "d6b4480347bd4c2199d904667eb200dfbaf9c3aaa23bae27a79e238ab89446db",
+  "mean_per_case_mae": 8.884004881014,
+  "median_per_case_mae": 9.397972216505,
+  "metrics": {
+    "bias": -3.171111997853,
+    "ccc": 0.66083488684,
+    "mae": 8.194085872623,
+    "n": 5537.0,
+    "pearson_r": 0.698901338361,
+    "rmse": 12.86981043903,
+    "stage_accuracy": 0.520317861658,
+    "stage_macro_f1": 0.42399250063
+  },
+  "min_quality": 0.2,
+  "n_cases": 5,
+  "n_windows": 5537,
+  "per_case": [
+    {
+      "bias": 0.330635165046,
+      "case_id": "case19",
+      "ccc": 0.722765205242,
+      "mae": 8.539037596759,
+      "n": 850.0,
+      "n_windows": 850,
+      "pearson_r": 0.848587543689,
+      "pk": 0.774843003841,
+      "rmse": 10.991406497849,
+      "stage_accuracy": 0.455294117647,
+      "stage_macro_f1": 0.413387558379
+    },
+    {
+      "bias": 0.309098846941,
+      "case_id": "case3",
+      "ccc": 0.631549723689,
+      "mae": 6.243444566677,
+      "n": 2324.0,
+      "n_windows": 2324,
+      "pearson_r": 0.633916280785,
+      "pk": 0.669954549003,
+      "rmse": 11.58567890157,
+      "stage_accuracy": 0.513769363167,
+      "stage_macro_f1": 0.460637576848
+    },
+    {
+      "bias": -6.162832377931,
+      "case_id": "case4",
+      "ccc": 0.595169404731,
+      "mae": 10.041870252532,
+      "n": 761.0,
+      "n_windows": 761,
+      "pearson_r": 0.664866715932,
+      "pk": 0.79942316378,
+      "rmse": 14.951811926705,
+      "stage_accuracy": 0.528252299606,
+      "stage_macro_f1": 0.402788313382
+    },
+    {
+      "bias": -8.77383500363,
+      "case_id": "case5",
+      "ccc": 0.68461436194,
+      "mae": 9.397972216505,
+      "n": 470.0,
+      "n_windows": 470,
+      "pearson_r": 0.805281999805,
+      "pk": 0.802144185742,
+      "rmse": 12.934632912109,
+      "stage_accuracy": 0.43829787234,
+      "stage_macro_f1": 0.393143757449
+    },
+    {
+      "bias": -8.607963649628,
+      "case_id": "case9",
+      "ccc": 0.609815726863,
+      "mae": 10.197699772596,
+      "n": 1132.0,
+      "n_windows": 1132,
+      "pearson_r": 0.778833188197,
+      "pk": 0.790821099161,
+      "rmse": 14.970805212882,
+      "stage_accuracy": 0.611307420495,
+      "stage_macro_f1": 0.329904723343
+    }
+  ],
+  "pk": 0.757550115272,
+  "pk_bootstrap": {
+    "lower_95": 0.684673747258,
+    "mean": 0.758572626199,
+    "upper_95": 0.812693267884
+  },
+  "prediction_file": "tmp/reanalysis/expB_figshare_holdout.npz",
+  "preprocess_config": {
+    "amplitude_scale_uv": 50.0,
+    "causal": true,
+    "clip_uv": 300.0,
+    "filter_order": 4,
+    "highcut_hz": 45.0,
+    "label_offset_seconds": 0.0,
+    "lowcut_hz": 0.5,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "winsor_uv": 200.0
+  },
+  "raw_eeg_in_report": false,
+  "retrained": true,
+  "scope": "research_only",
+  "znorm_stats_summary": null
+}

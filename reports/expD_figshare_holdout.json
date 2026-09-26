@@ -1,0 +1,167 @@
+{
+  "analysis": "experimento Sukriti-inspired (braco novo, sem retreino historico)",
+  "arm": "D",
+  "benchmark": "figshare_holdout",
+  "benchmark_case_ids": [
+    "case19",
+    "case3",
+    "case4",
+    "case5",
+    "case9"
+  ],
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "case_bootstrap": {
+    "bias": {
+      "lower_95": -1.545907618811,
+      "mean": 0.20246377707,
+      "upper_95": 2.669591270038
+    },
+    "ccc": {
+      "lower_95": 0.739103489252,
+      "mean": 0.826969096284,
+      "upper_95": 0.893759276565
+    },
+    "mae": {
+      "lower_95": 5.746940759605,
+      "mean": 7.075747328854,
+      "upper_95": 7.86038841128
+    },
+    "pearson_r": {
+      "lower_95": 0.767297432005,
+      "mean": 0.835265130958,
+      "upper_95": 0.900833254649
+    },
+    "rmse": {
+      "lower_95": 8.532355658854,
+      "mean": 10.433756340682,
+      "upper_95": 11.841708796307
+    },
+    "stage_accuracy": {
+      "lower_95": 0.508838229916,
+      "mean": 0.609407883247,
+      "upper_95": 0.775233248516
+    },
+    "stage_macro_f1": {
+      "lower_95": 0.437720386338,
+      "mean": 0.581812196849,
+      "upper_95": 0.695506233727
+    }
+  },
+  "checkpoint": "models/brainsniffer_expD_znorm.pt",
+  "checkpoint_sha256": "c95c50afd7c6348c027fc47eb97f301b5b85f8f098c4ee29fe2b3a04eeed430d",
+  "mean_per_case_mae": 6.890372081505,
+  "median_per_case_mae": 7.723987992231,
+  "metrics": {
+    "bias": -0.008355926602,
+    "ccc": 0.829693676302,
+    "mae": 7.140414176832,
+    "n": 5537.0,
+    "pearson_r": 0.833334450869,
+    "rmse": 10.642892765324,
+    "stage_accuracy": 0.599783276142,
+    "stage_macro_f1": 0.595752036822
+  },
+  "min_quality": 0.2,
+  "n_cases": 5,
+  "n_windows": 5537,
+  "per_case": [
+    {
+      "bias": 4.24994578642,
+      "case_id": "case19",
+      "ccc": 0.834413292463,
+      "mae": 7.723987992231,
+      "n": 850.0,
+      "n_windows": 850,
+      "pearson_r": 0.904683555679,
+      "pk": 0.809769662985,
+      "rmse": 9.366764567191,
+      "stage_accuracy": 0.561176470588,
+      "stage_macro_f1": 0.604944293554
+    },
+    {
+      "bias": -1.810467744653,
+      "case_id": "case3",
+      "ccc": 0.699598883047,
+      "mae": 7.91682214622,
+      "n": 2324.0,
+      "n_windows": 2324,
+      "pearson_r": 0.742368795742,
+      "pk": 0.667830156968,
+      "rmse": 12.151156941579,
+      "stage_accuracy": 0.490103270224,
+      "stage_macro_f1": 0.362339154657
+    },
+    {
+      "bias": -0.138438178425,
+      "case_id": "case4",
+      "ccc": 0.818345654456,
+      "mae": 7.764223073691,
+      "n": 761.0,
+      "n_windows": 761,
+      "pearson_r": 0.821394449623,
+      "pk": 0.786126057563,
+      "rmse": 11.416536240522,
+      "stage_accuracy": 0.554533508541,
+      "stage_macro_f1": 0.522345973109
+    },
+    {
+      "bias": -1.365812890073,
+      "case_id": "case5",
+      "ccc": 0.832197343385,
+      "mae": 5.802406810192,
+      "n": 470.0,
+      "n_windows": 470,
+      "pearson_r": 0.836457794229,
+      "pk": 0.846701001056,
+      "rmse": 8.970308524442,
+      "stage_accuracy": 0.712765957447,
+      "stage_macro_f1": 0.687232975659
+    },
+    {
+      "bias": 1.144955712578,
+      "case_id": "case9",
+      "ccc": 0.912539843433,
+      "mae": 5.244420385192,
+      "n": 1132.0,
+      "n_windows": 1132,
+      "pearson_r": 0.914282879141,
+      "pk": 0.803913965778,
+      "rmse": 8.000699664983,
+      "stage_accuracy": 0.837455830389,
+      "stage_macro_f1": 0.522031411643
+    }
+  ],
+  "pk": 0.772161868187,
+  "pk_bootstrap": {
+    "lower_95": 0.668791937978,
+    "mean": 0.773674313581,
+    "upper_95": 0.83771675753
+  },
+  "prediction_file": "tmp/reanalysis/expD_figshare_holdout.npz",
+  "preprocess_config": {
+    "amplitude_scale_uv": 50.0,
+    "causal": true,
+    "clip_uv": 300.0,
+    "filter_order": 4,
+    "highcut_hz": 45.0,
+    "label_offset_seconds": 0.0,
+    "lowcut_hz": 0.5,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "winsor_uv": 200.0
+  },
+  "raw_eeg_in_report": false,
+  "retrained": true,
+  "scope": "research_only",
+  "znorm_stats_summary": {
+    "global": {
+      "mean": -4.62946e-06,
+      "std": 0.3695464014
+    },
+    "n_cases": 13,
+    "note": "estatisticas do split de treino; fallback global p/ unseen"
+  }
+}

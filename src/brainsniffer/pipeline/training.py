@@ -677,7 +677,7 @@ def load_checkpoint(
         raise ValueError("model_state incompatível com a CNN baseline ou não finito")
     model.load_state_dict(state, strict=True)
     model.to(device).eval()
-    for key in ("checkpoint_sha256", "input_files"):
+    for key in ("checkpoint_sha256", "input_files", "znorm_stats"):
         if key in sidecar:
             payload[key] = sidecar[key]
     return model, preprocess, payload
