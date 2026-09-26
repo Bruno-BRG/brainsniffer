@@ -80,8 +80,6 @@ A Tabela~\ref{tab:modelos} resume os dois checkpoints e a Figura~\ref{fig:pipeli
 \begin{table}[H]
 \centering
 \small
-\caption{Definição conceitual dos dois checkpoints.}
-\label{tab:modelos}
 \begin{tabular}{p{0.25\columnwidth}p{0.29\columnwidth}p{0.37\columnwidth}}
 \hline
 Modelo & Treinado com & Avaliado em\\
@@ -90,6 +88,8 @@ Modelo A -- Figshare (ativo) & Figshare & Figshare (holdout por caso) e VitalDB 
 Modelo B -- misto & Figshare + parte do VitalDB & Figshare (benchmark histórico) e VitalDB (holdout histórico por participante)\\
 \hline
 \end{tabular}
+\caption{Definição conceitual dos dois checkpoints.}
+\label{tab:modelos}
 \end{table}
 
 \begin{figure}[H]
@@ -120,8 +120,6 @@ A CNN histórica recebe a janela de 640 amostras em um canal, é treinada com pe
 \begin{table}[H]
 \centering
 \footnotesize
-\caption{Configuração histórica dos checkpoints.}
-\label{tab:config}
 \begin{tabular}{p{0.28\columnwidth}p{0.63\columnwidth}}
 \hline
 Item & Configuração registrada\\
@@ -134,11 +132,13 @@ Amplitude e \textit{notch} & \textit{Clip} $\pm100\,\mu V$, divisor de escala $5
 \textit{Random Forest} & 100 árvores, profundidade máxima 12, mínimo de 2 amostras por folha, semente 42\\
 \hline
 \end{tabular}
+\caption{Configuração histórica dos checkpoints.}
+\label{tab:config}
 \end{table}
 
 A arquitetura compacta permite replay em CPU, sem superioridade presumida sobre alternativas \cite{park2020,shi2023}.
 
-Como controle, o baseline espectral resume cada janela em 14 atributos (potências de delta a gama, SEF90, entropia, RMS e \textit{line length}) com floresta aleatória (Tabela~\ref{tab:config}), nas mesmas janelas e partição do holdout: se o espectro já alcança erro parecido, a CNN precisa se justificar.
+Como controle simples, o baseline espectral resume cada janela de 5~s em 14 atributos clássicos: potências absoluta e relativa das bandas delta (0,5--4 Hz), teta (4--8 Hz), alfa (8--13 Hz), beta (13--30 Hz) e gama (30--45 Hz), frequência de borda espectral em 90\% (SEF90), entropia espectral, valor eficaz (RMS) e \textit{line length}. Uma floresta aleatória (\textit{Random Forest}, configuração na Tabela~\ref{tab:config}) é ajustada nas mesmas 15.894 janelas de treino e avaliada nas mesmas 5.523 janelas de teste do holdout Figshare, sem acesso a informação adicional e herdando a mesma proteção contra vazamento da partição agrupada por caso. O controle responde a uma pergunta prática: se poucas medidas de espectro já alcançam erro parecido, a complexidade da CNN precisa ser justificada; se a CNN supera o controle, há indício de que a representação aprendida captura estrutura além do espectro clássico.
 
 \subsection{Métricas, incerteza e análises exploratórias}
 
@@ -168,8 +168,6 @@ No holdout Figshare do checkpoint ativo, cinco casos e 5.523 janelas produziram 
 
 \begin{table}[H]
 \centering
-\caption{Holdout Figshare comum (5 casos, 5.523 janelas; MAE e RMSE em pontos BIS).}
-\label{tab:figshare-baseline}
 \begin{tabular}{lrrrrr}
 \hline
 Modelo & MAE & RMSE & Pearson & Acurácia & Macro-F1\\
@@ -178,9 +176,11 @@ CNN ativa & 7,03 & 11,08 & 0,784 & 0,585 & 0,548\\
 Baseline espectral & 8,86 & 13,23 & 0,667 & 0,540 & 0,480\\
 \hline
 \end{tabular}
+\caption{Holdout Figshare comum (5 casos, 5.523 janelas; MAE e RMSE em pontos BIS).}
+\label{tab:figshare-baseline}
 \end{table}
 
-A Figura~\ref{fig:trajectory} mostra que a CNN superestima o patamar intermediário do caso 19 (850 janelas: MAE 8,72, viés $+4{,}79$, Pearson 0,910): associação alta não elimina erro sistemático.
+A Figura~\ref{fig:trajectory} mostra queda inicial e elevação final em ambas as curvas, mas a CNN superestima o patamar intermediário e não reproduz várias oscilações da referência. Nas 850 janelas aceitas, MAE 8,72, RMSE 10,21, viés $+4{,}79$ e Pearson intra-caso 0,910: associação alta não elimina erro sistemático; é exemplo ilustrativo, não evidência de generalização. Das 871 janelas completas, 21 foram rejeitadas por qualidade e 56 posições ficaram sem previsão (NaN).
 
 \begin{figure}[H]
 \centering
@@ -197,8 +197,6 @@ O misto obteve 6,69/0,818 no Figshare e 8,60/0,688 no VitalDB; o ativo, 7,03/0,7
 \centering
 \footnotesize
 \setlength{\tabcolsep}{1pt}
-\caption{Comparação retrospectiva nos benchmarks históricos; 5 casos no \mbox{benchmark} Figshare e 15 no VitalDB; MAE em pontos BIS; IC 95\% por bootstrap agrupado por caso; o RF espectral viu apenas o Figshare.}
-\label{tab:benchmarks}
 \begin{tabular}{llrrr}
 \hline
 Benchmark & Modelo (fontes vistas) & MAE (IC 95\%) & Pearson (IC 95\%) & $P_K$ (IC 95\%)\\
@@ -210,6 +208,8 @@ VitalDB & misto (Figshare+VitalDB) & 8,60 (7,57--9,95) & 0,688 (0,606--0,752) & 
 VitalDB & RF espectral & 13,62 (11,98--16,01) & $-0,036$ ($-0,162$--0,111) & 0,502 (0,447--0,551)\\
 \hline
 \end{tabular}
+\caption{Comparação retrospectiva nos benchmarks históricos; 5 casos no \mbox{benchmark} Figshare e 15 no VitalDB; MAE em pontos BIS; IC 95\% por bootstrap agrupado por caso; o RF espectral viu apenas o Figshare.}
+\label{tab:benchmarks}
 \end{table}
 
 O baseline espectral também foi reavaliado nos 15 casos VitalDB, com o mesmo ajuste e protocolo: MAE 13,62 (11,98--16,01), Pearson $-0,04$ e $P_K$ 0,502, no nível do acaso, e a CNN ativa ainda o supera ($\Delta$MAE $-1,19$; IC $-2,13$--$-0,34$); o colapso no transporte não é específico da CNN. No bootstrap pareado por caso ($\Delta$ $=$ ativo $-$ misto), o misto melhora o VitalDB ($\Delta$MAE $+3,83$, IC $2,95$--$4,94$; $\Delta P_K$ $-0,157$, IC $-0,216$--$-0,083$; 14/15 casos, $p<0{,}001$), enquanto no Figshare MAE e $P_K$ não sustentam ganho ($\Delta$MAE $0,34$, IC $-0,28$--$0,81$; $\Delta P_K$ IC $-0,013$--$0,007$).
@@ -264,8 +264,6 @@ Para testar se as escolhas do modelo contemporâneo transferem ganho para esta c
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\caption{Braços fatoriais novos (brutos, sem EWMA); MAE em pontos BIS; IC 95\% por bootstrap agrupado por caso; CCC é o coeficiente de Lin.}
-\label{tab:fatorial}
 \begin{tabular}{llrrrr}
 \hline
 Benchmark & Braço & MAE (IC 95\%) & Pearson & CCC & $P_K$\\
@@ -280,6 +278,8 @@ VitalDB & C (Huber+longo) & 12,61 (11,40--14,22) & 0,145 & 0,134 & 0,553\\
 VitalDB & D (z por sujeito) & 12,41 (11,35--13,67) & 0,185 & 0,168 & 0,536\\
 \hline
 \end{tabular}
+\caption{Braços fatoriais novos (brutos, sem EWMA); MAE em pontos BIS; IC 95\% por bootstrap agrupado por caso; CCC é o coeficiente de Lin.}
+\label{tab:fatorial}
 \end{table}
 
 O treino longo aproxima esta cadeia da faixa publicada (6,63 contra 6,03 $\pm$ 0,38), mas o transporte genuíno Figshare--VitalDB segue ausente (12,4--12,6 contra 8,60 do misto, que viu a fonte).
@@ -293,8 +293,6 @@ A Tabela~\ref{tab:ewma} e a Figura~\ref{fig:ewma} mostram a varredura de spans (
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{Efeito do EWMA causal por caso; MAE em pontos BIS; predições congeladas, sem retreino.}
-\label{tab:ewma}
 \begin{tabular}{llrrrr}
 \hline
 Benchmark & Braço & Bruto & Span 5 & Span 10 & Span 15\\
@@ -307,6 +305,8 @@ VitalDB & misto & 8,60 & 7,95 & 7,89 & 7,93\\
 VitalDB & RF espectral & 13,62 & 12,75 & 12,62 & 12,58\\
 \hline
 \end{tabular}
+\caption{Efeito do EWMA causal por caso; MAE em pontos BIS; predições congeladas, sem retreino.}
+\label{tab:ewma}
 \end{table}
 
 \begin{figure}[H]
@@ -318,7 +318,7 @@ VitalDB & RF espectral & 13,62 & 12,75 & 12,62 & 12,58\\
 
 \subsection{Corpus e calibração}
 
-A Figura~\ref{fig:corpus}a separa os 59 casos em três estados mutuamente exclusivos por fonte: 33 elegíveis de desenvolvimento (23 Figshare e 10 VitalDB), 11 em quarentena de desenvolvimento (1 Figshare e 10 VitalDB, como o Figshare 24, de escala incompatível) e 15 do benchmark histórico congelado, todos do VitalDB e fora do pool; 9 desses 15 reprovam nos gates internos, mas permanecem no benchmark por desenho. A Figura~\ref{fig:corpus}b cruza a fração de amostras finitas com a fração de janelas aceitas e mostra por que os gates não são redundantes. A Figura~\ref{fig:training}a acompanha o treino: a perda cai de 6,2 para 4,7 em dez épocas, o MAE de validação oscila entre 5,49 e 6,38, e o checkpoint salvo é o de melhor validação (época 3). O painel (b) traz a calibração medida: a inclinação predito--referência cai de 0,72 (0,61--0,80) no Figshare ativo para 0,02 ($-0,08$--0,13) no VitalDB ativo, com ICC(2,1) 0,02 e 57,2\% das janelas com $|erro|\leq10$; o misto recupera 0,55 (0,46--0,64), ICC 0,67 e 68,9\%, ainda abaixo do Figshare (misto: 0,82, ICC 0,81 e 80,6\%).
+O corpus tem 59 casos: 33 elegíveis (23 Figshare e dez VitalDB), 11 em quarentena (incluindo o Figshare 24, de escala incompatível) e 15 VitalDB congelados para o benchmark, dos quais 9 reprovam nos gates internos por desenho (Figura~\ref{fig:corpus}). No treino do ativo, a perda cai de 6,2 para 4,7 em dez épocas (melhor validação na época 3); a inclinação predito--referência cai de 0,72 (0,61--0,80) no Figshare ativo para 0,02 ($-0,08$--0,13) no VitalDB ativo, com ICC(2,1) 0,02 e 57,2\% das janelas com $|erro|\leq10$, e o misto recupera 0,55 (0,46--0,64), ICC 0,67 e 68,9\% (Figura~\ref{fig:training}). A calibração do Figshare com o misto chega a 0,82 de inclinação, ICC 0,81 e 80,6\% das janelas com $|erro|\leq10$.
 
 \begin{figure}[H]
 \centering
@@ -349,7 +349,7 @@ A leitura ordinal separa dois diagnósticos: no VitalDB o ativo tem $P_K$ 0,515,
 
 \section{Conclusão}
 
-O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente, mas perdeu associação no VitalDB; o misto reduziu o erro após exposição a esse domínio, sem independência confirmatória e sem diferença sustentada no Figshare. Com a suavização causal exploratória, o misto alcança 5,68--5,84 no Figshare agrupado (5,84 com IC 95\% 4,56--7,62 no span de referência 10), dentro das 10 unidades de variabilidade do próprio monitor \cite{harada2021} e na faixa do modelo contemporâneo sob validação agrupada \cite{sukriti2026}, com 0,15 milhão de parâmetros (cerca de sete vezes menos) e dez épocas; o treino longo com Huber chega a 6,63 brutos. Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelos casos, pelo reuso dos benchmarks e pela imputação offline.
+O BrainSniffer entrega um protótipo aberto e reproduzível para estimar uma referência BIS a partir de EEG frontal. Como sintetizado na Seção~\ref{sec:resultados}, o ativo superou o baseline espectral internamente (MAE 7,03 contra 8,86, $\Delta$ pareado $-1{,}84$), mas perdeu associação no VitalDB ($P_K$ no acaso); o misto reduziu o erro após exposição a esse domínio (8,60, 14/15 casos), sem independência confirmatória e sem diferença sustentada no Figshare. Com a suavização causal exploratória, o misto alcança 5,68--5,84 no Figshare agrupado (5,84 com IC 95\% 4,56--7,62 no span de referência 10), dentro das 10 unidades de variabilidade do próprio monitor \cite{harada2021} e na faixa do modelo contemporâneo sob validação agrupada \cite{sukriti2026}, com 0,15 milhão de parâmetros (cerca de sete vezes menos) e dez épocas; o treino longo com Huber chega a 6,63 brutos (IC 6,03--7,67). Os resultados são retrospectivos, exploratórios e limitados pelo rótulo, pelos casos, pelo reuso dos benchmarks e pela imputação offline.
 
 A contribuição defensável é uma base auditável para formular e testar hipóteses, não um sistema clínico. O software não mede consciência, não prescreve dose, não controla bomba e não deve acionar alarme ou conduta; uma futura alegação de generalização exigiria avaliação independente \cite{tripodai}.
 
