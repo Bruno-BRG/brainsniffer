@@ -63,14 +63,14 @@ ARMS: dict[str, dict[str, object]] = {
         "checkpoint": "models/brainsniffer_expA_baseline.pt",
     },
     "B": {
-        "label": "A + winsor +/-200uV, clip 200uV",
-        "preprocess": PreprocessConfig(winsor_uv=200.0, clip_uv=200.0),
+        "label": "A + winsor +/-200uV, clip 300uV",
+        "preprocess": PreprocessConfig(winsor_uv=200.0, clip_uv=300.0),
         "training": TrainingConfig(),
         "checkpoint": "models/brainsniffer_expB_winsor.pt",
     },
     "C": {
         "label": "B + Huber(d=5), 120ep, patience 18, batch 64",
-        "preprocess": PreprocessConfig(winsor_uv=200.0, clip_uv=200.0),
+        "preprocess": PreprocessConfig(winsor_uv=200.0, clip_uv=300.0),
         "training": TrainingConfig(
             epochs=120,
             batch_size=64,
@@ -83,7 +83,7 @@ ARMS: dict[str, dict[str, object]] = {
     },
     "D": {
         "label": "C + z-score por sujeito (estatistica do treino)",
-        "preprocess": PreprocessConfig(winsor_uv=200.0, clip_uv=200.0),
+        "preprocess": PreprocessConfig(winsor_uv=200.0, clip_uv=300.0),
         "training": TrainingConfig(
             epochs=120,
             batch_size=64,
