@@ -117,8 +117,8 @@ Cada exemplo é um trecho curto de EEG frontal em microvolts: 640 amostras, isto
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.70\columnwidth]{figures/eeg_windows.pdf}
-\caption{Janelas reais do caso 19 antes (bruto, em $\mu V$) e depois do pipeline causal; a janela com pico mostra o efeito do clip, filtro e escala.}
+\includegraphics[width=0.78\columnwidth]{figures/eeg_windows.pdf}
+\caption{Janelas reais do caso 19: linha de cima, trecho limpo (BIS 30); linha de baixo, trecho com pico (BIS 75). Coluna da esquerda, sinal bruto; coluna da direita, após clip, filtro causal e escala. O pico de 125 $\mu V$ é contido para 88 $\mu V$; o trecho limpo quase não muda.}
 \label{fig:eeg}
 \end{figure}
 
@@ -232,9 +232,9 @@ O baseline espectral também foi reavaliado nos 15 casos VitalDB, com o mesmo aj
 \label{fig:comparison}
 \end{figure}
 
-\subsection{Probabilidade de predição $P_K$}
+\subsection{Ordenação, incerteza e alinhamento}
 
-No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835). O achado desta seção está na leitura conjunta com a Tabela~\ref{tab:benchmarks}: o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818), mas mantém $P_K$ praticamente idêntico (0,773 para 0,774): não há evidência de mudança na ordenação, e as diferenças são pequenas frente à incerteza dos intervalos. No VitalDB, o ativo tem $P_K$ 0,515 (0,434--0,581), indistinguível do acaso, e o misto 0,672 (0,591--0,737). Como $P_K$ ignora erro sistemático, ele separa duas leituras que o MAE confunde \cite{smith1996}. Por caso, o $P_K$ do ativo no VitalDB varia de 0,39 a 0,74 (mediana 0,48) e o do misto, de 0,48 a 0,81 (mediana 0,67); no Figshare, as medianas por caso são 0,80 (ativo) e 0,81 (misto), próximas aos agregados 0,773 e 0,774.
+No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o misto 0,774 (0,676--0,835): o misto reduz o MAE (7,03 para 6,69) e eleva o Pearson (0,784 para 0,818) sem mudar a ordenação, e as diferenças são pequenas frente aos intervalos. No VitalDB, o ativo fica no acaso (0,515) e o misto em 0,672; por caso, medianas 0,48 e 0,67 (no Figshare, 0,80 e 0,81) \cite{smith1996}. A Figura~\ref{fig:bootstrap} reúne os intervalos de 95\% (barras: réplicas; marcadores: observados). Na grade de offset ($-20$ a $+20$ s, sem retreino), o MAE variou de 7,22 a 6,76 (Figura~\ref{fig:offset}): tendência pós-hoc, sem valor causal e sem mudar o offset zero \cite{pilge2006}.
 
 \begin{figure}[H]
 \centering
@@ -243,19 +243,12 @@ No Figshare (Figura~\ref{fig:pk}), o ativo obtém $P_K$ 0,773 (0,679--0,828) e o
 \label{fig:pk}
 \end{figure}
 
-
-\subsection{Bootstrap agrupado e sensibilidade ao offset}
-
-A Tabela~\ref{tab:benchmarks} reúne os intervalos de 95\%; na Figura~\ref{fig:bootstrap}, as barras são réplicas e os marcadores, as métricas observadas.
-
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.64\columnwidth]{figures/bootstrap_intervals.pdf}
 \caption{Bootstrap agrupado por caso.}
 \label{fig:bootstrap}
 \end{figure}
-
-Na grade de offset, o ativo variou de MAE 7,22/Pearson 0,766 em $-20$ s para 7,03/0,784 em 0 s e 6,76/0,799 em $+20$ s. Um offset positivo associa a janela EEG a um BIS posterior. A Figura~\ref{fig:offset} mostra essa grade. A tendência foi observada pós-hoc, sem retreino, e não identifica causalmente atraso do monitor nem autoriza mudar o offset padrão. Contexto sobre atraso de índices processados em \cite{pilge2006}.
 
 \begin{figure}[H]
 \centering
