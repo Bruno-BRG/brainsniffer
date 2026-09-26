@@ -1,0 +1,300 @@
+{
+  "analysis": "experimento Sukriti-inspired (braco novo, sem retreino historico)",
+  "arm": "B",
+  "benchmark": "vitaldb_external",
+  "benchmark_case_ids": [
+    "vitaldb_case1",
+    "vitaldb_case10",
+    "vitaldb_case12",
+    "vitaldb_case13",
+    "vitaldb_case14",
+    "vitaldb_case16",
+    "vitaldb_case17",
+    "vitaldb_case2",
+    "vitaldb_case3",
+    "vitaldb_case4",
+    "vitaldb_case5",
+    "vitaldb_case6",
+    "vitaldb_case7",
+    "vitaldb_case8",
+    "vitaldb_case9"
+  ],
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "case_bootstrap": {
+    "bias": {
+      "lower_95": -4.995368973226,
+      "mean": -1.415984921949,
+      "upper_95": 2.943728629886
+    },
+    "ccc": {
+      "lower_95": 0.069586342508,
+      "mean": 0.191457850568,
+      "upper_95": 0.329498825546
+    },
+    "mae": {
+      "lower_95": 10.892988473873,
+      "mean": 12.120616912605,
+      "upper_95": 13.742137906724
+    },
+    "pearson_r": {
+      "lower_95": 0.091023879044,
+      "mean": 0.236390484109,
+      "upper_95": 0.393096209257
+    },
+    "rmse": {
+      "lower_95": 14.830013784347,
+      "mean": 16.552422946054,
+      "upper_95": 18.64030066857
+    },
+    "stage_accuracy": {
+      "lower_95": 0.281261419671,
+      "mean": 0.402765600672,
+      "upper_95": 0.535751067699
+    },
+    "stage_macro_f1": {
+      "lower_95": 0.296594081645,
+      "mean": 0.369235314917,
+      "upper_95": 0.447085342625
+    }
+  },
+  "checkpoint": "models/brainsniffer_expB_winsor.pt",
+  "checkpoint_sha256": "d6b4480347bd4c2199d904667eb200dfbaf9c3aaa23bae27a79e238ab89446db",
+  "mean_per_case_mae": 13.435161340807,
+  "median_per_case_mae": 13.156534527186,
+  "metrics": {
+    "bias": -1.506748763913,
+    "ccc": 0.194448860048,
+    "mae": 12.037770504953,
+    "n": 39012.0,
+    "pearson_r": 0.238131646413,
+    "rmse": 16.478671087447,
+    "stage_accuracy": 0.407900133292,
+    "stage_macro_f1": 0.377407141029
+  },
+  "min_quality": 0.2,
+  "n_cases": 15,
+  "n_windows": 39012,
+  "per_case": [
+    {
+      "bias": -4.999001345701,
+      "case_id": "vitaldb_case1",
+      "ccc": -0.119598830013,
+      "mae": 16.307682810558,
+      "n": 2304.0,
+      "n_windows": 2304,
+      "pearson_r": -0.163107028897,
+      "pk": 0.408836767991,
+      "rmse": 20.686279518392,
+      "stage_accuracy": 0.1953125,
+      "stage_macro_f1": 0.247650034038
+    },
+    {
+      "bias": -10.159153618734,
+      "case_id": "vitaldb_case10",
+      "ccc": 0.067536719884,
+      "mae": 12.843079520329,
+      "n": 4193.0,
+      "n_windows": 4193,
+      "pearson_r": 0.119305788398,
+      "pk": 0.476139585322,
+      "rmse": 15.190060754484,
+      "stage_accuracy": 0.082518483186,
+      "stage_macro_f1": 0.175009117654
+    },
+    {
+      "bias": -7.98167396024,
+      "case_id": "vitaldb_case12",
+      "ccc": 0.053054497928,
+      "mae": 10.349084316776,
+      "n": 6233.0,
+      "n_windows": 6233,
+      "pearson_r": 0.127122075234,
+      "pk": 0.717021627116,
+      "rmse": 12.506834395547,
+      "stage_accuracy": 0.312048772662,
+      "stage_macro_f1": 0.153378530585
+    },
+    {
+      "bias": 12.18852020269,
+      "case_id": "vitaldb_case13",
+      "ccc": 0.219647641673,
+      "mae": 16.69969112969,
+      "n": 2138.0,
+      "n_windows": 2138,
+      "pearson_r": 0.41847998146,
+      "pk": 0.443305921848,
+      "rmse": 23.029294135209,
+      "stage_accuracy": 0.619270346118,
+      "stage_macro_f1": 0.420473546263
+    },
+    {
+      "bias": 7.611801978869,
+      "case_id": "vitaldb_case14",
+      "ccc": 0.11631972875,
+      "mae": 18.7105437408,
+      "n": 819.0,
+      "n_windows": 819,
+      "pearson_r": 0.186238103193,
+      "pk": 0.504354313951,
+      "rmse": 24.573561165844,
+      "stage_accuracy": 0.340659340659,
+      "stage_macro_f1": 0.322196610365
+    },
+    {
+      "bias": -0.356755807364,
+      "case_id": "vitaldb_case16",
+      "ccc": 0.435040545278,
+      "mae": 8.096535973161,
+      "n": 2569.0,
+      "n_windows": 2569,
+      "pearson_r": 0.486955404359,
+      "pk": 0.642998631316,
+      "rmse": 12.579394534209,
+      "stage_accuracy": 0.643051771117,
+      "stage_macro_f1": 0.452502696345
+    },
+    {
+      "bias": 6.623145469549,
+      "case_id": "vitaldb_case17",
+      "ccc": 0.200351585953,
+      "mae": 11.011449270795,
+      "n": 4069.0,
+      "n_windows": 4069,
+      "pearson_r": 0.309054279572,
+      "pk": 0.433687735709,
+      "rmse": 15.045530179905,
+      "stage_accuracy": 0.362742688621,
+      "stage_macro_f1": 0.315390956159
+    },
+    {
+      "bias": -8.851578686393,
+      "case_id": "vitaldb_case2",
+      "ccc": 0.238673201069,
+      "mae": 13.156534527186,
+      "n": 3146.0,
+      "n_windows": 3146,
+      "pearson_r": 0.3599717542,
+      "pk": 0.734500920643,
+      "rmse": 15.94215244889,
+      "stage_accuracy": 0.156706929434,
+      "stage_macro_f1": 0.270946630595
+    },
+    {
+      "bias": 9.607635406074,
+      "case_id": "vitaldb_case3",
+      "ccc": 0.441782988607,
+      "mae": 14.913884842847,
+      "n": 871.0,
+      "n_windows": 871,
+      "pearson_r": 0.570041985952,
+      "pk": 0.506685569883,
+      "rmse": 21.875830047423,
+      "stage_accuracy": 0.369690011481,
+      "stage_macro_f1": 0.3756897302
+    },
+    {
+      "bias": 0.69331941878,
+      "case_id": "vitaldb_case4",
+      "ccc": 0.561035258287,
+      "mae": 10.119488204712,
+      "n": 4151.0,
+      "n_windows": 4151,
+      "pearson_r": 0.620492180129,
+      "pk": 0.473393767657,
+      "rmse": 13.923639145287,
+      "stage_accuracy": 0.57769212238,
+      "stage_macro_f1": 0.378614823736
+    },
+    {
+      "bias": -3.001413629023,
+      "case_id": "vitaldb_case5",
+      "ccc": -0.032906795775,
+      "mae": 9.529332136792,
+      "n": 4303.0,
+      "n_windows": 4303,
+      "pearson_r": -0.087515825015,
+      "pk": 0.521568611064,
+      "rmse": 14.779919867744,
+      "stage_accuracy": 0.810597257727,
+      "stage_macro_f1": 0.254552789786
+    },
+    {
+      "bias": -8.273850302387,
+      "case_id": "vitaldb_case6",
+      "ccc": 0.020733112683,
+      "mae": 15.315598206554,
+      "n": 695.0,
+      "n_windows": 695,
+      "pearson_r": 0.026732049291,
+      "pk": 0.585019923626,
+      "rmse": 20.019825789114,
+      "stage_accuracy": 0.329496402878,
+      "stage_macro_f1": 0.216100300729
+    },
+    {
+      "bias": 3.323660299719,
+      "case_id": "vitaldb_case7",
+      "ccc": 0.31680101334,
+      "mae": 9.074282478428,
+      "n": 1444.0,
+      "n_windows": 1444,
+      "pearson_r": 0.386518030616,
+      "pk": 0.564252154658,
+      "rmse": 15.401500778816,
+      "stage_accuracy": 0.523545706371,
+      "stage_macro_f1": 0.471922707883
+    },
+    {
+      "bias": 10.138469084064,
+      "case_id": "vitaldb_case8",
+      "ccc": 0.095332674154,
+      "mae": 14.746646769357,
+      "n": 1182.0,
+      "n_windows": 1182,
+      "pearson_r": 0.155248590038,
+      "pk": 0.522068423271,
+      "rmse": 21.211045948456,
+      "stage_accuracy": 0.407783417936,
+      "stage_macro_f1": 0.300475571726
+    },
+    {
+      "bias": 5.855358722623,
+      "case_id": "vitaldb_case9",
+      "ccc": 0.17859659971,
+      "mae": 20.653586184113,
+      "n": 895.0,
+      "n_windows": 895,
+      "pearson_r": 0.279089819848,
+      "pk": 0.56289347026,
+      "rmse": 25.787263669646,
+      "stage_accuracy": 0.305027932961,
+      "stage_macro_f1": 0.214180534418
+    }
+  ],
+  "pk": 0.527504532786,
+  "pk_bootstrap": {
+    "lower_95": 0.439659272889,
+    "mean": 0.525999686376,
+    "upper_95": 0.595531468363
+  },
+  "prediction_file": "tmp/reanalysis/expB_vitaldb_external.npz",
+  "preprocess_config": {
+    "amplitude_scale_uv": 50.0,
+    "causal": true,
+    "clip_uv": 300.0,
+    "filter_order": 4,
+    "highcut_hz": 45.0,
+    "label_offset_seconds": 0.0,
+    "lowcut_hz": 0.5,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "winsor_uv": 200.0
+  },
+  "raw_eeg_in_report": false,
+  "retrained": true,
+  "scope": "research_only",
+  "znorm_stats_summary": null
+}

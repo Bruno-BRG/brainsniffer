@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "model_name": "Conv1DDepthEstimator",
+  "effective_training": {
+    "device": "cpu",
+    "optimizer": "AdamW",
+    "loss": "SmoothL1Loss",
+    "scheduler": {
+      "name": "ReduceLROnPlateau",
+      "mode": "min",
+      "factor": 0.5,
+      "patience": 2,
+      "min_lrs": [
+        1e-06
+      ],
+      "threshold": 0.0001,
+      "threshold_mode": "rel",
+      "cooldown": 0,
+      "eps": 1e-08,
+      "final_learning_rates": [
+        0.0005
+      ]
+    },
+    "gradient_clip_norm": 1.0,
+    "mixed_precision": false,
+    "amp_dtype": null,
+    "deterministic_algorithms": true,
+    "deterministic_warn_only": true,
+    "cudnn_deterministic": true,
+    "cudnn_benchmark": false
+  },
+  "preprocess_config": {
+    "sampling_rate": 128,
+    "window_seconds": 5.0,
+    "lowcut_hz": 0.5,
+    "highcut_hz": 45.0,
+    "notch_hz": 50.0,
+    "notch_quality": 30.0,
+    "filter_order": 4,
+    "amplitude_scale_uv": 50.0,
+    "clip_uv": 300.0,
+    "winsor_uv": 200.0,
+    "causal": true,
+    "label_offset_seconds": 0.0
+  },
+  "training_config": {
+    "epochs": 10,
+    "batch_size": 128,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "loss_name": "smooth_l1",
+    "loss_huber_delta": 5.0,
+    "validation_fraction": 0.2,
+    "test_fraction": 0.2,
+    "seed": 42,
+    "device": "auto",
+    "num_workers": 0,
+    "balance_groups": false,
+    "balance_sources": false,
+    "early_stopping_patience": 5,
+    "early_stopping_min_delta": 0.0001,
+    "scheduler_factor": 0.5,
+    "scheduler_patience": 2,
+    "scheduler_min_lr": 1e-06,
+    "gradient_clip_norm": 1.0,
+    "mixed_precision": true,
+    "deterministic": true
+  },
+  "split": {
+    "train_cases": [
+      "figshare:case:case1",
+      "figshare:case:case10",
+      "figshare:case:case11",
+      "figshare:case:case13",
+      "figshare:case:case14",
+      "figshare:case:case17",
+      "figshare:case:case2",
+      "figshare:case:case20",
+      "figshare:case:case21",
+      "figshare:case:case22",
+      "figshare:case:case6",
+      "figshare:case:case7",
+      "figshare:case:case8"
+    ],
+    "validation_cases": [
+      "figshare:case:case12",
+      "figshare:case:case15",
+      "figshare:case:case16",
+      "figshare:case:case18",
+      "figshare:case:case23"
+    ],
+    "test_cases": [
+      "figshare:case:case19",
+      "figshare:case:case3",
+      "figshare:case:case4",
+      "figshare:case:case5",
+      "figshare:case:case9"
+    ]
+  },
+  "validation_metrics": {
+    "n": 9697.0,
+    "mae": 5.6544382800094075,
+    "rmse": 8.996234872321633,
+    "bias": -0.23944428577562749,
+    "pearson_r": 0.7973385202783194,
+    "ccc": 0.7825639740455035,
+    "stage_accuracy": 0.7450757966381355,
+    "stage_macro_f1": 0.5233652215233072
+  },
+  "test_metrics": {
+    "n": 5537.0,
+    "mae": 8.194085872623278,
+    "rmse": 12.869810439029683,
+    "bias": -3.1711119978527353,
+    "pearson_r": 0.6989013383613482,
+    "ccc": 0.6608348868398741,
+    "stage_accuracy": 0.5203178616579375,
+    "stage_macro_f1": 0.4239925006299717
+  },
+  "dataset_summary": {
+    "n_windows": 31252,
+    "n_cases": 23,
+    "n_groups": 23,
+    "window_shape": [
+      1,
+      640
+    ],
+    "stage_counts": {
+      "awake": 2028,
+      "light": 2947,
+      "general": 11582,
+      "deep": 14695
+    },
+    "source_counts": {
+      "Figshare · EEG and BIS raw data": 31252
+    },
+    "quality": {
+      "min": 0.20187793672084808,
+      "mean": 0.6916071909600071,
+      "median": 0.7042253613471985,
+      "max": 0.9906103014945984
+    },
+    "split_unit": "group",
+    "balanced_groups": false,
+    "balanced_sources": false,
+    "split_sizes": {
+      "train": 16018,
+      "validation": 9697,
+      "test": 5537
+    },
+    "mixed_precision": false,
+    "deterministic": true
+  },
+  "min_quality": 0.2,
+  "history": [
+    {
+      "epoch": 1.0,
+      "train_loss": 6.4863379380059625,
+      "validation_mae": 5.6544382800094075,
+      "validation_rmse": 8.996234872321633,
+      "validation_bias": -0.23944428577562749,
+      "validation_pearson_r": 0.7973385202783194,
+      "validation_stage_accuracy": 0.7450757966381355,
+      "validation_stage_macro_f1": 0.5233652215233072,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 2.0,
+      "train_loss": 5.436789291245597,
+      "validation_mae": 6.613892660566835,
+      "validation_rmse": 10.216825419723419,
+      "validation_bias": 3.2319466802426513,
+      "validation_pearson_r": 0.8073220914837858,
+      "validation_stage_accuracy": 0.7402289367845726,
+      "validation_stage_macro_f1": 0.5824866087695005,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 3.0,
+      "train_loss": 5.192240177638947,
+      "validation_mae": 6.086346375397632,
+      "validation_rmse": 8.958769428006324,
+      "validation_bias": 1.394957964034551,
+      "validation_pearson_r": 0.8084543072205248,
+      "validation_stage_accuracy": 0.7597195008765597,
+      "validation_stage_macro_f1": 0.5554640670373655,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 4.0,
+      "train_loss": 5.154515519974724,
+      "validation_mae": 5.731955015771202,
+      "validation_rmse": 9.05885870454242,
+      "validation_bias": -2.00700140338688,
+      "validation_pearson_r": 0.8150244700889264,
+      "validation_stage_accuracy": 0.8191193152521399,
+      "validation_stage_macro_f1": 0.5643991679199547,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 5.0,
+      "train_loss": 4.968550528798785,
+      "validation_mae": 6.456788609368882,
+      "validation_rmse": 9.629226542966013,
+      "validation_bias": 3.9814852124159392,
+      "validation_pearson_r": 0.829057209972046,
+      "validation_stage_accuracy": 0.7386820666185419,
+      "validation_stage_macro_f1": 0.6003843084870998,
+      "learning_rate": 0.0005
+    },
+    {
+      "epoch": 6.0,
+      "train_loss": 4.822192456987169,
+      "validation_mae": 6.34067716792255,
+      "validation_rmse": 9.584387495802046,
+      "validation_bias": 3.4033995092658884,
+      "validation_pearson_r": 0.8197663164562013,
+      "validation_stage_accuracy": 0.746828916159637,
+      "validation_stage_macro_f1": 0.5996874908336396,
+      "learning_rate": 0.0005
+    }
+  ],
+  "environment": {
+    "project": "0.1.0",
+    "python": "3.12.10",
+    "torch": "2.14.0+cpu",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "scikit_learn": "1.9.0",
+    "deterministic_algorithms": "True",
+    "cuda": null,
+    "cudnn": null
+  },
+  "input_files": [
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case1.mat",
+      "size_bytes": 637612,
+      "sha256": "3f96f696d213c96b46fa859dc956fe83d97c9a3a202ba915f996ae88bc7d947e"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case10.mat",
+      "size_bytes": 1263925,
+      "sha256": "a078f8b155f76ff1acd6cea4def151c7064c0fdc0289b086ef5d35dac8928971"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case11.mat",
+      "size_bytes": 2495259,
+      "sha256": "5062172f5fe18c3f8a7fc619fbff0454c77a6fe027c73f74b5ebf3dc72a87c46"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case12.mat",
+      "size_bytes": 3830629,
+      "sha256": "960f993e66dcf7ef6b8c4ef1f1fe7669d0bddff4ead31e6b51c7a752c002bf5f"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case13.mat",
+      "size_bytes": 762725,
+      "sha256": "a51056ac4c2fd745795779f2e79c90bed3be133d9cbf4fcd93467d97823002a8"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case14.mat",
+      "size_bytes": 605803,
+      "sha256": "deb75307a8f3b034afe36840885f30552f15379732081de35682143699a93fc8"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case15.mat",
+      "size_bytes": 2377618,
+      "sha256": "5d3934b75e643ffbad081f6edad0590f0a6a63a06085cc5b516dc0c32cad48bd"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case16.mat",
+      "size_bytes": 1204478,
+      "sha256": "26c8af1d5fbc20903cde61360ca3270758d2db15293565f9ff3f51cbac8e74a5"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case17.mat",
+      "size_bytes": 1292068,
+      "sha256": "75ff2745e1bf86fa0ae6fbb37c677277d3144e68c283bc4c15df34925d60f679"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case18.mat",
+      "size_bytes": 667899,
+      "sha256": "956594dff43f71f02341da3adc50e462bf01fa293a6851c6000192f27e3215ce"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case19.mat",
+      "size_bytes": 786271,
+      "sha256": "8d681e6704227659bf008554e9a9fd649adc2380528e7d82820fce168c721ad1"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case2.mat",
+      "size_bytes": 906024,
+      "sha256": "c360d742903ffcfe37208df1b561afc7438a95a0162fa83233999cd5ece4481e"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case20.mat",
+      "size_bytes": 1612058,
+      "sha256": "8fdda9fb089c9bc93213797353bd6ea8772cfaa6644181f4c52f635c2c628c54"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case21.mat",
+      "size_bytes": 1577358,
+      "sha256": "31eb4ce744f711017bb5f68f2286e20ce90398d890e2ac36f7182b9b6a5a2f1c"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case22.mat",
+      "size_bytes": 400422,
+      "sha256": "a85dd87cc4e4beab55239a1edf223afda21b77e1d0ff86fdeaff07180f62d97a"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case23.mat",
+      "size_bytes": 972095,
+      "sha256": "ac6ae02e368d0d71c5e24b5bc922a134fb633fa33dccb75b5dc8041b9d299f3a"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case24.mat",
+      "size_bytes": 526063,
+      "sha256": "b5f2dc548bdf7bfb9f16af1e9a095c58e113efaa8188be015c8964f716de918d"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case3.mat",
+      "size_bytes": 2050259,
+      "sha256": "83e086d5aab4f2e91be004aa19c144922b32bef546e0aa7367923c33b59bc990"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case4.mat",
+      "size_bytes": 671014,
+      "sha256": "71d72ee18301995a83506fa0173a102d3d176789f22cbdee70e5598af5e4c45c"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case5.mat",
+      "size_bytes": 466317,
+      "sha256": "596694eb9d197ee1910cc63eb85fa3dee2b6053caeb6efe68cdde01228d9b4de"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case6.mat",
+      "size_bytes": 859237,
+      "sha256": "25b3ad78b9cb5be5fc64c774479ba52b6e975ed96c86555838b76140c0239f85"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case7.mat",
+      "size_bytes": 1140316,
+      "sha256": "23a7a61444838ee90915de986ba4e82074d8a223e4b0d5c44206e356844f5f95"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case8.mat",
+      "size_bytes": 1581977,
+      "sha256": "1ed4c6b8f639790c4bd46235754bc8e3c1c0a729d1186cd45a5f714e0c16fd9f"
+    },
+    {
+      "path": "C:\\Users\\Chari\\OneDrive\\Documentos\\dev\\brainsniffer\\data\\raw\\case9.mat",
+      "size_bytes": 1119914,
+      "sha256": "d64d03c87ca1232a51f89a676070a6e7c8c97e090cd99d44cf3463b611dfb8fc"
+    }
+  ],
+  "corpus_manifest": null,
+  "split_unit": "group",
+  "best_epoch": 1,
+  "stopped_early": true,
+  "mixed_precision": false,
+  "split_sizes": {
+    "train": 16018,
+    "validation": 9697,
+    "test": 5537
+  },
+  "checkpoint_sha256": "d6b4480347bd4c2199d904667eb200dfbaf9c3aaa23bae27a79e238ab89446db"
+}
