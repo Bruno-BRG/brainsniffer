@@ -106,8 +106,8 @@ def test_winsor_clips_extremes_before_scale_on_both_paths():
     # Offline (zero-phase) e streaming (causal) divergem por desenho no filtro
     # e na remocao de mediana; o que o winsor precisa garantir em cada caminho
     # e saida finita, limitada e sensivel ao limiar (efeito real, nao no-op).
-    config = PreprocessConfig(winsor_uv=200.0, clip_uv=200.0)
-    plain = PreprocessConfig(winsor_uv=None, clip_uv=200.0)
+    config = PreprocessConfig(winsor_uv=200.0, clip_uv=300.0)
+    plain = PreprocessConfig(winsor_uv=None, clip_uv=300.0)
     rng = np.random.default_rng(42)
     raw = rng.normal(0, 30, size=config.window_samples).astype(np.float64)
     raw[::53] = 1500.0
