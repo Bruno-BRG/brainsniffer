@@ -21,12 +21,29 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.legend_handler import HandlerTuple
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports"
 OUTPUT = Path(__file__).resolve().parent / "figures"
+
+# Paleta Okabe-Ito, segura para daltonismo. A cor e' reforco, nunca o unico canal:
+# cada serie mantem marcador e estilo de linha proprios, entao a leitura sobrevive
+# a uma impressao em preto e branco (ver docs/figures/README.md).
+COLOR_ACTIVE = "#0072B2"  # azul: checkpoint ativo (treinado so no Figshare)
+COLOR_MIXED = "#D55E00"  # vermelho: candidato misto
+COLOR_BASELINE = "#009E73"  # verde: baseline espectral (RF)
+COLOR_REFERENCE = "#333333"  # cinza escuro: rotulo de referencia, sem arm
+# Azul-claro de Okabe-Ito para a predicao bruta na trajetoria. O bruto e o EWMA
+# saem do mesmo checkpoint, entao os dois sao azuis; sem um tom separado as duas
+# curvas se confundem onde andam juntas. O tom claro tambem abre 70 pontos de
+# luminancia em relacao ao azul cheio, que e' o que sobrevive em preto e branco.
+COLOR_CNN_RAW = "#56B4E9"
+COLOR_ELEGIBLE = "#0072B2"  # barras/rotulos do pool elegivel
+COLOR_QUARANTINE = "#E69F00"  # ambar: quarentena de desenvolvimento
+COLOR_FROZEN = "#9E9E9E"  # cinza: congelados fora do pool
 
 REPORT_FILES = (
     "corpus_manifest.json",
@@ -54,15 +71,15 @@ MODEL_FILES = ("brainsniffer_cnn.json", "brainsniffer_corpus_fixed.json")
 
 CALIBRATION_FILE = "calibration_analysis.json"
 # Ordem de exibição (Figshare em cima, VitalDB embaixo): braço, rótulo, marcador,
-# cor, estilo do IC e preenchimento do marcador. Marcadores separam CNN ativo
-# (círculo), CNN misto (quadrado) e baseline espectral (diamante) em preto e branco.
+# cor, estilo do IC e preenchimento do marcador. Cor e marcador separam CNN ativo
+# (círculo azul), CNN misto (quadrado vermelho) e baseline espectral (diamante verde).
 CALIBRATION_ARMS = (
-    ("cnn_active_figshare", "Figshare (ativo)", "o", "#000000", "-", True),
-    ("cnn_mixed_figshare", "Figshare (misto)", "s", "#555555", "--", False),
-    ("rf_spectral_figshare", "Figshare (RF espectral)", "D", "#666666", ":", True),
-    ("cnn_active_vitaldb", "VitalDB (ativo)", "o", "#000000", "-", True),
-    ("cnn_mixed_vitaldb", "VitalDB (misto)", "s", "#555555", "--", False),
-    ("rf_spectral_vitaldb", "VitalDB (RF espectral)", "D", "#666666", ":", True),
+    ("cnn_active_figshare", "Figshare (ativo)", "o", COLOR_ACTIVE, "-", True),
+    ("cnn_mixed_figshare", "Figshare (misto)", "s", COLOR_MIXED, "--", False),
+    ("rf_spectral_figshare", "Figshare (RF espectral)", "D", COLOR_BASELINE, ":", True),
+    ("cnn_active_vitaldb", "VitalDB (ativo)", "o", COLOR_ACTIVE, "-", True),
+    ("cnn_mixed_vitaldb", "VitalDB (misto)", "s", COLOR_MIXED, "--", False),
+    ("rf_spectral_vitaldb", "VitalDB (RF espectral)", "D", COLOR_BASELINE, ":", True),
 )
 CALIBRATION_CROSSCHECKS = (
     ("cnn_active_figshare", "figshare_holdout_evaluation.json"),
@@ -90,15 +107,29 @@ EWMA_ARMS = (
      "rf_spectral_vitaldb", None),
 )
 EWMA_SPANS = (1, 2, 3, 5, 10, 15)
-EWMA_BOOTSTRAP_SPANS = (1, 10)
+EWMA_BOOTSTRAP_SPANS = (1, 5, 10)
 EWMA_BOOTSTRAP_ARMS = ("ativo", "misto")
 EWMA_REFERENCE_SPAN = 10
 EWMA_BENCHMARKS = (("figshare_holdout", "Figshare"), ("vitaldb_external", "VitalDB"))
+# Referência publicada no mesmo corpus com suavização EWMA: TCN-BiLSTM com atenção
+# (Scientific Reports, 2026). O 6,03 +/- 0,38 vem do protocolo por sujeito
+# (GroupKFold), onde o alpha e escolhido por fold e recai com mais frequencia em
+# 0,05 ou 0,10; o alpha converte para span 2/alpha - 1 e para lag medio
+# (1-alpha)/alpha janelas, a mesma definicao usada aqui. Isso situa a suavizacao
+# deles entre 45 e 95 s de idade media -- bem a direita de toda a varredura desta
+# cadeia. O alpha = 0,35 aparece so nas curvas de sensibilidade dos splits
+# aleatorios, outro regime de avaliacao, e por isso nao ancora a comparacao.
+SUKRITI_MAE = 6.03
+SUKRITI_MAE_SD = 0.38
+SUKRITI_ALPHA_MIN = 0.05
+SUKRITI_ALPHA_MAX = 0.10
+SUKRITI_LAG_MIN_SECONDS = 5.0 * (1.0 - SUKRITI_ALPHA_MAX) / SUKRITI_ALPHA_MAX
+SUKRITI_LAG_MAX_SECONDS = 5.0 * (1.0 - SUKRITI_ALPHA_MIN) / SUKRITI_ALPHA_MIN
 # Série da varredura: braço, rótulo, marcador, cor, preenchido, estilo de linha.
 EWMA_SWEEP_STYLE = (
-    ("ativo", "CNN ativo", "o", "#000000", True, "-"),
-    ("misto", "CNN misto", "s", "#555555", False, "--"),
-    ("rf_spectral", "RF espectral", "D", "#666666", True, ":"),
+    ("ativo", "CNN ativo", "o", COLOR_ACTIVE, True, "-"),
+    ("misto", "CNN misto", "s", COLOR_MIXED, False, "--"),
+    ("rf_spectral", "RF espectral", "D", COLOR_BASELINE, True, ":"),
 )
 # Chave no relatório de calibração -> chave no relatório de EWMA.
 EWMA_FOR_CALIBRATION = {
@@ -501,7 +532,7 @@ plt.rcParams.update(
     }
 )
 WIDTH = 15 / 2.54
-COLORS = ("#000000", "#555555")
+COLORS = (COLOR_ACTIVE, COLOR_MIXED)
 MARKERS = ("o", "s")
 LABELS = ("Ativo", "Misto fixo")
 HOLDOUTS = (
@@ -517,8 +548,13 @@ def save_figure(fig, name, sources):
     fig.savefig(
         OUTPUT / f"{name}.png", dpi=300, metadata={"Sources": source_text, "Scope": "research_only"}
     )
+    # O dpi tambem vale para o PDF: sem ele o Matplotlib rasteriza o
+    # espectrograma a 100 dpi (o default de figure.dpi) e a unica parte raster da
+    # figura sai borrada ao lado do texto e das linhas, que sao vetoriais. Nao
+    # encolhe nem engorda as outras oito, que nao tem conteudo rasterizado.
     fig.savefig(
         OUTPUT / f"{name}.pdf",
+        dpi=300,
         metadata={
             "Subject": source_text,
             "CreationDate": None,
@@ -546,24 +582,25 @@ def point(ax, x, y, model, **kwargs):
     )
 
 
-def ewma_point(ax, x, y, model, **kwargs):
+def ewma_marker(model):
     """Marcador do EWMA exploratório: mesma forma do braço, metade esquerda preenchida."""
-    return ax.plot(
-        x,
-        y,
-        marker=MARKERS[model],
-        color=COLORS[model],
-        markerfacecolor=COLORS[model] if model == 0 else "white",
-        markerfacecoloralt="white" if model == 0 else COLORS[model],
-        fillstyle="left",
-        markersize=5.5,
-        linestyle="none",
-        **kwargs,
-    )
+    return {
+        "marker": MARKERS[model],
+        "color": COLORS[model],
+        "markerfacecolor": COLORS[model] if model == 0 else "white",
+        "markerfacecoloralt": "white" if model == 0 else COLORS[model],
+        "fillstyle": "left",
+        "markersize": 5.5,
+        "linestyle": "none",
+    }
+
+
+def ewma_point(ax, x, y, model, **kwargs):
+    return ax.plot(x, y, **ewma_marker(model), **kwargs)
 
 
 def figure_comparison(reports, ewma):
-    fig = plt.figure(figsize=(WIDTH, 4.4), layout="constrained")
+    fig = plt.figure(figsize=(WIDTH, 3.3), layout="constrained")
     grid = fig.add_gridspec(2, 2, width_ratios=(1, 1.35))
     for i, (metric, title, limits) in enumerate(
         (
@@ -632,31 +669,36 @@ def figure_comparison(reports, ewma):
         title="(c) VitalDB: 15 casos pareados",
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
+    # O EWMA vale para os dois bracos, entao a entrada da legenda mostra os dois
+    # marcadores (metade preenchida no circulo do ativo e no quadrado do misto).
+    # Com so o circulo, a legenda dizia que o EWMA existia apenas para o ativo.
     fig.legend(
         handles=[
             *handles,
-            Line2D(
-                [],
-                [],
-                marker="o",
-                color="#000000",
-                markerfacecolor="#000000",
-                markerfacecoloralt="white",
-                fillstyle="left",
-                markersize=5.5,
-                linestyle="none",
-            ),
+            (Line2D([], [], **ewma_marker(0)), Line2D([], [], **ewma_marker(1))),
         ],
         labels=[*LABELS, "EWMA span 10"],
         loc="outside lower center",
         ncol=3,
         frameon=False,
+        handler_map={tuple: HandlerTuple(ndivide=None, pad=0.4)},
     )
     save_figure(fig, "comparison", [f"reports/{n}" for n in (*HOLDOUTS, EWMA_FILE)])
 
 
-def figure_bootstrap(reports, ewma):
-    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 4.4), layout="constrained")
+def figure_bootstrap_offset(reports, ewma):
+    """Incerteza por caso (bootstrap agrupado) e sensibilidade ao offset do rótulo.
+
+    Funde as antigas figuras separadas: os dois painéis de IC 95% por caso ocupam
+    uma linha cada e a varredura de offset divide a terceira linha. Os mesmos
+    relatórios auditados entram, sem recálculo de métrica.
+
+    A varredura de offset tem um único checkpoint (``offset_sensitivity.json``
+    guarda só o ativo), então os dois painéis usam a cor e a forma do ativo; os
+    títulos (c) e (d) é que separam MAE de Pearson.
+    """
+    fig = plt.figure(figsize=(WIDTH, 4.2), layout="constrained")
+    grid = fig.add_gridspec(3, 2, height_ratios=(1.15, 1.15, 0.9))
     labels = ["Figshare · ativo", "Figshare · misto", "VitalDB · ativo", "VitalDB · misto"]
     smoothed_arms = (
         ("figshare_holdout", "ativo"),
@@ -664,13 +706,13 @@ def figure_bootstrap(reports, ewma):
         ("vitaldb_external", "ativo"),
         ("vitaldb_external", "misto"),
     )
-    for ax, metric, title, limits in zip(
-        axes,
-        ("pearson_r", "mae"),
-        ("(a) Pearson r", "(b) MAE (pontos BIS)"),
-        ((-1, 1), (0, 16)),
-        strict=True,
+    for row, (metric, title, limits) in enumerate(
+        (
+            ("pearson_r", "(a) Pearson r por caso", (-1, 1)),
+            ("mae", "(b) MAE por caso (pontos BIS)", (0, 16)),
+        )
     ):
+        ax = fig.add_subplot(grid[row, :])
         for y, name in enumerate(HOLDOUTS):
             report = reports[name]
             ci = report["case_bootstrap"][metric]
@@ -678,10 +720,11 @@ def figure_bootstrap(reports, ewma):
             observed = metrics(report)[metric]
             ensure(limits[0] <= lo <= hi <= limits[1], f"interval outside axis: {name}")
             raw_y = y - 0.17
+            arm_color = COLORS[y % 2]
             ax.hlines(
-                raw_y, lo, hi, color=COLORS[y % 2], linestyles="solid" if y % 2 == 0 else "dashed"
+                raw_y, lo, hi, color=arm_color, linestyles="solid" if y % 2 == 0 else "dashed"
             )
-            ax.plot([lo, hi], [raw_y, raw_y], "|", color=COLORS[y % 2], markersize=6)
+            ax.plot([lo, hi], [raw_y, raw_y], "|", color=arm_color, markersize=6)
             point(ax, observed, raw_y, y % 2)
             benchmark, arm = smoothed_arms[y]
             smoothed = ewma_block(ewma, benchmark, arm, EWMA_REFERENCE_SPAN)
@@ -694,11 +737,11 @@ def figure_bootstrap(reports, ewma):
             )
             ewma_y = y + 0.17
             ax.hlines(
-                ewma_y, smoothed_lo, smoothed_hi, color=COLORS[y % 2], linestyles=(0, (1.0, 1.4))
+                ewma_y, smoothed_lo, smoothed_hi, color=arm_color, linestyles=(0, (1.0, 1.4))
             )
             ax.plot(
                 [smoothed_lo, smoothed_hi], [ewma_y, ewma_y], "|",
-                color=COLORS[y % 2], markersize=5,
+                color=arm_color, markersize=5,
             )
             ewma_point(ax, smoothed_value, ewma_y, y % 2)
         ax.set(
@@ -714,44 +757,39 @@ def figure_bootstrap(reports, ewma):
             ax.axvline(0, color=".5", linewidth=0.7)
         else:
             ax.set_xticks([0, 4, 8, 12, 16])
-    fig.legend(
-        handles=[
-            Line2D(
-                [], [], color=".25", linewidth=1.2, linestyle="-", marker="|",
-                markersize=6, label="bruto (IC 95% por caso)",
-            ),
-            Line2D(
-                [], [], color=".25", linewidth=1.2, linestyle=(0, (1.0, 1.4)), marker="|",
-                markersize=5, label="EWMA span 10 (IC 95% por caso)",
-            ),
-        ],
-        loc="outside lower center",
-        ncol=2,
-        frameon=False,
-    )
-    save_figure(fig, "bootstrap_intervals", [f"reports/{n}" for n in (*HOLDOUTS, EWMA_FILE)])
+        if row == 0:
+            ax.legend(
+                handles=[
+                    Line2D(
+                        [], [], color=".25", linewidth=1.2, linestyle="-", marker="|",
+                        markersize=6, label="bruto (IC 95% por caso)",
+                    ),
+                    Line2D(
+                        [], [], color=".25", linewidth=1.2, linestyle=(0, (1.0, 1.4)), marker="|",
+                        markersize=5, label="EWMA span 10 (IC 95% por caso)",
+                    ),
+                ],
+                loc="upper left",
+                frameon=False,
+                fontsize=8,
+            )
 
-
-def figure_offset(reports):
     rows = reports["offset_sensitivity.json"]["results"]
     offsets = [r["offset_seconds"] for r in rows]
-    fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 2.4), layout="constrained")
-    for i, (ax, metric, title, limits) in enumerate(
-        zip(
-            axes,
-            ("mae", "pearson_r"),
-            ("(a) MAE (pontos BIS)", "(b) Pearson r"),
-            ((6.7, 7.3), (0.76, 0.805)),
-            strict=True,
+    for column, (metric, title, limits) in enumerate(
+        (
+            ("mae", "(c) MAE vs offset do rótulo", (6.7, 7.3)),
+            ("pearson_r", "(d) Pearson r vs offset do rótulo", (0.76, 0.805)),
         )
     ):
+        ax = fig.add_subplot(grid[2, column])
         ax.plot(
             offsets,
             [r["metrics"][metric] for r in rows],
-            marker=MARKERS[i],
-            color=COLORS[i],
-            linestyle="-" if i == 0 else "--",
-            markerfacecolor=COLORS[i] if i == 0 else "white",
+            marker=MARKERS[0],
+            color=COLOR_ACTIVE,
+            linestyle="-",
+            markerfacecolor=COLOR_ACTIVE,
             markersize=4,
         )
         ax.axvline(0, color=".5", linewidth=0.7, linestyle=":")
@@ -763,7 +801,23 @@ def figure_offset(reports):
             title=title,
         )
         ax.grid(axis="y", color=".9", linewidth=0.5)
-    save_figure(fig, "offset_sensitivity", ["reports/offset_sensitivity.json"])
+
+    fig.legend(
+        handles=[
+            Line2D([], [], marker="o", color=COLOR_ACTIVE, markerfacecolor=COLOR_ACTIVE,
+                   markersize=5, linestyle="none", label=LABELS[0]),
+            Line2D([], [], marker="s", color=COLOR_MIXED, markerfacecolor="white",
+                   markersize=5, linestyle="none", label=LABELS[1]),
+        ],
+        loc="outside lower center",
+        ncol=2,
+        frameon=False,
+    )
+    save_figure(
+        fig,
+        "bootstrap_offset",
+        ["reports/offset_sensitivity.json"] + [f"reports/{n}" for n in (*HOLDOUTS, EWMA_FILE)],
+    )
 
 
 def figure_pipeline(reports):
@@ -801,23 +855,44 @@ def figure_pipeline(reports):
         ),
         "historical Figshare holdout entered fixed development",
     )
-    fig, ax = plt.subplots(figsize=(WIDTH, 3.6))
+    fig, ax = plt.subplots(figsize=(WIDTH, 3.0))
     fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
     ax.set(xlim=(0, 1), ylim=(0, 1))
     ax.axis("off")
 
-    def box(x, y, text, width=0.43, height=0.17):
+    # Cada checkpoint mantém a cor do seu braço nas figuras de resultado (azul
+    # para o ativo, vermelho para o misto); os blocos compartilhados ficam neutros.
+    # As duas matizes tem luminância quase igual (231,7 contra 231,0), então o
+    # preenchimento sozinho não sobrevive à impressão em preto e branco: por isso
+    # cada caixa de braço carrega o mesmo marcador que o identifica nas demais
+    # figuras (círculo cheio = ativo, quadrado aberto = misto).
+    neutral = {"facecolor": "#F2F2F2", "edgecolor": "#666666"}
+    active_tint = {"facecolor": "#DCEAF4", "edgecolor": COLOR_ACTIVE}
+    mixed_tint = {"facecolor": "#FBE3D4", "edgecolor": COLOR_MIXED}
+
+    def box(x, y, text, width=0.43, height=0.17, tint=None, marker=None):
         ax.add_patch(
             Rectangle(
                 (x - width / 2, y - height / 2),
                 width,
                 height,
-                facecolor="white",
-                edgecolor=".2",
-                linewidth=0.7,
+                linewidth=1.0,
+                **(tint or neutral),
             )
         )
         ax.text(x, y, text, ha="center", va="center", fontsize=9, linespacing=1.3)
+        if marker is not None:
+            style, color = marker
+            ax.plot(
+                [x - width / 2 + 0.008],
+                [y],
+                marker=style,
+                markersize=5,
+                markeredgewidth=0.9,
+                markeredgecolor=color,
+                markerfacecolor=color if style == "o" else "white",
+                linestyle="none",
+            )
 
     def arrow(start, end):
         ax.annotate(
@@ -831,12 +906,24 @@ def figure_pipeline(reports):
         width=0.65,
         height=0.15,
     )
-    box(0.25, 0.65, "Ativo: 23 casos Figshare\nTreino / validação / teste: 13 / 5 / 5")
-    box(0.75, 0.65, "Misto fixo: 28 grupos (18 + 10)\nTreino / validação / teste: 16 / 6 / 6")
+    box(
+        0.25, 0.65, "Ativo: 23 casos Figshare\nTreino / validação / teste: 13 / 5 / 5",
+        tint=active_tint, marker=("o", COLOR_ACTIVE),
+    )
+    box(
+        0.75, 0.65, "Misto fixo: 28 grupos (18 + 10)\nTreino / validação / teste: 16 / 6 / 6",
+        tint=mixed_tint, marker=("s", COLOR_MIXED),
+    )
     arrow((0.36, 0.825), (0.25, 0.735))
     arrow((0.64, 0.825), (0.75, 0.735))
-    box(0.25, 0.39, "CNN ativa\nAjuste: 13 Figshare", height=0.15)
-    box(0.75, 0.39, "CNN mista fixa\nAjuste: 12 Figshare + 4 VitalDB", height=0.15)
+    box(
+        0.25, 0.39, "CNN ativa\nAjuste: 13 Figshare", height=0.15,
+        tint=active_tint, marker=("o", COLOR_ACTIVE),
+    )
+    box(
+        0.75, 0.39, "CNN mista fixa\nAjuste: 12 Figshare + 4 VitalDB",
+        height=0.15, tint=mixed_tint, marker=("s", COLOR_MIXED),
+    )
     arrow((0.25, 0.565), (0.25, 0.465))
     arrow((0.75, 0.565), (0.75, 0.465))
     box(
@@ -947,18 +1034,18 @@ def figure_trajectory():
         value = float(raw[index])
         state = value if state is None else alpha * value + (1.0 - alpha) * state
         smoothed[index] = state
-    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.5), sharex=True,
+    fig, axes = plt.subplots(2, 1, figsize=(WIDTH, 3.1), sharex=True,
                              gridspec_kw={"height_ratios": [2, 1]}, layout="constrained")
-    axes[0].plot(time, reference, color="black", linestyle="-",
-                 label="BIS referência (linha contínua)", linewidth=1.0)
-    axes[0].plot(time, raw, color="black", linestyle="--", dashes=(4, 2),
-                 label="CNN ativa bruta (linha tracejada)", linewidth=1.0)
-    axes[0].plot(time, smoothed, color="black", linestyle=":", linewidth=1.1,
+    axes[0].plot(time, reference, color=COLOR_REFERENCE, linestyle="-",
+                 label="BIS referência (linha contínua)", linewidth=1.1)
+    axes[0].plot(time, raw, color=COLOR_CNN_RAW, linestyle="--", dashes=(4, 2),
+                 label="CNN ativa bruta (linha tracejada)", linewidth=0.8)
+    axes[0].plot(time, smoothed, color=COLOR_ACTIVE, linestyle=":", linewidth=1.9,
                  label="CNN ativa EWMA span 10 (linha pontilhada)")
     axes[0].set(ylabel="Índice (pontos BIS)", ylim=(0, 100),
                 title="Figshare, caso 19 · gravação completa · comparação offline")
     axes[0].legend(frameon=False, loc="upper center")
-    axes[1].plot(time, raw - reference, color="black", linestyle="-", linewidth=0.7)
+    axes[1].plot(time, raw - reference, color=COLOR_MIXED, linestyle="-", linewidth=0.7)
     axes[1].axhline(0, color=".4", linewidth=0.7)
     axes[1].set(ylabel="Erro (pontos BIS)", xlabel="Tempo da referência desde o início (min)")
     for ax in axes:
@@ -970,7 +1057,7 @@ def figure_trajectory():
 
 def figure_pk(pk_reports: dict[str, dict[str, Any]], ewma: dict[str, Any]) -> None:
     """Prediction probability Pk with case-cluster intervals; bruto vs EWMA span 10."""
-    fig, ax = plt.subplots(figsize=(WIDTH, 3.7), layout="constrained")
+    fig, ax = plt.subplots(figsize=(WIDTH, 3.0), layout="constrained")
     lanes = (
         ("Figshare", "bruto", False),
         ("Figshare", "EWMA span 10", True),
@@ -1039,92 +1126,117 @@ def figure_pk(pk_reports: dict[str, dict[str, Any]], ewma: dict[str, Any]) -> No
     save_figure(fig, "pk_prediction", [f"reports/{n}" for n in (*PK_FILES, EWMA_FILE)])
 
 
-def figure_ewma_sweep(ewma: dict[str, Any]) -> None:
-    """Varredura de spans do EWMA causal por braço (MAE e Pk) — exploratória."""
+def ewma_lag_seconds(span: int) -> float:
+    """Idade média das amostras do EWMA causal: (span - 1) / 2 janelas de 5 s."""
+    return 5.0 * (span - 1) / 2.0
+
+
+def figure_ewma_tradeoff(ewma: dict[str, Any]) -> None:
+    """Atraso contra erro no Figshare, com a referência publicada como faixa.
+
+    O eixo x é a idade média das amostras do filtro, e não o span: é a única
+    grandeza comparável ao EWMA do TCN-BiLSTM. Sob avaliação por sujeito o alpha
+    dele é escolhido por fold, com 0,05 e 0,10 predominantes, o que cai entre 45
+    e 95 s nesta convenção, enquanto a varredura inteira daqui cabe em 35 s. A
+    faixa cinza é o intervalo de erro que ele próprio reporta; a figura mostra
+    onde a comparação deixa de ser de ordem de grandeza e quanto atraso o
+    resultado comparável custou lá. O anel no span 5 marca a comparação principal.
+    """
     spans = EWMA_SPANS
-    positions = list(range(len(spans)))
-    reference_position = spans.index(EWMA_REFERENCE_SPAN)
-    annotations = {
-        ("figshare_holdout", "mae"): {"offset": (-4, -8), "vertical": "top", "align": "right"},
-        ("figshare_holdout", "pk"): {"offset": (0, 9), "vertical": "bottom", "align": "center"},
-        ("vitaldb_external", "mae"): {"offset": (-4, -8), "vertical": "top", "align": "right"},
-        ("vitaldb_external", "pk"): {"offset": (0, 9), "vertical": "bottom", "align": "center"},
-    }
-    panels = (
-        ("mae", "MAE (pontos BIS)", (0, 14.5)),
-        ("pk", "$P_K$", (0.4, 1.0)),
+    lags = [ewma_lag_seconds(span) for span in spans]
+    # Autoral no tamanho final (0,88 da largura do texto, como no artigo), para o
+    # TeX inserir sem reescalar e os tamanhos de ponto sobreviverem.
+    fig, ax = plt.subplots(figsize=(WIDTH * 0.88, 2.45), layout="constrained")
+
+    # Região em que o modelo publicado opera sob avaliação por sujeito.
+    ax.axvspan(SUKRITI_LAG_MIN_SECONDS, SUKRITI_LAG_MAX_SECONDS, color=".93", zorder=0)
+    low, high = SUKRITI_MAE - SUKRITI_MAE_SD, SUKRITI_MAE + SUKRITI_MAE_SD
+    ax.axhspan(low, high, color=".88", zorder=0)
+    ax.axhline(SUKRITI_MAE, color=".55", linewidth=0.8, linestyle="--", zorder=1)
+
+    for arm, series_label, marker, color, filled, linestyle in EWMA_SWEEP_STYLE:
+        values = [
+            float(ewma_block(ewma, "figshare_holdout", arm, span)["metrics"]["mae"])
+            for span in spans
+        ]
+        ax.plot(
+            lags,
+            values,
+            marker=marker,
+            color=color,
+            linestyle=linestyle,
+            linewidth=1.1,
+            markersize=5,
+            markerfacecolor=color if filled else "white",
+            label=series_label,
+        )
+
+    # Rótulos de span sobre a curva misto: com o eixo estendido até a faixa
+    # deles, os rótulos de tick do lado esquerdo se sobreporiam.
+    mixed = [
+        float(ewma_block(ewma, "figshare_holdout", "misto", span)["metrics"]["mae"])
+        for span in spans
+    ]
+    for span, lag, value in zip(spans, lags, mixed):
+        ax.annotate(
+            str(span),
+            (lag, value),
+            xytext=(0, -6),
+            textcoords="offset points",
+            ha="center",
+            va="top",
+            fontsize=7.5,
+            color=".3",
+            zorder=6,
+        )
+
+    # Anel no ponto da comparação principal: span 5, de 10 s de idade média.
+    matched_span = 5
+    matched_lag = ewma_lag_seconds(matched_span)
+    matched_mae = float(
+        ewma_block(ewma, "figshare_holdout", "misto", matched_span)["metrics"]["mae"]
     )
-    fig, grid = plt.subplots(2, 2, figsize=(WIDTH, 4.3), layout="constrained", sharex="col")
-    for row, (benchmark, benchmark_label) in enumerate(EWMA_BENCHMARKS):
-        for column, (metric, metric_label, limits) in enumerate(panels):
-            ax = grid[row, column]
-            for arm, series_label, marker, color, filled, linestyle in EWMA_SWEEP_STYLE:
-                values = [
-                    float(block["pk"] if metric == "pk" else block["metrics"][metric])
-                    for block in (ewma_block(ewma, benchmark, arm, span) for span in spans)
-                ]
-                for value in values:
-                    ensure(
-                        limits[0] <= value <= limits[1],
-                        f"EWMA sweep outside axis: {benchmark} {arm} {metric}",
-                    )
-                ax.plot(
-                    positions,
-                    values,
-                    marker=marker,
-                    color=color,
-                    linestyle=linestyle,
-                    linewidth=1.1,
-                    markersize=5,
-                    markerfacecolor=color if filled else "white",
-                    label=series_label,
-                )
-            ax.axvline(reference_position, color=".85", linewidth=0.8, zorder=0)
-            misto_block = ewma_block(ewma, benchmark, "misto", EWMA_REFERENCE_SPAN)
-            misto_value = float(
-                misto_block["pk"] if metric == "pk" else misto_block["metrics"][metric]
-            )
-            anchor = annotations[(benchmark, metric)]
-            ax.annotate(
-                f"misto {misto_value:.2f}".replace(".", ","),
-                xy=(reference_position, misto_value),
-                xytext=anchor["offset"],
-                textcoords="offset points",
-                ha=anchor["align"],
-                va=anchor["vertical"],
-                fontsize=7,
-                color=".3",
-                bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.8, "alpha": 0.9},
-            )
-            if metric == "pk":
-                ax.axhline(0.5, color=".45", linewidth=0.7, linestyle=":")
-                ax.set_yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-            else:
-                ax.set_yticks([0, 2, 4, 6, 8, 10, 12, 14])
-            ax.set(
-                title=f"({chr(97 + 2 * row + column)}) {benchmark_label} · {metric_label}",
-                xlim=(-0.35, len(spans) - 0.65),
-                ylim=limits,
-            )
-            ax.grid(axis="y", color=".9", linewidth=0.5)
-    for column in range(2):
-        grid[1, column].set_xticks(positions)
-        grid[1, column].set_xticklabels([str(span) for span in spans])
-        grid[1, column].set_xlabel("Span EWMA (janelas de 5 s)")
-    fig.legend(
-        handles=[
-            Line2D([], [], marker="o", color="#000000", markerfacecolor="#000000",
-                   markersize=5, linestyle="-", linewidth=1.1, label="CNN ativo"),
-            Line2D([], [], marker="s", color="#555555", markerfacecolor="white",
-                   markersize=5, linestyle="--", linewidth=1.1, label="CNN misto"),
-            Line2D([], [], marker="D", color="#666666", markerfacecolor="#666666",
-                   markersize=5, linestyle=":", linewidth=1.1, label="RF espectral"),
-        ],
-        loc="outside lower center",
-        ncol=3,
-        frameon=False,
+    ax.plot(
+        [matched_lag],
+        [matched_mae],
+        marker="o",
+        markersize=12,
+        markerfacecolor="none",
+        markeredgecolor=COLOR_MIXED,
+        markeredgewidth=1.0,
+        linestyle="none",
+        zorder=5,
     )
-    save_figure(fig, "ewma_sweep", [f"reports/{EWMA_FILE}"])
+    ax.text(
+        0.995,
+        high,
+        f"TCN-BiLSTM {SUKRITI_MAE:.2f} $\\pm$ {SUKRITI_MAE_SD:.2f}".replace(".", ","),
+        transform=ax.get_yaxis_transform(),
+        ha="right",
+        va="bottom",
+        fontsize=7.5,
+        color=".35",
+    )
+    ax.text(
+        (SUKRITI_LAG_MIN_SECONDS + SUKRITI_LAG_MAX_SECONDS) / 2.0,
+        5.33,
+        "TCN-BiLSTM sob avaliação\npor sujeito: 45 a 95 s",
+        ha="center",
+        va="bottom",
+        fontsize=7.5,
+        color=".35",
+    )
+    ax.set(
+        xlabel="idade média das amostras (s); cada número é o span do EWMA",
+        ylabel="MAE (pontos BIS)",
+        xlim=(-2, 100),
+        ylim=(5.3, 9.25),
+        xticks=[0, 25, 50, 75, 100],
+        yticks=[5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0],
+    )
+    ax.grid(axis="y", color=".9", linewidth=0.5)
+    ax.legend(loc="upper right", frameon=False, fontsize=8.5, bbox_to_anchor=(1.0, 1.0))
+    save_figure(fig, "ewma_tradeoff", [f"reports/{EWMA_FILE}"])
 
 
 def figure_corpus_panels(reports):
@@ -1233,7 +1345,7 @@ def figure_corpus_panels(reports):
             f"quarantine accounting differs for {source}",
         )
 
-    fig, grid = plt.subplots(1, 2, figsize=(WIDTH, 4.0), layout="constrained")
+    fig, grid = plt.subplots(1, 2, figsize=(WIDTH, 3.0), layout="constrained")
     ax = grid[0]
     positions = list(range(len(sources)))
     ax.bar(
@@ -1241,16 +1353,16 @@ def figure_corpus_panels(reports):
         eligible,
         0.5,
         label="Elegíveis para treino (sólido)",
-        color="black",
-        edgecolor="black",
+        color=COLOR_ELEGIBLE,
+        edgecolor="#1A5B85",
     )
     ax.bar(
         positions,
         quarantined,
         0.5,
         label="Quarentena de desenvolvimento (hachurado)",
-        color="white",
-        edgecolor="black",
+        color=COLOR_QUARANTINE,
+        edgecolor="#A66A00",
         hatch="///",
         bottom=eligible,
     )
@@ -1263,8 +1375,8 @@ def figure_corpus_panels(reports):
         frozen,
         0.5,
         label="Congelados, fora do pool (quadriculado)",
-        color="#BBBBBB",
-        edgecolor="black",
+        color=COLOR_FROZEN,
+        edgecolor="#6E6E6E",
         hatch="xx",
         bottom=frozen_bottom,
     )
@@ -1289,7 +1401,9 @@ def figure_corpus_panels(reports):
         xticklabels=[names.get(source, source) for source in sources],
         title=f"(a) Composição do corpus ({sum(totals)} casos)",
         ylabel="Casos",
-        ylim=(0, max(totals) * 1.3),
+        # Folga acima das barras para a legenda de três entradas não encostar no
+        # rótulo "35 casos" nem nas anotações do bloco congelado.
+        ylim=(0, max(totals) * 1.55),
     )
     ax.legend(frameon=False, fontsize=7.5, loc="upper left", borderaxespad=0.6)
 
@@ -1299,10 +1413,12 @@ def figure_corpus_panels(reports):
     min_finite = 90.0
     if isinstance(gate, dict):
         min_finite = float(gate.get("min_finite_fraction", 0.9)) * 100
+    # Rótulos curtos: a forma do marcador já aparece no próprio símbolo da legenda
+    # e um texto longo empurrava a legenda por cima da linha do gate em x = 90.
     styles = (
-        ("include", "black", "o", "Elegível (círculo preenchido)", True),
-        ("quarantine", "black", "x", "Quarentena (x)", False),
-        ("exclude", ".55", "d", "Excluído (losango aberto)", False),
+        ("include", COLOR_ELEGIBLE, "o", "Elegível", True),
+        ("quarantine", COLOR_QUARANTINE, "x", "Quarentena", False),
+        ("exclude", COLOR_FROZEN, "d", "Excluído", False),
     )
     for status, color, marker, label, filled in styles:
         selected = [record for record in records if record.get("quality_status") == status]
@@ -1327,17 +1443,19 @@ def figure_corpus_panels(reports):
             markerfacecolor=color if filled else "none",
         )
     ax.axvline(min_finite, color="black", linewidth=1.0, linestyle=(0, (4, 2)))
+    # Rótulo do gate a meia altura: embaixo ele dividia espaço com a legenda e no
+    # topo encostava nos dois pontos de finitude 100% e janelas aceitas 100%.
     ax.text(
-        min_finite - 2,
-        6,
+        min_finite - 4,
+        50,
         f"gate {min_finite:.0f}%",
         fontsize=8,
         color="black",
         ha="right",
-        va="bottom",
+        va="center",
     )
     ax.set(
-        title="(b) Qualidade: finitude x janelas",
+        title="(b) Finitude × janelas aceitas",
         xlabel="Amostras EEG finitas (%)",
         ylabel="Janelas aceitas (%)",
         xlim=(0, 104),
@@ -1363,7 +1481,7 @@ def figure_training_panels(reports, calibration, ewma):
     fig, grid = plt.subplots(
         1,
         2,
-        figsize=(WIDTH, 3.9),
+        figsize=(WIDTH, 3.0),
         layout="constrained",
         gridspec_kw={"width_ratios": (1, 1.25)},
     )
@@ -1372,9 +1490,9 @@ def figure_training_panels(reports, calibration, ewma):
     rows = [row for row in history if isinstance(row, dict)]
     epochs = [float(row.get("epoch", index + 1)) for index, row in enumerate(rows)]
     for key, label, marker, color, style in (
-        ("train_loss", "Loss treino", "o", COLORS[0], "-"),
-        ("validation_mae", "MAE validação", "s", COLORS[1], "--"),
-        ("validation_rmse", "RMSE validação", "^", ".35", ":"),
+        ("train_loss", "Loss treino", "o", COLOR_ACTIVE, "-"),
+        ("validation_mae", "MAE validação", "s", COLOR_MIXED, "--"),
+        ("validation_rmse", "RMSE validação", "^", COLOR_BASELINE, ":"),
     ):
         values = [float(row[key]) for row in rows if key in row]
         if len(values) != len(epochs):
@@ -1395,7 +1513,17 @@ def figure_training_panels(reports, calibration, ewma):
         xticks=epochs,
         ylim=(0, max(float(row.get("validation_rmse", 0)) for row in rows) * 1.25),
     )
-    ax.legend(frameon=False, fontsize=8, loc="upper right", borderaxespad=0.6)
+    # Embaixo à esquerda, a faixa livre: no canto superior a legenda caía sobre a
+    # curva de RMSE, que é justamente a mais alta das três.
+    ax.legend(
+        frameon=True,
+        facecolor="white",
+        edgecolor="none",
+        framealpha=0.9,
+        fontsize=8,
+        loc="lower left",
+        borderaxespad=0.4,
+    )
 
     # Dot-and-whisker da inclinação de calibração. Linha de cima: bruto, com IC 95%
     # por bootstrap por caso; linha de baixo: EWMA span 10 (pós-hoc, sem IC, que não
@@ -1455,27 +1583,30 @@ def figure_training_panels(reports, calibration, ewma):
         icc = float(arm["icc_2_1_absolute_agreement"])
         smoothed_icc = float(smoothed["calibration"]["icc_2_1_absolute_agreement"])
         fraction = float(arm["fraction_abs_error_le_10"]) * 100.0
+        # Duas linhas, não três: com três a anotação ficava mais alta que o passo
+        # entre as linhas do painel e os textos de linhas vizinhas se sobrepunham.
         ax.text(
             annotation_x,
             row,
-            f"ICC bruto {icc:.2f}".replace(".", ",")
+            f"ICC {icc:.2f}→{smoothed_icc:.2f}".replace(".", ",")
             + "\n"
-            + f"ICC EWMA {smoothed_icc:.2f}".replace(".", ",")
-            + "\n"
-            + f"{fraction:.1f}".replace(".", ",")
-            + "% ≤10",
-            fontsize=6.5,
+            + f"{fraction:.1f}% ≤10".replace(".", ","),
+            fontsize=6.2,
             color=".25",
             ha="left",
             va="center",
-            linespacing=1.2,
+            linespacing=1.15,
         )
     separator = len(CALIBRATION_ARMS) / 2 - 0.5
     ax.axhline(separator, color=".85", linewidth=0.6, zorder=1)
     ax.axvline(0.0, color=".45", linewidth=0.8, linestyle=":", zorder=1)
     ax.axvline(1.0, color=".45", linewidth=0.8, linestyle="--", zorder=1)
     handles = []
-    for index, legend_label in enumerate(("CNN ativo", "CNN misto", "RF espectral")):
+    # Rotulos curtos: o nome completo de cada braco ja esta no rotulo do eixo y
+    # ("Figshare (ativo)", "VitalDB (RF espectral)"), entao a legenda so precisa
+    # ligar marcador a braco. Com os nomes longos ela ficava mais larga que o
+    # painel e vazava pela borda direita em qualquer arranjo de colunas.
+    for index, legend_label in enumerate(("Ativo", "Misto", "RF")):
         _, _, marker, color, _, filled = CALIBRATION_ARMS[index]
         drawn = ax.plot(
             [],
@@ -1502,28 +1633,41 @@ def figure_training_panels(reports, calibration, ewma):
             label="EWMA span 10",
         )
     )
+    # Cabeçalho da coluna de anotações, na faixa livre acima da primeira linha.
+    # A explicação que estava no rótulo do eixo x cabe aqui, em duas linhas.
+    ax.text(
+        annotation_x,
+        -1.00,
+        "ICC bruto→EWMA\n% janelas ≤10",
+        fontsize=6.2,
+        color=".35",
+        ha="left",
+        va="center",
+        linespacing=1.15,
+    )
     ax.set(
         title="(b) Calibração: inclinação\n(bruto: IC 95% · EWMA sem IC)",
-        xlabel="Predito ~ referência\nx = 0: sem calibração\nx = 1: identidade\n"
-        "ICC bruto/EWMA · % ≤10 bruto",
+        # Três linhas curtas: em duas, a segunda linha fica mais larga que o
+        # painel e o "identidade" sai cortado na borda direita da figura.
+        xlabel="Predito ~ referência\nx = 0: sem calibração\nx = 1: identidade",
         yticks=range(len(CALIBRATION_ARMS)),
         yticklabels=[label for _, label, *_ in CALIBRATION_ARMS],
-        ylim=(len(CALIBRATION_ARMS) - 0.55, -0.6),
+        # Faixas livres em cima (cabeçalho) e embaixo (legenda em uma linha). A
+        # legenda em coluna não cabia na faixa de baixo e subia sobre VitalDB.
+        ylim=(len(CALIBRATION_ARMS) - 0.55 + 1.0, -1.30),
         xlim=(-0.25, 1.66),
         xticks=[0, 0.5, 1],
     )
     ax.grid(axis="x", color=".9", linewidth=0.5)
     ax.legend(
         handles=handles,
-        loc="upper left",
-        fontsize=7,
-        frameon=True,
-        facecolor="white",
-        edgecolor=".85",
-        framealpha=1.0,
-        borderpad=0.5,
-        labelspacing=0.35,
-        handletextpad=0.5,
+        loc="lower center",
+        fontsize=6,
+        ncol=4,
+        frameon=False,
+        columnspacing=1.0,
+        handletextpad=0.3,
+        borderpad=0.2,
     )
 
     for axis in grid:
@@ -1537,12 +1681,63 @@ def figure_training_panels(reports, calibration, ewma):
     )
 
 
-def figure_eeg_windows():
-    """Janelas brutas do caso 19: trecho limpo e trecho com pico (antes/depois).
+def case19_spectrogram(config):
+    """Espectrograma causal do caso 19 inteiro, na base de tempo do rótulo BIS.
 
-    Le ``tmp/eeg_fig_raw.npz`` (segmentos auditados do caso 19, sem inferencia)
-    e desenha cada janela antes e depois do pipeline causal (winsor desligado,
-    clip +-100 uV, banda 0,5--45 Hz, notch 50 Hz, escala /50 uV). Sem retreino.
+    Descritivo do sinal, sem inferência: o EEG completo passa pelo mesmo
+    pré-processamento causal em streaming das janelas de cima e o espectrograma
+    usa a janela de 5 s do modelo com avanço de 2,5 s (resolução de 0,2 Hz na
+    frequência). Devolve frequências, minutos do espectrograma, PSD em dB e a
+    referência BIS no grid do rótulo, com inválidos como NaN.
+    """
+    import numpy as np
+    from scipy.signal import spectrogram
+
+    from brainsniffer.data.mat_reader import load_case
+    from brainsniffer.data.preprocess import StreamingPreprocessor
+
+    case = load_case(ROOT / "data" / "raw" / "case19.mat")
+    ensure(case.sampling_rate == config.sampling_rate, "taxa de amostragem do caso 19 mudou")
+    processed = StreamingPreprocessor(config).process(case.eeg) * float(config.amplitude_scale_uv)
+    nperseg = config.window_samples
+    frequencies, seconds, power = spectrogram(
+        processed,
+        fs=config.sampling_rate,
+        window="hann",
+        nperseg=nperseg,
+        noverlap=nperseg // 2,
+        detrend=False,
+        scaling="density",
+    )
+    band = (frequencies >= config.lowcut_hz) & (frequencies <= config.highcut_hz)
+    ensure(bool(band.any()), "banda do pre-processamento nao intersecta o espectrograma")
+    power_db = 10.0 * np.log10(np.maximum(power[band], 1e-12))
+    # Quedas de eletrodo (no caso 19, uma a cada ~10 min) deixam a janela de 5 s
+    # constante. Sem potencia, elas virariam listras escuras que se leem como
+    # silencio do EEG; mascarar como NaN mostra "sem dado", que e' o correto.
+    half = nperseg // 2
+    centers = np.rint(seconds * config.sampling_rate).astype(int)
+    flatlined = np.array(
+        [np.nanstd(case.eeg[max(center - half, 0):center + half]) < 1.0 for center in centers]
+    )
+    ensure(bool(flatlined.any()), "nenhuma queda de eletrodo detectada no caso 19")
+    power_db[:, flatlined] = np.nan
+    ensure(bool(np.isfinite(power_db).any()), "espectrograma inteiramente nao finito")
+    # Referência no grid completo do rótulo: inválidos viram NaN e nunca são ligados.
+    reference_seconds = np.arange(case.bis.size) * case.label_interval_seconds
+    reference = case.bis.astype(float).copy()
+    reference[~np.isfinite(reference) | (reference < 0) | (reference > 100)] = np.nan
+    ensure(bool(np.isfinite(reference).any()), "referencia BIS ausente no caso 19")
+    return frequencies[band], seconds / 60.0, power_db, reference_seconds / 60.0, reference
+
+
+def figure_eeg_windows():
+    """Janelas do caso 19 antes/depois do pipeline e espectrograma da gravação toda.
+
+    Le ``tmp/eeg_fig_raw.npz`` (segmentos auditados do caso 19, sem inferencia) para
+    as quatro janelas de 5 s e ``data/raw/case19.mat`` para o espectrograma. O painel
+    de baixo e' descritivo do sinal: mostra como a potencia por frequencia acompanha o
+    rotulo BIS ao longo dos 72 minutos, que e' a relacao que o modelo explora.
     """
     import numpy as np
 
@@ -1554,26 +1749,77 @@ def figure_eeg_windows():
     ensure(float(saved["fs"]) == float(config.sampling_rate), "taxa inesperada")
     time = np.arange(config.window_samples) / config.sampling_rate
     panels = (
-        ("clean", "Trecho limpo", float(saved["bis_clean"])),
-        ("art", "Trecho com pico", float(saved["bis_art"])),
+        ("clean", "Limpo", float(saved["bis_clean"])),
+        ("art", "Com pico", float(saved["bis_art"])),
     )
-    fig, grid = plt.subplots(
-        2, 2, figsize=(WIDTH, 3.9), layout="constrained", sharex=True, sharey="row"
-    )
+    fig = plt.figure(figsize=(WIDTH, 4.7), layout="constrained")
+    outer = fig.add_gridspec(2, 1, height_ratios=(1.45, 1.7))
+    windows = outer[0].subgridspec(2, 2)
     column_titles = ("(a) EEG bruto", "(b) após filtro, clip e escala")
+    window_grid = []
     for row, (key, row_label, bis) in enumerate(panels):
         raw = np.asarray(saved[key], dtype=np.float64)
         processed = StreamingPreprocessor(config).process(raw) * float(config.amplitude_scale_uv)
+        row_axes = []
         for column, values in enumerate((raw, processed)):
-            ax = grid[row, column]
-            ax.plot(time, values, color="black", linewidth=0.7)
-            ax.set(
-                xlabel="Tempo na janela (s)" if row == 1 else None,
-                ylabel=f"{row_label} (BIS {bis:.0f})" if column == 0 else None,
-            )
+            ax = fig.add_subplot(windows[row, column])
+            if row:
+                ax.sharex(window_grid[0][column])  # coluna compartilha o tempo na janela
+            if column:
+                ax.sharey(row_axes[0])  # linha compartilha a amplitude
+            ax.plot(time, values, color=COLOR_ACTIVE, linewidth=0.8)
             ax.grid(color=".9", linewidth=0.5)
             if row == 0:
                 ax.set_title(column_titles[column], fontsize=9)
+                ax.tick_params(labelbottom=False)
+            else:
+                ax.set_xlabel("Tempo na janela (s)")
+            if column == 0:
+                # Duas linhas: rotacionado, "Limpo (BIS 30)" numa linha só fica mais
+                # alto que a faixa da linha e invade o rótulo da linha vizinha.
+                ax.set_ylabel(f"{row_label}\nBIS {bis:.0f}")
+            else:
+                ax.tick_params(labelleft=False)
+            row_axes.append(ax)
+        window_grid.append(row_axes)
+
+    frequencies, spectro_minutes, power_db, bis_minutes, reference = case19_spectrogram(config)
+    # O painel de baixo tem escala de tempo propria (minutos), entao nao compartilha
+    # eixo com as janelas de cima; espectrograma e BIS compartilham entre si, e a
+    # coluna estreita da direita abriga a barra de cores sem desalinhar os dois.
+    lower = outer[1].subgridspec(2, 2, width_ratios=(1, 0.022), height_ratios=(1.75, 1.15))
+    spectro_ax = fig.add_subplot(lower[0, 0])
+    low, high = (float(value) for value in np.nanpercentile(power_db, (5.0, 99.5)))
+    mesh = spectro_ax.pcolormesh(
+        spectro_minutes,
+        frequencies,
+        power_db,
+        shading="auto",
+        # turbo em vez de viridis: a potencia sobe do azul ao vermelho, que e' a
+        # leitura que a maioria espera num espectrograma. O viridis e' mais
+        # uniforme em luminancia, mas aqui a banda que interessa (beta/gama) sai
+        # verde e se confunde com o fundo; no turbo ela sai quente e destaca.
+        cmap="turbo",
+        vmin=low,
+        vmax=high,
+        rasterized=True,
+    )
+    spectro_ax.set(
+        ylabel="Freq. (Hz)",
+        title="(c) Espectrograma do caso 19 (72 min) e a referência BIS",
+        ylim=(config.lowcut_hz, config.highcut_hz),
+    )
+    fig.colorbar(mesh, cax=fig.add_subplot(lower[0, 1])).set_label("PSD (dB)", fontsize=9)
+
+    bis_ax = fig.add_subplot(lower[1, 0], sharex=spectro_ax)
+    bis_ax.plot(bis_minutes, reference, color=COLOR_REFERENCE, linewidth=0.9)
+    bis_ax.set(
+        xlabel="Tempo desde o início da gravação (min)",
+        ylabel="BIS ref.",
+        ylim=(0, 100),
+    )
+    bis_ax.grid(color=".9", linewidth=0.5)
+    fig.add_subplot(lower[1, 1]).axis("off")
     save_figure(fig, "eeg_windows", ["data/raw/case19.mat", "tmp/eeg_fig_raw.npz"])
 
 
@@ -1593,15 +1839,15 @@ def main():
     audit_pk_reports(reports, pk_reports)
     calibration = load_calibration(reports)
     ewma = load_ewma(calibration, pk_reports)
+    # Ordem de chamada acompanha a ordem das figuras no artigo.
     figure_pipeline(reports)
+    figure_eeg_windows()
     figure_comparison(reports, ewma)
-    figure_offset(reports)
-    figure_bootstrap(reports, ewma)
     figure_pk(pk_reports, ewma)
+    figure_bootstrap_offset(reports, ewma)
+    figure_ewma_tradeoff(ewma)
     figure_corpus_panels(reports)
     figure_training_panels(reports, calibration, ewma)
-    figure_eeg_windows()
-    figure_ewma_sweep(ewma)
     if args.infer_trajectory:
         infer_trajectory()
     if args.infer_trajectory or args.trajectory:
