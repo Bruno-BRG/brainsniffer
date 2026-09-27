@@ -47,7 +47,7 @@ ARMS: tuple[tuple[str, str, str], ...] = (
 SPANS: tuple[int, ...] = (1, 2, 3, 5, 10, 15)
 # spans-chave que recebem bootstrap agrupado por caso (métricas; sem bootstrap de Pk,
 # cujo custo O(n log n) por réplica é proibitivo nos 38.730 pontos do VitalDB)
-BOOTSTRAP_SPANS: tuple[int, ...] = (1, 10)
+BOOTSTRAP_SPANS: tuple[int, ...] = (1, 5, 10)
 BOOTSTRAP_SAMPLES = 1000
 BOOTSTRAP_SEED = 42
 # bootstrap apenas nos braços CNN (o RF é referência e entra só com estimativas pontuais)
@@ -126,13 +126,18 @@ def main() -> None:
     report: dict[str, object] = {
         "scope": "research_only",
         "analysis": "Pos-processamento EWMA causal exploratorio (pos-hoc; sem retreino).",
-        "ewma_definition": "s_t = alpha*y_t + (1-alpha)*s_{t-1}; alpha = 2/(span+1); reinicio por caso; span em janelas de 5 s.",
+        "ewma_definition": (
+            "s_t = alpha*y_t + (1-alpha)*s_{t-1}; alpha = 2/(span+1); "
+            "reinicio por caso; span em janelas de 5 s."
+        ),
         "raw_eeg_in_report": False,
         "retrained": False,
         "bootstrap_samples": BOOTSTRAP_SAMPLES,
         "bootstrap_seed": BOOTSTRAP_SEED,
         "bootstrap_spans": list(BOOTSTRAP_SPANS),
-        "prediction_source": "tmp/reanalysis/*.npz (predicoes por janela dos mesmos benchmarks historicos)",
+        "prediction_source": (
+            "tmp/reanalysis/*.npz (predicoes por janela dos mesmos benchmarks historicos)"
+        ),
         "spans": list(SPANS),
         "arms": {},
     }
