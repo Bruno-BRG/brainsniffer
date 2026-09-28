@@ -3,7 +3,7 @@ import json
 import pytest
 import torch
 
-from brainsniffer.models.cnn import Conv1DDepthEstimator
+from brainsniffer.nets.cnn import Conv1DDepthEstimator
 from brainsniffer.pipeline.training import (
     build_file_manifest,
     load_checkpoint,
