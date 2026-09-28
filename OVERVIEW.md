@@ -2,7 +2,7 @@
 
 **Título do artigo (TCC):** BrainSniffer: protótipo reproduzível para estimar uma referência BIS a partir de EEG frontal
 
-Fonte do artigo: `docs/tcc_brainsniffer.tex` (formato SBC) + `docs/referencias.bib` + PDF em `docs/tcc_brainsniffer.pdf`.
+Fonte do artigo: `docs/artigo/tcc_brainsniffer.tex` (formato SBC) + `docs/artigo/referencias.bib` + PDF em `docs/artigo/tcc_brainsniffer.pdf`; build com `scripts/build_tcc_article.sh` (ver `docs/artigo/README.md`).
 
 ## O que estamos fazendo
 
@@ -34,15 +34,14 @@ Resultados históricos (5.523 janelas Figshare, 38.730 VitalDB): Figshare CNN at
 | DOSE-I (Zenodo `10.5281/zenodo.18483292`, 171 gravações) | CC BY 4.0 + `Data_Use_Agreement.txt` | Citado, **não usado** no treino (alvo MOAA/S ≠ BIS). Não converter rótulo. |
 | Código BrainSniffer | MIT (`LICENSE`, `CITATION.cff`) | MIT não relicencia dados/pesos derivados. |
 
-Detalhes: seção `Disponibilidade de dados e código` + `Ética` no `.tex`, `docs/data_catalog.md`, `docs/source_ledger.md`, `docs/_archive/research/reporting_ethics_checklist.md`. Antes de submeter: reconfirmar versão/termos e definir com a instituição se uso secundário precisa de parecer/dispensa (não presumir dispensa por ser público).
+Detalhes: seção `Disponibilidade de dados e código` + `Ética` no `.tex`, `docs/notas/data_catalog.md`, `docs/notas/source_ledger.md`, `docs/_archive/research/reporting_ethics_checklist.md`. Antes de submeter: reconfirmar versão/termos e definir com a instituição se uso secundário precisa de parecer/dispensa (não presumir dispensa por ser público).
 
 ## Tecnologias
 
 - **Linguagem/ambiente:** Python 3.12 (`.python-version`), `uv` + `uv.lock`, Hatchling, `pyproject.toml`.
 - **ML/sinal:** PyTorch ≥2.4 (CNN + `sigmoid`), scikit-learn ≥1.5 (Random Forest), SciPy ≥1.14 (filtros `sosfilt`, resampler), NumPy ≥2.1, pandas ≥2.2, h5py ≥3.10 (MAT v7.3).
-- **Interface:** Dash ≥2.18 + Plotly ≥5.24 (`dash_app.py`, única interface web), gunicorn ≥23, `assets/`.
-- **Qualidade:** pytest ≥8.3 (`tests/`), ruff (lint, line-length 100), GitHub Actions CI, Dockerfile (Python 3.12, `uv sync --locked`).
-- **Docs/artigo:** LaTeX template SBC (`docs/latex/`, `docs/tcc_brainsniffer.tex`, `docs/referencias.bib`, `scripts/build_tcc_article.sh`), Markdown de apoio (`docs/article.md`, `model_card.md`, `decisions.md`, etc.), `docs/generate_figures.py` + matplotlib (figuras `pipeline.pdf`, `bis_trajectory.pdf`, `comparison.pdf`, `bootstrap_intervals.pdf`, `offset_sensitivity.pdf`).
+- **Qualidade:** pytest ≥8.3 (`tests/`), ruff (lint, line-length 100), GitHub Actions CI.
+- **Docs/artigo:** LaTeX template SBC (`docs/artigo/latex/`, `docs/artigo/tcc_brainsniffer.tex`, `docs/artigo/referencias.bib`, `scripts/build_tcc_article.sh`), notas em Markdown (`docs/notas/`: `article.md`, `model_card.md`, `decisions.md`, etc.), `docs/artigo/generate_figures.py` + matplotlib (figuras `pipeline.pdf`, `bis_trajectory.pdf`, `comparison.pdf`, `eeg_windows.pdf`, `corpus_panels.pdf`, `training_panels.pdf`, entre outras).
 
 ## Estrutura do repositório
 
@@ -51,29 +50,29 @@ brainsniffer/
 ├── OVERVIEW.md               ← este arquivo
 ├── README.md                 ← manual operacional completo
 ├── CITATION.cff / LICENSE   ← citação software / MIT (só código)
-├── pyproject.toml / uv.lock / .python-version / Dockerfile
-├── dash_app.py / assets/     ← dashboard (replay, trajetória, resultados, corpus)
+├── pyproject.toml / uv.lock / .python-version
 ├── src/brainsniffer/
 │   ├── cli.py / config.py
 │   ├── data/                 ← figshare.py, vitaldb.py, mat_reader.py, preprocess.py, corpus.py, split.py
 │   ├── models/               ← cnn.py (Conv1DDepthEstimator + RobustConv1DDepthEstimator experimental)
-│   └── pipeline/             ← training.py, metrics.py, baseline.py, realtime.py, streaming.py, stream_audit.py, benchmark.py, intake.py
+│   └── pipeline/             ← training.py, metrics.py, baseline.py, realtime.py, streaming.py, stream_audit.py, benchmark.py, intake.py, planning.py
 ├── docs/
-│   ├── tcc_brainsniffer.tex / referencias.bib / tcc_brainsniffer.pdf  ← artigo
-│   ├── article.md / model_card.md / decisions.md / source_ledger.md / data_catalog.md
-│   ├── mixed_corpus.md / vitaldb_external_validation.md / talk_script.md
-│   ├── project_status.md / model_card.md / decisions.md
-│   ├── latex/ / figures/ / generate_figures.py
-│   └── _archive/ (research/, prospective_protocol, live_acquisition, real_eeg_intake)
-├── models/                   ← .pt + .json (ativo, misto fixed, smoke)
-├── reports/                  ← corpus_manifest.json, *_holdout*.json, *_external*.json, offset_sensitivity.json
+│   ├── README.md             ← índice da documentação
+│   ├── artigo/               ← TCC: tcc_brainsniffer.tex/.pdf, referencias.bib, latex/, figures/, generate_figures.py, historico/
+│   ├── notas/                ← decisions, model_card, project_status, data_catalog, mixed_corpus, source_ledger, vitaldb_external_validation, article, talk_script
+│   ├── submissao-jhi/        ← submissão JHI (.docx + scripts de build/checklist)
+│   └── _archive/             ← research/, prospective_protocol, live_acquisition, real_eeg_intake
+├── models/                   ← .pt + .json (ativo, misto fixed, experimentos A–D)
+├── reports/                  ← corpus_manifest.json, *_holdout*.json, *_external*.json, pk_*.json, offset_sensitivity.json
 ├── data/raw/ / data/vitaldb/ / data/vitaldb_train/  ← dados locais (não redistribuir; .gitignore não apaga histórico)
-├── tests/                    ← 18 arquivos (cli, corpus, split, preprocess, metrics, vitaldb, streaming, etc.)
+├── tests/                    ← 17 arquivos (cli, corpus, split, preprocess, metrics, vitaldb, streaming, etc.)
 ├── examples/                 ← stream_metadata.template.json + sintéticos
-└── scripts/build_tcc_article.sh
+└── scripts/                  ← build_tcc_article.sh, ewma_postprocess.py, reviewer_reanalysis.py, sukriti_experiment.py
 ```
 
 ## Rodar rápido
+
+Tudo pela CLI (`uv run brainsniffer --help` lista os subcomandos):
 
 ```bash
 uv sync --locked --extra dev
@@ -82,7 +81,4 @@ uv run brainsniffer download-data            # Figshare → data/raw/
 uv run brainsniffer download-vitaldb --case 1 --out data/vitaldb
 uv run brainsniffer build-corpus --out reports/corpus_manifest.json
 uv run brainsniffer evaluate --checkpoint models/brainsniffer_cnn.pt --report reports/figshare_holdout_evaluation.json --bootstrap-samples 1000 --bootstrap-seed 42
-uv run python -c 'from dash_app import app; app.run(host="127.0.0.1", port=8501, debug=False)'
-# artigo:
-bash scripts/build_tcc_article.sh  # ver docs/latex/README.md
 ```

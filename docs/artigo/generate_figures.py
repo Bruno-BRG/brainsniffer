@@ -25,13 +25,13 @@ from matplotlib.legend_handler import HandlerTuple
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 REPORTS = ROOT / "reports"
 OUTPUT = Path(__file__).resolve().parent / "figures"
 
 # Paleta Okabe-Ito, segura para daltonismo. A cor e' reforco, nunca o unico canal:
 # cada serie mantem marcador e estilo de linha proprios, entao a leitura sobrevive
-# a uma impressao em preto e branco (ver docs/figures/README.md).
+# a uma impressao em preto e branco (ver docs/artigo/figures/README.md).
 COLOR_ACTIVE = "#0072B2"  # azul: checkpoint ativo (treinado so no Figshare)
 COLOR_MIXED = "#D55E00"  # vermelho: candidato misto
 COLOR_BASELINE = "#009E73"  # verde: baseline espectral (RF)

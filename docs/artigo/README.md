@@ -1,10 +1,10 @@
 # Artigo LaTeX no formato SBC
 
-O artigo principal é [`../tcc_brainsniffer.tex`](../tcc_brainsniffer.tex) e a
-única fonte bibliográfica é [`../referencias.bib`](../referencias.bib). O texto
+O artigo principal é [`tcc_brainsniffer.tex`](tcc_brainsniffer.tex) e a
+única fonte bibliográfica é [`referencias.bib`](referencias.bib). O texto
 usa `\\bibliographystyle{sbc}` e `\\bibliography{referencias}`; não há uma
 segunda bibliografia manual no `.tex`. `sbc-template.sty`, `sbc.bst` e
-`caption2.sty` acompanham o repositório.
+`caption2.sty` ficam em [`latex/`](latex/).
 
 ## Receita de build e verificações
 
@@ -30,10 +30,10 @@ TECTONIC_BIN=/caminho/para/tectonic scripts/build_tcc_article.sh
 ```
 
 O Tectonic resolve o ciclo LaTeX/BibTeX, mantém log e intermediários em
-`tmp/pdfs/tcc-build/`, atualiza `docs/tcc_brainsniffer.pdf`, rejeita referências
+`tmp/pdfs/tcc-build/`, atualiza `docs/artigo/tcc_brainsniffer.pdf`, rejeita referências
 indefinidas ou caixas `Overfull`, exige **no máximo 17 páginas** por padrão
 (`TCC_MAX_PAGES` permite teto maior em experimentos) e valida a extração
-de texto com Poppler. A cópia para `docs/tcc_brainsniffer.pdf` ocorre somente
+de texto com Poppler. A cópia para `docs/artigo/tcc_brainsniffer.pdf` ocorre somente
 depois desses gates; eles não substituem revisão visual ou científica.
 
 **O PDF não é regenerado automaticamente ao editar fontes/documentação.**
@@ -46,7 +46,7 @@ As páginas de figuras têm espaço branco; não foi observado corte ou sobrepos
 
 No Windows (sem bash/Poppler completos), o script aceita `TECTONIC_FMT` com o
 caminho do `.fmt` do cache (`%LOCALAPPDATA%\TectonicProject\Tectonic\cache\formats\`):
-sem a flag `-f`, a busca do formato `latex` colide com o diretório `docs/latex/` e
+sem a flag `-f`, a busca do formato `latex` colide com o diretório `docs/artigo/latex/` e
 falha com `Access is denied`. A contagem de páginas sai do log
 (`Output written ... (N pages)`) e a extração de texto do `pdftotext` do Git for
 Windows (`C:\Program Files\Git\mingw64\bin`).
@@ -81,7 +81,7 @@ Para inspeção visual de todas as páginas:
 
 ```bash
 mkdir -p tmp/pdfs/tcc-render
-pdftoppm -png -r 140 docs/tcc_brainsniffer.pdf tmp/pdfs/tcc-render/page
+pdftoppm -png -r 140 docs/artigo/tcc_brainsniffer.pdf tmp/pdfs/tcc-render/page
 ```
 
 ## Metadados institucionais
@@ -91,4 +91,4 @@ O artigo não publica e-mail pessoal nem inventa orientador ou vínculo instituc
 
 As métricas do texto devem permanecer sincronizadas com os JSONs versionados em
 `reports/` e com os metadados de checkpoint em `models/`. Os gráficos são
-regenerados separadamente por `docs/generate_figures.py`.
+regenerados separadamente por `docs/artigo/generate_figures.py`.

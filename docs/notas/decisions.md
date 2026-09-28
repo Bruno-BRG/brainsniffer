@@ -171,7 +171,7 @@ adequação do conjunto software–hardware–usuário. Os gates preservam a
 reprodutibilidade e permitem detectar mudança de domínio, falhas de aquisição e
 problemas de fatores humanos antes de qualquer saída influenciar o cuidado.
 
-**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e [TRIPOD+AI](https://www.bmj.com/content/385/bmj-2023-078378). A proposta histórica, não operacional nesta entrega, está em [`docs/_archive/prospective_protocol.md`](_archive/prospective_protocol.md).
+**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e [TRIPOD+AI](https://www.bmj.com/content/385/bmj-2023-078378). A proposta histórica, não operacional nesta entrega, está em [`docs/_archive/prospective_protocol.md`](../_archive/prospective_protocol.md).
 
 ## D16 — Manifesto do sinal e invariância da taxa
 
@@ -187,7 +187,7 @@ Aceitar uma declaração divergente cria uma saída numericamente plausível, ma
 fisicamente ambígua. Separar transporte, metadados e algoritmo torna a sessão
 reproduzível e deixa explícito o que ainda precisa ser confirmado no equipamento.
 
-**Referências:** [introdução oficial do LSL](https://labstreaminglayer.readthedocs.io/info/intro.html), [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles) e o [protocolo de avanço](_archive/prospective_protocol.md).
+**Referências:** [introdução oficial do LSL](https://labstreaminglayer.readthedocs.io/info/intro.html), [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles) e o [protocolo de avanço](../_archive/prospective_protocol.md).
 
 ## D17 — Ficha técnica como gate de onboarding
 
@@ -209,7 +209,7 @@ completa. Ainda são obrigatórios o sinal sintético, o teste de perdas e
 reconexões, a comparação de distribuição, a medição ponta a ponta e os gates
 éticos/regulatórios do protocolo prospectivo.
 
-**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](_archive/prospective_protocol.md).
+**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](../_archive/prospective_protocol.md).
 
 ## D19 — Sensibilidade de alinhamento antes de fixar o rótulo
 
@@ -228,7 +228,7 @@ melhorarem este holdout não demonstra que o monitor tenha exatamente esse atras
 nem autoriza usar o melhor valor em pacientes. O próximo estudo deve pré-registrar
 o alinhamento, verificar relógios e repetir em dados independentes.
 
-**Referências:** [Hajat, Ahmad & Andrzejowski (2017)](https://pubmed.ncbi.nlm.nih.gov/28044337/), [Nsugbe e Connelly (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9160818/), [Pilge et al. (2006)](https://doi.org/10.1097/00000542-200603000-00016) e o [protocolo de avanço](_archive/prospective_protocol.md). Pilge estudou atrasos variáveis em condições artificiais nos índices testados; não fornece offset universal, nem mede o atraso dos arquivos Figshare.
+**Referências:** [Hajat, Ahmad & Andrzejowski (2017)](https://pubmed.ncbi.nlm.nih.gov/28044337/), [Nsugbe e Connelly (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9160818/), [Pilge et al. (2006)](https://doi.org/10.1097/00000542-200603000-00016) e o [protocolo de avanço](../_archive/prospective_protocol.md). Pilge estudou atrasos variáveis em condições artificiais nos índices testados; não fornece offset universal, nem mede o atraso dos arquivos Figshare.
 
 ## D18 — Auditoria fail-closed durante o stream
 
@@ -247,7 +247,7 @@ válida. O modo sem a flag permanece disponível para caracterização explorat�
 alarme clínico, não estima risco anestésico e não substitui testes de perda,
 reconexão e latência ponta a ponta no hardware.
 
-**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](_archive/prospective_protocol.md).
+**Referências:** [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles), [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e o [protocolo de avanço](../_archive/prospective_protocol.md).
 
 ## D20 — Incerteza reamostrada por cirurgia
 
@@ -269,7 +269,7 @@ reportada junto com o número de pacientes, não apenas com o número de janelas
 
 **Referências:** [TRIPOD+AI](https://www.bmj.com/content/385/bmj-2023-078378),
 [DECIDE-AI](https://doi.org/10.1038/s41591-022-01772-9) e a seção de
-avaliação por caso em [`docs/_archive/prospective_protocol.md`](_archive/prospective_protocol.md).
+avaliação por caso em [`docs/_archive/prospective_protocol.md`](../_archive/prospective_protocol.md).
 
 ## D21 — Expiração explícita de uma estimativa após silêncio (histórico LSL)
 
@@ -294,10 +294,10 @@ finitude, saturação e linha plana continua necessária.
 
 **Referências:** [Lab Streaming Layer — introdução oficial](https://labstreaminglayer.readthedocs.io/info/intro.html),
 [GMLP FDA/Health Canada/MHRA](https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles)
-e [`docs/real_eeg_intake.md`](_archive/real_eeg_intake.md).
+e [`docs/_archive/real_eeg_intake.md`](../_archive/real_eeg_intake.md).
 
 ## Nota de auditoria bibliográfica e relato
 
 As atribuições anteriores “Li et al.” em D1 e D19 foram corrigidas para Nsugbe e Connelly, autores do DOI `10.1049/htl2.12025`. Li Ma é autor do dataset, não desse artigo. O estudo multiescala/LDA sustenta contexto do corpus, não valida a arquitetura CNN do BrainSniffer. As 26 chaves existentes da bibliografia foram preservadas.
 
-O [checklist de relato e ética](_archive/research/reporting_ethics_checklist.md) distingue TRIPOD+AI (relato) de PROBAST+AI (risco de viés/aplicabilidade), alvo instrumental de desfecho clínico, independência de dados de transportabilidade e licença de software de licença de dados/artigos. É um roteiro com pendências humanas, não aprovação ética, regulatória ou parecer formal. Consulte o [ledger](source_ledger.md) para o nível de verificação das fontes.
+O [checklist de relato e ética](../_archive/research/reporting_ethics_checklist.md) distingue TRIPOD+AI (relato) de PROBAST+AI (risco de viés/aplicabilidade), alvo instrumental de desfecho clínico, independência de dados de transportabilidade e licença de software de licença de dados/artigos. É um roteiro com pendências humanas, não aprovação ética, regulatória ou parecer formal. Consulte o [ledger](source_ledger.md) para o nível de verificação das fontes.

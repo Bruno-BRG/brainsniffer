@@ -100,7 +100,7 @@ janelas. A expansão ocorreu depois do primeiro piloto 1–5, portanto não é u
 resultado pré-registrado. A variação por caso foi grande; isso é compatível com
 mudança de domínio e não deve ser usado como estimativa final de desempenho. O
 piloto histórico de dez casos permanece documentado em
-`docs/vitaldb_external_validation.md` para preservar a evolução do protocolo.
+`docs/notas/vitaldb_external_validation.md` para preservar a evolução do protocolo.
 
 O catálogo VitalDB declara `BIS/EEG1_WAV` em µV a 128 Hz; a rotina de normalização
 preserva essa unidade, os nomes dos tracks e seus IDs. Os 15 arquivos observados
@@ -129,7 +129,7 @@ mas já foram reutilizados para comparação após exposição ao domínio Vital
 não constituem validação externa confirmatória. A melhora sugere adaptação ao
 domínio observado, não transporte comprovado a outra fonte. O candidato não
 foi promovido ao checkpoint ativo. O protocolo
-completo, gates e hashes estão em [`docs/mixed_corpus.md`](mixed_corpus.md).
+completo, gates e hashes estão em [`docs/notas/mixed_corpus.md`](mixed_corpus.md).
 
 ## Riscos e validação necessária fora do TCC
 
@@ -149,7 +149,7 @@ Um eventual projeto independente precisaria incluir um segundo centro/aparelho, 
 complementar ao BIS, alinhamento do atraso do monitor, SQI anotado, desempenho por
 paciente/fármaco/qualidade e uma política de abstenção calibrada.
 O registro histórico da proposta por etapas, incluindo bancada, validação externa
-travada e modo sombra (fora do escopo definitivo), está em [`docs/_archive/prospective_protocol.md`](_archive/prospective_protocol.md) e
+travada e modo sombra (fora do escopo definitivo), está em [`docs/_archive/prospective_protocol.md`](../_archive/prospective_protocol.md) e
 segue as referências GMLP, DECIDE-AI e TRIPOD+AI.
 
 ## Artefatos e reprodução
@@ -171,10 +171,10 @@ segue as referências GMLP, DECIDE-AI e TRIPOD+AI.
   digest para vincular cada resultado ao modelo executado.
 - Ambiente de execução (Python e versões das bibliotecas): campo `environment`
   no checkpoint e no JSON.
-- Registro das decisões: `docs/decisions.md`.
-- Ledger de fontes, hipóteses e limites: `docs/source_ledger.md`.
-- Artigo técnico: `docs/article.md`.
-- Roteiro falado: `docs/talk_script.md`.
+- Registro das decisões: `docs/notas/decisions.md`.
+- Ledger de fontes, hipóteses e limites: `docs/notas/source_ledger.md`.
+- Artigo técnico: `docs/notas/article.md`.
+- Roteiro falado: `docs/notas/talk_script.md`.
 - Contrato JSONL local opcional e histórico LSL: `docs/_archive/live_acquisition.md`.
 - Proposta histórica fora do TCC: `docs/_archive/prospective_protocol.md`.
 
@@ -208,4 +208,4 @@ As decisões metodológicas são fundamentadas na literatura de DoA/CNN, no corp
 publicado e nas limitações documentadas de índices pEEG; a documentação LSL
 fundamentou somente o transporte histórico removido, não o escopo atual;
 as fontes completas estão no [README](../README.md) e em
-[`docs/decisions.md`](decisions.md).
+[`docs/notas/decisions.md`](decisions.md).

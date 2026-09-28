@@ -51,14 +51,12 @@ jobs:
 
       - name: Compile and smoke-test imports
         run: |
-          uv run --locked --extra dev python -m compileall -q src tests dash_app.py
+          uv run --locked --extra dev python -m compileall -q src tests
           uv run --locked --extra dev python - <<'PY'
           import sys
 
           import brainsniffer
           import brainsniffer.cli
-          from dash_app import server
 
           assert sys.version_info[:2] == (3, 12), sys.version
-          assert server is not None
           PY
