@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import nn
 
-from brainsniffer.models.cnn import RobustConv1DDepthEstimator, parameter_count
+from brainsniffer.nets.cnn import RobustConv1DDepthEstimator, parameter_count
 
 
 def test_robust_cnn_is_bounded_and_uses_batch_independent_normalization():

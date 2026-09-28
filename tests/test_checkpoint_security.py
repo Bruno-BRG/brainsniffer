@@ -10,7 +10,7 @@ import pytest
 import torch
 
 from brainsniffer.config import PreprocessConfig
-from brainsniffer.models.cnn import Conv1DDepthEstimator
+from brainsniffer.nets.cnn import Conv1DDepthEstimator
 from brainsniffer.pipeline import training
 
 

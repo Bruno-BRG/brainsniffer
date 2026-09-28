@@ -19,7 +19,7 @@ Pergunta de pesquisa: quanto uma CNN compacta aproxima o rótulo BIS em casos n�
    - Ativo (Modelo A): `Conv1DDepthEstimator` treinado só no Figshare (13/5/5 casos, seed 42).
    - Misto (Modelo B): mesmo código, treinado com Figshare + parte do VitalDB (28 grupos, 16/6/6; ajuste usa 12 Figshare + 4 VitalDB).
    - Baseline: potência absoluta/relativa delta/teta/alfa/beta/gama + SEF90 + entropia espectral + RMS + line length → Random Forest (`n_estimators=100, max_depth=12, min_samples_leaf=2`).
-5. **Arquitetura CNN (`Conv1DDepthEstimator`):** `Conv1d` channels 1-32-64-128-128, `kernel_size` 7,7,5,5, `padding` 3,3,2,2, `stride` 1, `BatchNorm1d` + GELU por bloco, `MaxPool1d(2)` nos 3 primeiros blocos, `AdaptiveAvgPool1d(1)`, `Linear` 128-64-1 + GELU + Dropout 0.20, saída `100 * sigmoid`. Treino: 10 epochs, `batch_size` 128, `learning_rate` 1e-3, `weight_decay` 1e-4. Código em `src/brainsniffer/models/cnn.py`.
+5. **Arquitetura CNN (`Conv1DDepthEstimator`):** `Conv1d` channels 1-32-64-128-128, `kernel_size` 7,7,5,5, `padding` 3,3,2,2, `stride` 1, `BatchNorm1d` + GELU por bloco, `MaxPool1d(2)` nos 3 primeiros blocos, `AdaptiveAvgPool1d(1)`, `Linear` 128-64-1 + GELU + Dropout 0.20, saída `100 * sigmoid`. Treino: 10 epochs, `batch_size` 128, `learning_rate` 1e-3, `weight_decay` 1e-4. Código em `src/brainsniffer/nets/cnn.py`.
 6. **Avaliação:** split por grupo (Figshare = caso, VitalDB = `subjectid`), métricas pooled por janela (MAE/RMSE/viés/Pearson + acurácia/macro-F1 em 4 faixas), bootstrap por caso (B=1000, seed 42), sensibilidade a offset (-20…+20 s, sem retreino). Resultados são retrospectivos/exploratórios.
 7. **Replay:** percorre gravação existente (buffer 5 s, emite a cada 1 s, separa bruto/EWMA/qualidade/timestamp). Sem EEG físico neste TCC.
 
@@ -47,14 +47,14 @@ Detalhes: seção `Disponibilidade de dados e código` + `Ética` no `.tex`, `do
 
 ```
 brainsniffer/
-├── OVERVIEW.md               ← este arquivo
+├── OVERVIEW.md               ← este arquivo (mapa das pastas)
 ├── README.md                 ← manual operacional completo
 ├── CITATION.cff / LICENSE   ← citação software / MIT (só código)
 ├── pyproject.toml / uv.lock / .python-version
-├── src/brainsniffer/
+├── src/brainsniffer/         ← código do produto (pacote Python `brainsniffer`)
 │   ├── cli.py / config.py
 │   ├── data/                 ← figshare.py, vitaldb.py, mat_reader.py, preprocess.py, corpus.py, split.py
-│   ├── models/               ← cnn.py (Conv1DDepthEstimator + RobustConv1DDepthEstimator experimental)
+│   ├── nets/                 ← cnn.py (código das arquiteturas: Conv1DDepthEstimator + RobustConv1DDepthEstimator)
 │   └── pipeline/             ← training.py, metrics.py, baseline.py, realtime.py, streaming.py, stream_audit.py, benchmark.py, intake.py, planning.py
 ├── docs/
 │   ├── README.md             ← índice da documentação
@@ -62,13 +62,15 @@ brainsniffer/
 │   ├── notas/                ← decisions, model_card, project_status, data_catalog, mixed_corpus, source_ledger, vitaldb_external_validation, article, talk_script
 │   ├── submissao-jhi/        ← submissão JHI (.docx + scripts de build/checklist)
 │   └── _archive/             ← research/, prospective_protocol, live_acquisition, real_eeg_intake
-├── models/                   ← .pt + .json (ativo, misto fixed, experimentos A–D)
-├── reports/                  ← corpus_manifest.json, *_holdout*.json, *_external*.json, pk_*.json, offset_sensitivity.json
-├── data/raw/ / data/vitaldb/ / data/vitaldb_train/  ← dados locais (não redistribuir; .gitignore não apaga histórico)
-├── tests/                    ← 17 arquivos (cli, corpus, split, preprocess, metrics, vitaldb, streaming, etc.)
-├── examples/                 ← stream_metadata.template.json + sintéticos
-└── scripts/                  ← build_tcc_article.sh, ewma_postprocess.py, reviewer_reanalysis.py, sukriti_experiment.py
+├── models/                   ← artefatos treinados: .pt (pesos, fora do Git) + .json (ficha/hash, versionada); ativo, misto e experimentos A–D
+├── reports/                  ← evidência congelada do artigo: corpus_manifest.json, *_holdout*.json, *_external*.json, pk_*.json, offset_sensitivity.json
+├── data/                     ← dados locais baixados (raw/, vitaldb/, vitaldb_train/); não redistribuir, fora do Git
+├── tests/                    ← 17 arquivos de teste do pipeline; rodam no CI junto com o ruff
+├── scripts/                  ← build_tcc_article.sh (build do PDF) + reanálises one-off do TCC (ewma, reviewer_reanalysis, sukriti_experiment)
+├── examples/                 ← fichas de manifesto de sinal para bancada/stream (template + sintéticos; não são código de exemplo)
 ```
+
+> **Dois "models" não são a mesma coisa:** `models/` na raiz guarda os **artefatos treinados**; o **código** das arquiteturas fica em `src/brainsniffer/nets/`. `reports/` e os `models/*.json` são evidência histórica: não apagar nem sobrescrever.
 
 ## Rodar rápido
 

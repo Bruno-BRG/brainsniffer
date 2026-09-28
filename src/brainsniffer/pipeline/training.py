@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 from ..config import DEFAULT_MIN_SIGNAL_QUALITY, PreprocessConfig, TrainingConfig, resolve_device
 from ..data.preprocess import WindowedEEG, bis_stage
 from ..data.split import CaseSplit, split_case_ids
-from ..models.cnn import Conv1DDepthEstimator
+from ..nets.cnn import Conv1DDepthEstimator
 
 CHECKPOINT_SCHEMA_VERSION = 1
 SUPPORTED_MODEL_NAME = "Conv1DDepthEstimator"

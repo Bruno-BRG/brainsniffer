@@ -28,3 +28,7 @@ docs/artigo/*.out
 docs/artigo/*.synctex.gz
 docs/artigo/*.toc
 docs/artigo/*.xdv
+# Submission files with author-identifying information; keep local, not public.
+docs/submissao-jhi/jhi_cadastro_autores.docx
+docs/submissao-jhi/jhi_checklist_conformidade.docx
+docs/submissao-jhi/fill_checklist.py

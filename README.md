@@ -7,6 +7,21 @@ Protótipo de pesquisa em Python 3.12 para estimar, a partir de EEG frontal, um 
 
 > **Aviso clínico:** este repositório não é um dispositivo médico e não deve orientar, sozinho, dose anestésica ou conduta em uma cirurgia. O “ground truth” do MVP é o BIS publicado, que é um índice processado do monitor e não uma medida absoluta de consciência. Qualquer uso clínico exigiria protocolo prospectivo, aprovação ética, validação externa multicêntrica, análise de segurança, gestão de alarmes e avaliação regulatória.
 
+## Estrutura do repositório
+
+O mapa completo das pastas está em [`OVERVIEW.md`](OVERVIEW.md#estrutura-do-repositório); em resumo:
+
+| Caminho | O que é |
+|---|---|
+| `src/brainsniffer/` | Código do produto: CLI e config + `data/` (leitura/pré-processamento), `nets/` (arquiteturas CNN) e `pipeline/` (treino, métricas, baseline, replay/stream) |
+| `models/` | Artefatos treinados: `.pt` (pesos, fora do Git) + `.json` (ficha/hash, versionada) |
+| `reports/` | JSONs de evidência do artigo (holdouts, bootstrap, Pk, calibração); congelados |
+| `data/` | Dados locais baixados (Figshare/VitalDB); não redistribuídos, fora do Git |
+| `tests/` | Testes do pipeline; rodam no CI junto com o `ruff` |
+| `scripts/` | Build do PDF do TCC + reanálises one-off que geram `reports/` |
+| `examples/` | Fichas de manifesto de sinal para bancada/stream (template + sintéticos) |
+| `docs/` | Artigo do TCC, notas, submissão JHI e arquivo morto |
+
 ## Recursos e documentação de apoio
 
 <details>

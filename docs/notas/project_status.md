@@ -165,7 +165,7 @@ Relatórios históricos não provam correção atual nem validação clínica.
 | Requisito | Artefato principal | Evidência histórica ou caminho documentado | Status histórico / pendência |
 |---|---|---|---|
 | Python 3.12 | `pyproject.toml`, `.python-version` | `requires-python >=3.12,<3.13`; compileall | Implementado |
-| CNN para EEG | `src/brainsniffer/models/cnn.py` | checkpoint `models/brainsniffer_cnn.pt` carregado e avaliado | Implementado |
+| CNN para EEG | `src/brainsniffer/nets/cnn.py` | checkpoint `models/brainsniffer_cnn.pt` carregado e avaliado | Implementado |
 | Estimar referência BIS/estágio | `data/preprocess.py`, `pipeline/metrics.py` | regressão 0–100 e quatro faixas de pesquisa | Implementado como pesquisa |
 | Inferência em fluxo | `pipeline/realtime.py` | replay causal e emissão a cada stride | Implementado |
 | Entrada local opcional | `pipeline/streaming.py`, CLI `stream-json` | Contrato JSONL; smoke histórico 256→128 Hz não prova equipamento | Preservado; LSL removido |
