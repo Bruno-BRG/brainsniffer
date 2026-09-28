@@ -1,6 +1,6 @@
 # Mapa das figuras científicas
 
-As nove figuras são geradas por `docs/generate_figures.py` a partir de listas
+As nove figuras são geradas por `docs/artigo/generate_figures.py` a partir de listas
 explícitas de snapshots JSON rastreados pelo Git. A geração valida escopo,
 holdouts, contagens de janelas, pré-processamento e parâmetros de bootstrap
 antes de escrever os PNGs e PDFs vetoriais. O fluxograma também lê os dois
@@ -291,7 +291,7 @@ quando se mexe no referencial e não no modelo.
 - Fonte: `reports/ewma_postprocess.json` (auditado; o span 1 confere com os
   agregados históricos); α e faixa de atraso do TCN-BiLSTM conforme
   \cite{sukriti2026}, `SUKRITI_ALPHA_MIN`/`SUKRITI_ALPHA_MAX` em
-  `docs/generate_figures.py`.
+  `docs/artigo/generate_figures.py`.
 
 ## `corpus_panels.png`
 

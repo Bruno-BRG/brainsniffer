@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "${script_dir}/.." && pwd)"
-docs_dir="${repo_dir}/docs"
+docs_dir="${repo_dir}/docs/artigo"
 build_dir="${repo_dir}/tmp/pdfs/tcc-build"
 source_name="tcc_brainsniffer.tex"
 pdf_name="tcc_brainsniffer.pdf"
@@ -23,7 +23,7 @@ if ! command -v "${tectonic_bin}" >/dev/null 2>&1; then
 fi
 
 # No Windows (sem cache de formato no local padrão), TECTONIC_FMT aponta para o
-# arquivo .fmt do cache e evita a colisão da busca do formato com docs/latex/.
+# arquivo .fmt do cache e evita a colisão da busca do formato com docs/artigo/latex/.
 tectonic_flags=()
 if [[ -n "${TECTONIC_FMT:-}" ]]; then
   tectonic_flags+=(-f "${TECTONIC_FMT}")

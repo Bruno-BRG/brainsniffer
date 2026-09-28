@@ -3,10 +3,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
-.streamlit/
 tmp/
 output/
-/_archive/
 data/raw/*.mat
 data/vitaldb/*.npz
 data/vitaldb_train/*.npz
@@ -17,16 +15,16 @@ models/*.pth
 /models/brainsniffer_corpus.json
 /reports/mixed_internal_holdout.json
 *.egg-info/
-# LaTeX build artifacts; keep docs/tcc_brainsniffer.pdf versioned.
-docs/*.aux
-docs/*.bbl
-docs/*.blg
-docs/*.fdb_latexmk
-docs/*.fls
-docs/*.lof
-docs/*.log
-docs/*.lot
-docs/*.out
-docs/*.synctex.gz
-docs/*.toc
-docs/*.xdv
+# LaTeX build artifacts; keep docs/artigo/tcc_brainsniffer.pdf versioned.
+docs/artigo/*.aux
+docs/artigo/*.bbl
+docs/artigo/*.blg
+docs/artigo/*.fdb_latexmk
+docs/artigo/*.fls
+docs/artigo/*.lof
+docs/artigo/*.log
+docs/artigo/*.lot
+docs/artigo/*.out
+docs/artigo/*.synctex.gz
+docs/artigo/*.toc
+docs/artigo/*.xdv

@@ -42,7 +42,7 @@ Esta rodada conferiu arquivos locais e a consistência das 26 chaves, sem novas 
 
 **Auditoria bibliográfica local:** na revisão de 24/09/2026, a bibliografia do artigo passou a 24 entradas, todas citadas; saíram `lsl` e `kothe2025` (suporte LSL removido do escopo) e o duplicado de PhysioNet (`clinicaldata`), e entrou a referência primária do BIS (`johansen2000`, Anesthesiology 93(5):1336--1344, 2000). Conferidos DOI, autoria, título, ano e veículo contra o registro histórico local, sem declarar validação remota exaustiva. Connor (`openbis`), Nsugbe (`nsugbe2022`), TRIPOD+AI e PROBAST+AI já estavam corrigidos; `dosei` já estava incluída. As ausências e a bibliografia manual citadas na revisão antiga estão marcadas como históricas/superadas, sem apagar a evidência. Autoria abreviada com `others`, datas de acesso, versões e termos de provedores ainda devem ser conferidos antes da submissão; não foram completados por suposição.
 
-O [checklist de relato e ética](_archive/research/reporting_ethics_checklist.md) registra comparabilidade, agrupamento, missingness, abstenção e pendências de aprovação/licenciamento. A avaliação externa requer independência do desenvolvimento; transportabilidade exige caracterizar diferenças relevantes, não simplesmente chamar outro hospital de “externo”.
+O [checklist de relato e ética](../_archive/research/reporting_ethics_checklist.md) registra comparabilidade, agrupamento, missingness, abstenção e pendências de aprovação/licenciamento. A avaliação externa requer independência do desenvolvimento; transportabilidade exige caracterizar diferenças relevantes, não simplesmente chamar outro hospital de “externo”.
 
 ## Regra de uso do ledger
 

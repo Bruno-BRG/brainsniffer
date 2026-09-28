@@ -1,6 +1,6 @@
 # Roteiro falado — duração estimada de 5 a 7 minutos
 
-> Texto para ensaio, não duração medida. Estimativa a 120–150 palavras por minuto, sem demonstração longa. A fonte científica é `tcc_brainsniffer.tex`; o estado do build está em `project_status.md`. As notas não fazem parte da fala.
+> Texto para ensaio, não duração medida. Estimativa a 120–150 palavras por minuto, sem demonstração longa. A fonte científica é `../artigo/tcc_brainsniffer.tex`; o estado do build está em `project_status.md`. As notas não fazem parte da fala.
 
 ## Abertura e pergunta
 

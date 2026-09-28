@@ -28,13 +28,13 @@ Relatórios históricos não provam correção atual nem validação clínica.
   previsão ficam NaN. EEG integralmente finito; referência não suavizada.
   MAE 8,7152, RMSE 10,2100, viés +4,7852 e Pearson 0,9100 nesse caso.
   A curva mostra superestimação intermediária apesar da associação alta.
-- Figura vetorial `docs/figures/bis_trajectory.pdf` e PNG, dados
+- Figura vetorial `docs/artigo/figures/bis_trajectory.pdf` e PNG, dados
   `tmp/pdfs/trajectory-audit/case19.{npz,csv,json}`. Tempo do alvo offline
   (início+offset), não emissão do replay (fim+processamento); CNN bruta sem EWMA.
   Figura individual ilustrativa, sem alegação de generalização ou ausência de atraso.
 - Reprodução, sem instalar dependências: `PYTHONDONTWRITEBYTECODE=1
   MPLCONFIGDIR=$PWD/tmp/pdfs/trajectory-audit/mpl .venv/bin/python
-  docs/generate_figures.py --infer-trajectory`. Executado com saída 0; repetido
+  docs/artigo/generate_figures.py --infer-trajectory`. Executado com saída 0; repetido
   após enriquecer a auditoria. `--trajectory` apenas redesenha os dados salvos;
   execução padrão gera figuras históricas sem inferir/baixar/treinar.
 - Build solicitado Tectonic passou: **15 páginas**, sem overflow, referências
@@ -81,7 +81,7 @@ Relatórios históricos não provam correção atual nem validação clínica.
   código inspecionado permaneceram iguais (`sources-check.log`). Sequência
   numérica do TeX fora das chaves de citação preservada (`checks.txt`).
 - Nenhum treino, teste de sistema ou reavaliação de modelos executado.
-  `docs/article.md` não editado nesta rodada. Curso, instituição, cidade/estado,
+  `docs/notas/article.md` não editado nesta rodada. Curso, instituição, cidade/estado,
   revisão institucional/ética e aceite final do autor continuam pendentes.
 
 ## Rodada Matplotlib — evidência histórica das figuras (PDF substituído acima)
@@ -89,14 +89,14 @@ Relatórios históricos não provam correção atual nem validação clínica.
 - Quatro figuras regeneradas realmente com Matplotlib 3.11.1, backend Agg,
   DejaVu Sans 9–10 pt, branco/eixos discretos; sem cards, flores ou takeaways.
   PNGs 300 dpi (chunk pHYs: 299,9994 dpi por arredondamento) e quatro PDFs
-  vetoriais em `docs/figures/`, usados no TeX a 16 cm de largura.
+  vetoriais em `docs/artigo/figures/`, usados no TeX a 16 cm de largura.
 - Matplotlib ausente na verificação inicial; adicionado ao extra `dev` com
   `uv add --optional dev 'matplotlib>=3.10' --no-sync`. Lock mínimo relativo
   ao início desta rodada: sete pacotes novos, nenhuma versão existente mudou.
   Pillow é agora dependência transitiva declarada de Matplotlib, não sobra do
   Streamlit; o gerador não importa Pillow. Dash/Plotly não foram alterados.
 - `MPLCONFIGDIR=$PWD/tmp/pdfs/matplotlib/cache uv run --locked --extra dev python
-  docs/generate_figures.py`: saída 0, oito snapshots auditados e oito saídas.
+  docs/artigo/generate_figures.py`: saída 0, oito snapshots auditados e oito saídas.
   Funções originais `report_value`, `ensure`, `load_reports`, `audit_reports`
   preservadas por comparação de AST. Dois controles negativos em memória
   (IDs/contagens VitalDB divergentes) foram rejeitados. Conferências adicionais
@@ -113,7 +113,7 @@ Relatórios históricos não provam correção atual nem validação clínica.
   a 150 dpi. Sem cortes/sobreposições observados; páginas de float 3 e 9 têm
   espaço branco amplo. Permanecem avisos Fontconfig, UTF-8 legado do template
   e Underfull, não escondidos. Não se afirma nova inspeção das páginas 1–2/4–7.
-- `uv run --locked --extra dev ruff check docs/generate_figures.py` e
+- `uv run --locked --extra dev ruff check docs/artigo/generate_figures.py` e
   `uv lock --check` passaram; lint inicial tinha formatação/linhas longas,
   corrigidas somente no gerador. SHA-256 de todos os JSON `reports/*.json` e
   `models/*.json` permaneceu idêntico ao início (`sources-before.sha256`).
@@ -129,13 +129,13 @@ Relatórios históricos não provam correção atual nem validação clínica.
   x86_64 Linux musl. Download direto falhou por conexão; download pela API oficial
   HTTPS funcionou, sem credenciais/sudo. SHA-256 do tarball conferido contra
   `digest` publicado: `8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7`.
-  Procedência completa em `docs/latex/README.md`; metadados em
+  Procedência completa em `docs/artigo/README.md`; metadados em
   `tmp/pdfs/tectonic-install/release.json`.
 - `TECTONIC_BIN=/home/fryits/.local/bin/tectonic scripts/build_tcc_article.sh`:
   saída 0, **15 páginas A4**, bibliografia resolvida, sem `Overfull` e sem `??`
   no texto extraído. Script e seus gates foram preservados. PDF anterior só foi
   substituído após aprovação dos gates, conforme o script.
-- PDF: `docs/tcc_brainsniffer.pdf`, 724.714 bytes, SHA-256
+- PDF: `docs/artigo/tcc_brainsniffer.pdf`, 724.714 bytes, SHA-256
   `e7ea37962db8c185d067d5354dbb54c2c34683fe678c58fef5d3d0eb86662ccb`.
   Poppler 26.08.0. `pdfinfo`, `pdftotext -layout` e
   `pdftoppm -png -r 100` executados. Evidências: `tmp/pdfs/pdfinfo.txt`,
@@ -179,17 +179,17 @@ Relatórios históricos não provam correção atual nem validação clínica.
 | Dataset para desenvolvimento | `data/figshare.py`, CLI `download-data` | 24 casos Figshare, download com MD5 | Implementado |
 | Benchmark VitalDB | `data/vitaldb.py` | quinze casos VitalDB compatíveis normalizados e avaliados sem retreino pelo checkpoint Figshare-only | Avaliação cruzada de dataset; retrospectiva e exploratória |
 | Corpus misto | `data/corpus.py`, `build-corpus`, `train-corpus`, `reports/corpus_manifest.json` | pool 23 Figshare + 10 VitalDB; fixed: 18+10=28, split 16/6/6, ajuste 12 Figshare + 4 VitalDB; Figshare por caso, VitalDB por subjectid quando disponível | Candidato experimental |
-| Catálogo de datasets | `docs/data_catalog.md`, `docs/mixed_corpus.md` | Figshare/VitalDB integrados em pool auditável; DOSE-I, PhysioNet GABA e Dryad continuam separados por alvo, acesso e compatibilidade | Implementado como pesquisa |
+| Catálogo de datasets | `docs/notas/data_catalog.md`, `docs/notas/mixed_corpus.md` | Figshare/VitalDB integrados em pool auditável; DOSE-I, PhysioNet GABA e Dryad continuam separados por alvo, acesso e compatibilidade | Implementado como pesquisa |
 | Proveniência de dados | `data/vitaldb.py`, `data/mat_reader.py`, `signal_diagnostics` | novos NPZ registram origem, unidade, nomes/IDs dos tracks; avaliações registram finitude e imputação offline | Implementado |
 | Relatório holdout | `evaluate --report`, `reports/figshare_holdout_evaluation.json` | métricas recalculadas, bootstrap agrupado por caso, cinco casos, configuração, manifesto SHA-256 e ausência de EEG bruto | Reproduzível |
 | Relatório VitalDB | `evaluate-external --report`, `reports/vitaldb_external_validation.json` | métricas, bootstrap, diagnósticos, política offline/online, configuração e SHA-256 salvos pela CLI | Benchmark histórico reproduzível; não confirmatório |
 | Interface web | `dash_app.py` | Dash + Plotly é a única UI web; inspeção de dados/relatórios locais e replay retrospectivo | Aceite integrado atual pendente |
 | Operações locais de pesquisa | CLI `download-data`, `download-vitaldb`, `train`, `train-corpus`, `validate-intake` | Download, treino e validação da ficha permanecem na CLI; LSL removido, não migrado para Dash | Fora das ações da demo; aceite atual pendente |
-| Artigo técnico | `docs/tcc_brainsniffer.tex` e `docs/tcc_brainsniffer.pdf` | build Tectonic e inspeção das 14 páginas na rodada de citações acima | Gates documentais passaram; metadados e revisão institucional pendentes |
-| Artigo falado | `docs/talk_script.md` | sincronizado ao relato; 804 palavras faladas | 5,36–6,70 min estimados; ensaio humano pendente |
-| Decisões fundamentadas | `docs/decisions.md`, `docs/source_ledger.md` | matriz BIS/PSI/Openibis/AnesNET/LSL, fontes, hipóteses e limites de extrapolação | Implementado |
+| Artigo técnico | `docs/artigo/tcc_brainsniffer.tex` e `docs/artigo/tcc_brainsniffer.pdf` | build Tectonic e inspeção das 14 páginas na rodada de citações acima | Gates documentais passaram; metadados e revisão institucional pendentes |
+| Artigo falado | `docs/notas/talk_script.md` | sincronizado ao relato; 804 palavras faladas | 5,36–6,70 min estimados; ensaio humano pendente |
+| Decisões fundamentadas | `docs/notas/decisions.md`, `docs/notas/source_ledger.md` | matriz BIS/PSI/Openibis/AnesNET/LSL, fontes, hipóteses e limites de extrapolação | Implementado |
 | Registro de protocolo clínico fora do TCC | `docs/_archive/prospective_protocol.md` | documento histórico, não roteiro de execução desta entrega retrospectiva | Fora do escopo definitivo |
-| Reprodutibilidade | `docs/model_card.md`, `evaluate`, `evaluate-external`, testes | métricas recalculadas coincidem com checkpoint; ambiente, SHA-256 e seed do bootstrap salvos/verificados | Implementado |
+| Reprodutibilidade | `docs/notas/model_card.md`, `evaluate`, `evaluate-external`, testes | métricas recalculadas coincidem com checkpoint; ambiente, SHA-256 e seed do bootstrap salvos/verificados | Implementado |
 | Sensibilidade EEG-BIS | `evaluate-offset`, `reports/offset_sensitivity.json` | mesma divisão por caso e pesos congelados; grade −20…+20 s executada sem retreino | Exploratório |
 
 ## Evidência numérica histórica preservada
@@ -243,7 +243,7 @@ atual e sem reexecução nesta remoção. Também foram removidos o adaptador LS
 histórica, não uma instrução atual; seus resultados não foram reatribuídos ao
 JSONL. A fixture `examples/stream_metadata.bench.synthetic.json` mantém a
 identidade desse publisher e relógio liblsl, conforme
-[live_acquisition.md](_archive/live_acquisition.md), sem promessa de hardware.
+[live_acquisition.md](../_archive/live_acquisition.md), sem promessa de hardware.
 
 - `uv run pytest -q`: 91 testes passaram; `uv run ruff check .`, compilação e
   `uv lock --check` também passaram.

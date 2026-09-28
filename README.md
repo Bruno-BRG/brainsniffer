@@ -3,40 +3,9 @@
 [![CI](https://github.com/Bruno-BRG/brainsniffer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Bruno-BRG/brainsniffer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Protótipo de pesquisa em Python 3.12 para estimar, a partir de EEG frontal, um valor contínuo semelhante ao BIS e um estágio discreto relacionado ao BIS. O modelo inicial é uma CNN 1-D compacta; o sistema também inclui aquisição do dataset público, pré-processamento, divisão por paciente/caso, treino, replay em fluxo e dashboard Dash + Plotly.
+Protótipo de pesquisa em Python 3.12 para estimar, a partir de EEG frontal, um valor contínuo semelhante ao BIS e um estágio discreto relacionado ao BIS. O modelo inicial é uma CNN 1-D compacta; o sistema também inclui aquisição do dataset público, pré-processamento, divisão por paciente/caso, treino e replay em fluxo. A interface é a linha de comando (CLI); o projeto não inclui interface web.
 
 > **Aviso clínico:** este repositório não é um dispositivo médico e não deve orientar, sozinho, dose anestésica ou conduta em uma cirurgia. O “ground truth” do MVP é o BIS publicado, que é um índice processado do monitor e não uma medida absoluta de consciência. Qualquer uso clínico exigiria protocolo prospectivo, aprovação ética, validação externa multicêntrica, análise de segurança, gestão de alarmes e avaliação regulatória.
-
-## Iniciar o Dash e demonstrar
-
-Na raiz do checkout, com Python 3.12 e `uv` instalados:
-
-```bash
-uv sync --locked --extra dev
-# servidor somente local; não baixa dados nem treina
-uv run python -c 'from dash_app import app; app.run(host="127.0.0.1", port=8501, debug=False)'
-```
-
-Abra **http://127.0.0.1:8501**. A demonstração exige casos, modelo e relatórios
-locais compatíveis; se faltarem, prepare-os pela CLI antes da sessão. O endpoint
-`/healthz` verifica prontidão técnica, não validação clínica nem aceite do browser.
-
-Roteiro curto para o TCC:
-
-1. **Problema:** estimar o BIS registrado a partir de EEG frontal, sem tratá-lo
-   como medida direta de consciência.
-2. **Trajetória completa:** escolher um caso e comparar a estimativa com o BIS.
-3. **Replay causal:** observar EEG/BIS, play/pause, qualidade e abstenção
-   (sem emissão quando o sinal é insuficiente). É gravação, não aquisição ao vivo.
-4. **Visão geral / Resultados:** mostrar erros, associação e variação entre casos;
-   resultados negativos e mudança de dataset também são resultados do trabalho.
-5. **Método e limitações:** explicar separação por caso, referência BIS e ausência
-   de validação clínica. **Modelo (apoio)** e **Corpus** ficam para aprofundamento.
-
-Dash é a **única interface web**. Download, treino, avaliação e bridge JSONL
-continuam na [CLI](#uso-rápido), fora da demonstração. O
-[checklist](docs/_archive/research/demo_acceptance_checklist.md) separa o aceite da demo
-local de pesquisas futuras; não declara os cenários pendentes aprovados.
 
 ## Recursos e documentação de apoio
 
@@ -50,7 +19,7 @@ local de pesquisas futuras; não declara os cenários pendentes aprovados.
 - A normalização VitalDB preserva unidade declarada, nomes/IDs dos tracks e origem do dataset; amplitude e montagem não são convertidas silenciosamente.
 - Leitura de arquivos MATLAB v7.3 (`EEG` e `bis`) e fallback para MAT clássico.
 - Janelas não sobrepostas de 5 s a 128 Hz, alinhadas ao ponto BIS correspondente.
-- Filtro passa-banda, notch de 50 Hz, tratamento de amostras não finitas e heurística de qualidade exposta na interface.
+- Filtro passa-banda, notch de 50 Hz, tratamento de amostras não finitas e heurística de qualidade exposta na CLI e nos relatórios.
 - Gate padrão de qualidade 0,20 no treino e na inferência; o corpus baixado tem 24 arquivos, mas o `case24` é reprovado pela auditoria de escala e não entra no checkpoint padrão.
 - CNN 1-D com regressão limitada a 0–100 e mapeamento para quatro estágios: `deep`, `general`, `light`, `awake`.
 - Divisão por caso antes da avaliação para evitar que janelas vizinhas do mesmo paciente vazem entre conjuntos.
@@ -58,21 +27,20 @@ local de pesquisas futuras; não declara os cenários pendentes aprovados.
 - Entrada experimental por bridge JSONL na CLI, com timestamps, conversão de taxa e saída JSON; o driver do equipamento e o bridge continuam sendo responsabilidade do laboratório.
 - Baseline espectral com potência por banda, entropia, frequência de borda, RMS e line length para comparar a CNN com uma referência interpretável.
 - Benchmark de latência do caminho de streaming, com p50/p95 por chunk e fração do orçamento de tempo real.
-- Dashboard Dash + Plotly para comparar CNN contra BIS e reproduzir um caso gravado com cursor temporal, play/pause, velocidade, EEG causal, saída bruta/suavizada, estágio e qualidade.
-- Aba **Corpus** com composição por fonte, mapa finitude × janelas aproveitáveis e comparação do checkpoint ativo contra o candidato misto.
-- Dash é a única interface web, em [`dash_app.py`](dash_app.py). Download (`download-data`, `download-vitaldb`), treino (`train`, `train-corpus`), bridge JSONL (`stream-json`, `audit-json`) e ficha do equipamento (`validate-intake`) são operações da CLI, não recursos do Dash.
-- Artigo escrito do TCC em LaTeX no formato SBC em [`docs/tcc_brainsniffer.tex`](docs/tcc_brainsniffer.tex), com referências em [`docs/referencias.bib`](docs/referencias.bib), arquivos do template em [`docs/latex/`](docs/latex/) e PDF compilado em [`docs/tcc_brainsniffer.pdf`](docs/tcc_brainsniffer.pdf).
-- Rascunho técnico de apoio em [`docs/article.md`](docs/article.md).
-- Ledger que liga fontes, hipóteses, decisões e limites em [`docs/source_ledger.md`](docs/source_ledger.md).
-- Catálogo de datasets e compatibilidade de cada fonte em [`docs/data_catalog.md`](docs/data_catalog.md).
-- Protocolo e resultado do corpus misto em [`docs/mixed_corpus.md`](docs/mixed_corpus.md).
-- Model card com uso pretendido, métricas, riscos e limites em [`docs/model_card.md`](docs/model_card.md).
-- Guia da avaliação externa exploratória seletiva com VitalDB em [`docs/vitaldb_external_validation.md`](docs/vitaldb_external_validation.md).
+- Download (`download-data`, `download-vitaldb`), treino (`train`, `train-corpus`), bridge JSONL (`stream-json`, `audit-json`) e ficha do equipamento (`validate-intake`) são operações da CLI.
+- Artigo escrito do TCC em LaTeX no formato SBC em [`docs/artigo/tcc_brainsniffer.tex`](docs/artigo/tcc_brainsniffer.tex), com referências em [`docs/artigo/referencias.bib`](docs/artigo/referencias.bib), arquivos do template em [`docs/artigo/latex/`](docs/artigo/latex/) e PDF compilado em [`docs/artigo/tcc_brainsniffer.pdf`](docs/artigo/tcc_brainsniffer.pdf).
+- Índice da documentação em [`docs/README.md`](docs/README.md): artigo, notas, submissão e arquivo morto.
+- Rascunho técnico de apoio em [`docs/notas/article.md`](docs/notas/article.md).
+- Ledger que liga fontes, hipóteses, decisões e limites em [`docs/notas/source_ledger.md`](docs/notas/source_ledger.md).
+- Catálogo de datasets e compatibilidade de cada fonte em [`docs/notas/data_catalog.md`](docs/notas/data_catalog.md).
+- Protocolo e resultado do corpus misto em [`docs/notas/mixed_corpus.md`](docs/notas/mixed_corpus.md).
+- Model card com uso pretendido, métricas, riscos e limites em [`docs/notas/model_card.md`](docs/notas/model_card.md).
+- Guia da avaliação externa exploratória seletiva com VitalDB em [`docs/notas/vitaldb_external_validation.md`](docs/notas/vitaldb_external_validation.md).
 - Ficha de entrada e aceite para equipamento EEG real em [`docs/_archive/real_eeg_intake.md`](docs/_archive/real_eeg_intake.md).
 - Protocolo de avanço da bancada ao modo sombra prospectivo em [`docs/_archive/prospective_protocol.md`](docs/_archive/prospective_protocol.md).
-- O Dash exibe dados e relatórios locais; download e avaliação exploratória VitalDB sem retreino são feitos pela CLI (`download-vitaldb` e `evaluate-external`).
+- Download e avaliação exploratória VitalDB sem retreino são feitos pela CLI (`download-vitaldb` e `evaluate-external`).
 - A CLI `stream-json --report` registra a auditoria da sessão em JSON sem armazenar
-  o EEG bruto. O Dash não oferece captura de equipamento nem edição/validação de intake.
+  o EEG bruto.
 - Preencha o manifesto JSON do equipamento e valide-o com `validate-intake`
   antes de reutilizá-lo na sessão via `--metadata-file`.
 - A ficha JSON do equipamento pode ser validada antes da bancada com
@@ -92,7 +60,7 @@ local de pesquisas futuras; não declara os cenários pendentes aprovados.
   [`examples/stream_metadata.template.json`](examples/stream_metadata.template.json)
   e passe `--metadata-file` aos comandos `audit-json` ou `stream-json`.
   Conflitos entre arquivo, flags e chunks JSON fazem a sessão falhar de forma explícita.
-- Matriz de requisitos, evidências e lacunas em [`docs/project_status.md`](docs/project_status.md).
+- Matriz de requisitos, evidências e lacunas em [`docs/notas/project_status.md`](docs/notas/project_status.md).
 
 </details>
 
@@ -122,48 +90,39 @@ uv run --locked --extra dev pytest -q
 
 Os comandos dos experimentos estão em [Uso rápido](#uso-rápido). A proveniência,
 as hipóteses e os limites de interpretação são registrados em
-[`docs/source_ledger.md`](docs/source_ledger.md) e
-[`docs/decisions.md`](docs/decisions.md).
+[`docs/notas/source_ledger.md`](docs/notas/source_ledger.md) e
+[`docs/notas/decisions.md`](docs/notas/decisions.md).
 
-### Limites da reprodução e da demonstração
+### Limites da reprodução
 
-O `Dockerfile` usa Python 3.12 e `uv sync --locked --no-dev --no-editable`:
-a instalação consome `uv.lock` e deve falhar se ele divergir do projeto, em vez
+A instalação consome `uv.lock` e deve falhar se ele divergir do projeto, em vez
 de resolver livremente com `pip install .`. O lock atual aponta Torch do PyPI,
-incluindo dependências CUDA no Linux; não é uma imagem CPU-only nem há garantia
-de tamanho reduzido. A disponibilidade dos wheels e o build da imagem ainda
-precisam de validação de integração. A imagem base, pacotes apt e dependências
-de build isolado (Hatchling) não estão todos fixados por digest/lock: isto não
-promete reprodução bit a bit. Não houve build/deploy como parte desta revisão.
-
-O Dash é uma aplicação do **checkout**, não um entrypoint incluído no wheel:
-execute da raiz com `dash_app.py`, `assets/` e os dados, checkpoints e relatórios
-necessários presentes. Instalar apenas o pacote Python não instala esse conjunto.
-Download, treino e acesso a arquivos/bridges são operações **locais privilegiadas**
-da CLI para operadores confiáveis, separadas da superfície Dash para visitantes.
-Esses fluxos não migraram para o Dash; execute-os fora da sessão de demonstração.
+incluindo dependências CUDA no Linux: o ambiente não é CPU-only nem tem garantia
+de tamanho reduzido, e a disponibilidade dos wheels ainda precisa de validação
+de integração.
 
 Trate checkpoints e qualquer artefato serializado com pickle como entradas
 **somente de origem confiável**. Pickle pode executar código ao desserializar;
-não carregue uploads ou caminhos fornecidos por visitantes. Esta orientação não
+não carregue uploads ou caminhos fornecidos por terceiros. Esta orientação não
 atesta nem antecipa o contrato de segurança de cada loader.
 
-Para a demo, congele dados, checkpoint, relatórios e configuração antes da sessão,
-registre seus hashes e mantenha-os somente para leitura. Não treine, baixe dados
-ou substitua o modelo durante a apresentação; prepare uma nova versão e repita o
-aceite fora da sessão. Isto é um requisito operacional, não uma alegação de que
-o filesystem já imponha imutabilidade. O
+Para uma apresentação, congele dados, checkpoint, relatórios e configuração antes
+da sessão, registre seus hashes e mantenha-os somente para leitura. Não treine,
+baixe dados ou substitua o modelo durante a sessão; prepare uma nova versão e
+repita a verificação fora dela. Isto é um requisito operacional, não uma alegação
+de que o filesystem já imponha imutabilidade. O
 [checklist de aceite da demonstração](docs/_archive/research/demo_acceptance_checklist.md)
-lista testes de browser, rede, gates, sessões e hardware ainda **não executados**
-nesta revisão. Correções paralelas e CI não são declarados aprovados por este texto.
+foi escrito para a interface web removida e permanece apenas como registro
+histórico: os cenários que ele lista seguem **não executados** nesta revisão.
+Correções paralelas e CI não são declarados aprovados por este texto.
 
 ## Uso rápido
 
-### CLI — preparação e experimentos, não recursos do Dash
+### CLI — preparação e experimentos
 
-Os comandos abaixo são opções independentes, **não uma sequência obrigatória**
-para iniciar a demo. Download acessa a rede; treino e avaliações podem escrever
-artefatos. Execute apenas a operação necessária, fora da sessão de apresentação.
+Os comandos abaixo são opções independentes, **não uma sequência obrigatória**.
+Download acessa a rede; treino e avaliações podem escrever artefatos. Execute
+apenas a operação necessária, fora da sessão de apresentação.
 
 <details>
 <summary>Comandos de download, treino, avaliação e benchmark</summary>
@@ -243,11 +202,10 @@ uv run brainsniffer benchmark-latency --iterations 30
 </details>
 
 O replay da CLI simula o caminho online e, por isso, rejeita amostras `NaN`/`Inf`
-antes do filtro causal. A trajetória e o replay visual do Dash são inspeções
-retrospectivas de arquivos gravados: quando um VitalDB tem pontos ausentes, a
-interface interpola esses pontos somente para a simulação e mantém o score de
-qualidade calculado no sinal original. Essa conveniência não altera o estimador
-online nem valida uma aquisição ao vivo.
+antes do filtro causal. O replay e as demais inspeções retrospectivas de arquivos
+gravados preservam as lacunas do sinal: pontos ausentes permanecem ausentes, e o
+score de qualidade continua o do sinal original. Essa conveniência não altera o
+estimador online nem valida uma aquisição ao vivo.
 
 ### Experimentos de arquitetura e treino
 
@@ -285,11 +243,11 @@ meu-bridge-do-fabricante | uv run brainsniffer stream-json \
   --report registros/sessao.json
 ```
 
-### Bridge JSONL experimental — fora do fluxo principal Dash
+### Bridge JSONL experimental
 
-O fluxo principal é a inspeção retrospectiva e o replay de gravações no Dash.
-Para integrar um driver próprio na CLI, o modo JSON aceita uma linha por chunk
-pela entrada padrão; não há captura de equipamento pelo Dash.
+Além do `replay` de gravações, a CLI aceita entrada em JSON, uma linha por chunk
+pela entrada padrão, para integrar um driver próprio; não há captura de
+equipamento.
 
 O suporte LSL foi retirado. Relatórios e documentos históricos de ensaios LSL
 preservam evidência passada, não representam capacidade atual do software.
@@ -392,7 +350,7 @@ O dataset fornece EEG e BIS, não um diagnóstico clínico independente de consc
 7. *Open Reimplementation of the BIS Algorithms for Depth of Anesthesia* (2022). [PMC9481655](https://pmc.ncbi.nlm.nih.gov/articles/PMC9481655/). Referência para distinguir índice proprietário, sinais intermediários e validação independente.
 8. FDA, K202621. [Indications and comparison of EEG-based proprietary indices](https://www.accessdata.fda.gov/cdrh_docs/pdf20/K202621.pdf). Registro regulatório que descreve índices 0–100 e o intervalo de referência 40–60 como auxílio de monitoramento.
 
-As decisões detalhadas, as hipóteses e os itens que ainda dependem de validação estão em [`docs/decisions.md`](docs/decisions.md).
+As decisões detalhadas, as hipóteses e os itens que ainda dependem de validação estão em [`docs/notas/decisions.md`](docs/notas/decisions.md).
 O contrato para uma fonte de EEG real está em [`docs/_archive/live_acquisition.md`](docs/_archive/live_acquisition.md); antes de usar um equipamento, preencha também a [`ficha de entrada de EEG real`](docs/_archive/real_eeg_intake.md).
 O protocolo para avançar de replay para bancada, validação externa travada e modo sombra está em [`docs/_archive/prospective_protocol.md`](docs/_archive/prospective_protocol.md).
 

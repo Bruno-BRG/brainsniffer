@@ -28,7 +28,7 @@ VitalDB é avaliação cruzada de dataset exploratória. Para o candidato misto,
 esses mesmos 15 casos são holdout histórico após exposição ao domínio e
 reutilização para comparação, não validação externa confirmatória; não entram
 no ajuste dos pesos. O checkpoint ativo não é promovido por esses resultados.
-Partições, hashes e limites constam em [`docs/mixed_corpus.md`](mixed_corpus.md).
+Partições, hashes e limites constam em [`docs/notas/mixed_corpus.md`](mixed_corpus.md).
 Reavaliar pesos congelados é diferente de reproduzir o treino histórico:
 executar a receita no código atual produz um novo experimento, sem garantia de
 identidade dos pesos. Os relatórios não comprovam a implementação atual.

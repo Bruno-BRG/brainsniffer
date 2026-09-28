@@ -1,8 +1,8 @@
 # BrainSniffer — nota histórica e guia do artigo
 
 Este Markdown é uma nota de contexto, não um segundo manuscrito. A fonte do TCC
-é [`tcc_brainsniffer.tex`](tcc_brainsniffer.tex), com bibliografia em
-[`referencias.bib`](referencias.bib) e receita em [`latex/README.md`](latex/README.md).
+é [`tcc_brainsniffer.tex`](../artigo/tcc_brainsniffer.tex), com bibliografia em
+[`referencias.bib`](../artigo/referencias.bib) e receita em [`artigo/README.md`](../artigo/README.md).
 O estado real da compilação está em [`project_status.md`](project_status.md).
 
 ## Contribuição de graduação
