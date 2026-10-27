@@ -154,7 +154,13 @@ segue as referências GMLP, DECIDE-AI e TRIPOD+AI.
 
 ## Artefatos e reprodução
 
-- Checkpoint: `models/brainsniffer_cnn.pt`.
+> **Pesos não publicados.** Desde 26/10/2026 os `.pt` não estão no repositório;
+> reconstrua-os com `train` / `train-corpus`. O checkpoint candidato misto
+> (`corpus_fixed`) foi treinado com dados do VitalDB (CC BY-NC-SA 4.0 e Data Use
+> Agreement): uso restrito a pesquisa, sem fins comerciais, e sem divulgação dos
+> dados. Detalhes e termos no README, seção "Licença e termos do VitalDB".
+
+- Checkpoint (local, não versionado): `models/brainsniffer_cnn.pt`.
 - Metadados, métricas e SHA-256 do checkpoint: `models/brainsniffer_cnn.json`.
 - Relatório reproduzível do holdout Figshare: `reports/figshare_holdout_evaluation.json`.
 - Relatório externo exploratório reproduzível: `reports/vitaldb_external_validation.json`.

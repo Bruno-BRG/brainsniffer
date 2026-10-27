@@ -338,16 +338,43 @@ arquivos derivados do VitalDB foram removidos do índice **e do histórico**;
 clones anteriores a essa data ainda podem contê-los e devem ser tratados como
 desatualizados.
 
-Os 24 arquivos `.mat` do corpus [EEG and BIS raw data](https://doi.org/10.6084/m9.figshare.5589841.v1)
-permanecem em `data/raw/` sob CC BY 4.0, com o crédito acima; `download-data`
-reconstrói o diretório sem depender do clone. Os dois checkpoints `.pt` de
-pesquisa permanecem em `models/` para auditoria dos relatórios (hashes nos
-sidecars `.json`); pesos derivados de dados não relicenciam nem substituem os
-termos das fontes.
+Em 26/10/2026 o histórico foi reescrito de novo para remover também os 24
+arquivos `.mat` do Figshare e os checkpoints `.pt` (`brainsniffer_cnn.pt` e
+`brainsniffer_corpus_fixed.pt`). **Nenhum dado e nenhum peso treinado é publicado
+neste repositório.** Clones anteriores a essa data ainda podem contê-los e devem
+ser tratados como desatualizados.
 
-A licença MIT não relicencia dados, checkpoints ou relatórios de terceiros.
-Preserve atribuição e termos do Figshare (CC BY 4.0), consulte os termos do
-VitalDB antes de qualquer uso e não presuma que rastreamento no Git equivalha a
+- **Dados:** `download-data` baixa os 24 arquivos do corpus
+  [EEG and BIS raw data](https://doi.org/10.6084/m9.figshare.5589841.v1)
+  (Figshare, CC BY 4.0) para `data/raw/`, e `download-vitaldb` baixa casos do
+  VitalDB para `data/vitaldb*/`. Ambos ficam fora do Git e são baixados por quem
+  executa o sistema.
+- **Pesos:** os `.pt` ficam só na máquina de quem treina (`train` e `train-corpus`
+  os reconstroem). Os sidecars `.json` (configuração, métricas e SHA-256)
+  continuam versionados para auditoria dos relatórios.
+
+### Licença e termos do VitalDB
+
+O VitalDB Open Dataset é distribuído sob **CC BY-NC-SA 4.0** e um
+[Data Use Agreement](https://vitaldb.net/dataset/) (seção "Data Use Agreement").
+Quem usa os dados ou pesos derivados deles deve observar, entre outros pontos do
+acordo:
+
+- uso **somente para pesquisa e desenvolvimento**; **uso comercial é vedado**;
+- **não divulgar os dados** a quem não seja contratado pelo usuário, sem
+  consentimento do provedor;
+- **não tentar identificar pessoas** a partir dos dados;
+- citar o provedor: Lee H-C et al., *VitalDB, a high-fidelity multi-parameter
+  vital signs database in surgical patients*, Scientific Data, 2022.
+
+Os pesos treinados com VitalDB (por exemplo, o candidato `corpus_fixed`) são
+obra derivada desses dados e devem ser tratados como **restritos a pesquisa, sem
+uso comercial e com a mesma licença da fonte (CC BY-NC-SA 4.0)**. Se o acordo for
+alterado, vale a versão vigente em vitaldb.net.
+
+A licença MIT cobre apenas o código. Ela não relicencia dados, checkpoints ou
+relatórios de terceiros. Preserve a atribuição e os termos do Figshare
+(CC BY 4.0), siga o acordo do VitalDB e não presuma que estar no Git equivalha a
 autorização de redistribuição ou uso clínico.
 
 ## Interpretação do rótulo
