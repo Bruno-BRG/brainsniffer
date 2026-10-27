@@ -1,0 +1,24 @@
+{
+  "v": 4,
+  "createdOnFiles": {"v": 1, "at": "2026-10-20T12:00:00Z"},
+  "lists": "css",
+  "title": "BrainSniffer - TCC",
+  "order": [
+    "capa", "identificacao", "sumario", "problema", "perguntas", "eeg", "ritmos", "anestesia", "bis", "caso", "dados", "preproc", "rede", "treino", "resultados", "trajetoria", "comparacao", "vitaldb", "implantabilidade", "fatorial", "conclusao", "limitacoes", "obrigado", "ref1", "ref2", "ref3"
+  ],
+  "sections": {
+    "abertura": {"description": "Capa, identificação e sumário", "start": "capa"},
+    "problema": {"description": "Problema e perguntas de pesquisa", "start": "problema"},
+    "eeg": {"description": "Como o EEG funciona", "start": "eeg"},
+    "anestesia": {"description": "EEG na anestesia e o índice BIS", "start": "anestesia"},
+    "dados": {"description": "Dados e pré-processamento", "start": "dados"},
+    "rede": {"description": "A rede convolucional", "start": "rede"},
+    "resultados": {"description": "Resultados", "start": "resultados"},
+    "conclusao": {"description": "Conclusão e limitações", "start": "conclusao"},
+    "referencias": {"description": "Referências (anexo)", "start": "ref1"}
+  },
+  "faces": {
+    "inter": {"family": "Inter", "href": "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap"}
+  },
+  "designSystems": []
+}

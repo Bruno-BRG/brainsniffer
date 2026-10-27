@@ -1,0 +1,19 @@
+<section id="vitaldb" style="background:#FFFFFF;color:#1A1A1A;font-family:'Inter', Arial, sans-serif;display:flex;flex-direction:column;padding:200px 128px 160px 128px;gap:24px">
+<img src="/_blob/e61d3a037f7090cc31665c6e71238a70" alt="Logotipo UniJorge" style="position:absolute;left:128px;top:56px;width:96px;height:68px;object-fit:contain">
+<p style="position:absolute;right:128px;top:84px;width:800px;text-align:right;font-size:24px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#4D4D4D">BrainSniffer · TCC</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1000px;font-size:24px;color:#4D4D4D">BrainSniffer · Bruno Rocha Guimarães</p>
+<p style="position:absolute;right:128px;bottom:64px;width:300px;text-align:right;font-size:24px;color:#4D4D4D">18 / 26</p>
+<p style="font-size:24px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#305080">06 · Resultados — VitalDB</p>
+<h2 style="font-size:56px;font-weight:800;line-height:1.1;text-transform:uppercase">O desempenho não transporta entre fontes</h2>
+<div style="display:flex;gap:48px;align-items:center">
+<img src="/_blob/90541d6b9bc6588043a7d71875684fff" alt="Desempenho da CNN e do controle espectral no VitalDB, comparado ao holdout do Figshare" style="width:900px;height:504px;object-fit:contain">
+<div style="flex:1;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-size:48px;font-weight:800;color:#305080">12,43</p><p style="font-size:24px;color:#4D4D4D">MAE do ativo no VitalDB (era 7,03)</p></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-size:48px;font-weight:800;color:#305080">0,515</p><p style="font-size:24px;color:#4D4D4D">PK: indistinguível do acaso</p></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-size:48px;font-weight:800;color:#305080">13,62</p><p style="font-size:24px;color:#4D4D4D">RF espectral colapsa igual (PK 0,502)</p></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-size:48px;font-weight:800;color:#305080">14 / 15</p><p style="font-size:24px;color:#4D4D4D">casos melhoram com o misto — que já viu a fonte</p></div>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:140px;width:1600px;font-size:22px;line-height:1.3;color:#7A7A7A"><b style="color:#305080">Fonte:</b> Lee et al. (2022); Saeb et al. (2017); resultados deste trabalho.</p>
+<aside>A fronteira é o transporte. O ativo vai de 7 no Figshare para 12,43 no VitalDB, e o PK cai para 0,515: a rede deixa de ordenar os momentos. O controle espectral colapsa igual, então não é falha da CNN. O misto melhora 14 dos 15 casos, mas já viu a fonte: adaptação ao domínio, não generalização. (≈45 s)</aside>
+</section>

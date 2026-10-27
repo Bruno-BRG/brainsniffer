@@ -1,0 +1,22 @@
+<section id="implantabilidade" style="background:#FFFFFF;color:#1A1A1A;font-family:'Inter', Arial, sans-serif;display:flex;flex-direction:column;padding:200px 128px 160px 128px;gap:24px">
+<img src="/_blob/e61d3a037f7090cc31665c6e71238a70" alt="Logotipo UniJorge" style="position:absolute;left:128px;top:56px;width:96px;height:68px;object-fit:contain">
+<p style="position:absolute;right:128px;top:84px;width:800px;text-align:right;font-size:24px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#4D4D4D">BrainSniffer · TCC</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1000px;font-size:24px;color:#4D4D4D">BrainSniffer · Bruno Rocha Guimarães</p>
+<p style="position:absolute;right:128px;bottom:64px;width:300px;text-align:right;font-size:24px;color:#4D4D4D">19 / 26</p>
+<p style="font-size:24px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#305080">06 · Resultados — implantabilidade</p>
+<h2 style="font-size:56px;font-weight:800;line-height:1.1;text-transform:uppercase">Ordem de grandeza de um modelo 7× maior</h2>
+<p style="font-size:26px;line-height:1.4;color:#4D4D4D">Cada ponto é um span do EWMA. Comparação de ordem de grandeza, não ranking: protocolos, seleção da suavização e avaliação diferem; o span 5 foi escolhido pós-hoc.</p>
+<div style="display:flex;gap:48px;align-items:center">
+<table style="width:900px;font-size:26px;line-height:1.3">
+<tr><th style="width:30%;font-weight:700;color:#305080">Métrica</th><th style="width:35%;font-weight:700;color:#305080">BrainSniffer</th><th style="width:35%;font-weight:700;color:#305080">TCN-BiLSTM</th></tr>
+<tr><td>MAE Figshare</td><td>6,11 (span 5)</td><td>6,03 ± 0,38</td></tr>
+<tr><td>Memória</td><td>10 s</td><td>45–95 s</td></tr>
+<tr><td>Parâmetros</td><td>0,15 M</td><td>1,07 M</td></tr>
+<tr><td>Causal ao vivo</td><td>Sim</td><td>Não</td></tr>
+</table>
+<img src="/_blob/5829ffa44732961fadaf3fc069077583" alt="Curva de MAE por span do EWMA para o BrainSniffer" style="width:716px;height:338px;object-fit:contain">
+</div>
+<p style="font-size:26px;line-height:1.4;color:#4D4D4D">TCN-BiLSTM — BiLSTM bidirecional e filtro de fase zero. Com span 10, o misto chega a 5,84 (22,5 s).</p>
+<p style="position:absolute;left:128px;bottom:140px;width:1600px;font-size:22px;line-height:1.3;color:#7A7A7A"><b style="color:#305080">Fonte:</b> Sukriti et al. (2026); Park et al. (2020); Kiranyaz et al. (2021).</p>
+<aside>O melhor publicado neste corpus é um TCN-BiLSTM de 2026: 1,07 milhão de parâmetros, MAE 6,03 após suavização. Com nossa EWMA causal, o misto chega a 6,11 com 10 s de memória, contra 45 a 95 s do deles. O nosso é causal; o deles usa BiLSTM bidirecional e filtro de fase zero. Comparação de ordem de grandeza, não ranking. (≈45 s)</aside>
+</section>

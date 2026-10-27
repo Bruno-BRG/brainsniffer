@@ -1,0 +1,21 @@
+<section id="rede" style="background:#FFFFFF;color:#1A1A1A;font-family:'Inter', Arial, sans-serif;display:flex;flex-direction:column;padding:200px 128px 160px 128px;gap:24px">
+<img src="/_blob/e61d3a037f7090cc31665c6e71238a70" alt="Logotipo UniJorge" style="position:absolute;left:128px;top:56px;width:96px;height:68px;object-fit:contain">
+<p style="position:absolute;right:128px;top:84px;width:800px;text-align:right;font-size:24px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#4D4D4D">BrainSniffer · TCC</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1000px;font-size:24px;color:#4D4D4D">BrainSniffer · Bruno Rocha Guimarães</p>
+<p style="position:absolute;right:128px;bottom:64px;width:300px;text-align:right;font-size:24px;color:#4D4D4D">13 / 26</p>
+<p style="font-size:24px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#305080">05 · A rede</p>
+<h2 style="font-size:56px;font-weight:800;line-height:1.1;text-transform:uppercase">Uma CNN 1-D compacta</h2>
+<div style="display:flex;gap:24px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:28px;background:#F3F5F8"><h3 style="font-size:30px;font-weight:700">Entrada</h3><p style="font-size:26px;line-height:1.4">5 s de EEG</p><p style="font-size:26px;line-height:1.4">1 × 640</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:28px;background:#F3F5F8"><h3 style="font-size:30px;font-weight:700">Convolução</h3><p style="font-size:26px;line-height:1.4">4 blocos: 1→32→64→128→128 canais</p><p style="font-size:26px;line-height:1.4">Kernels 7, 7, 5, 5 · BN · GELU · pooling nos 3 primeiros (640 → 80)</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:28px;background:#F3F5F8"><h3 style="font-size:30px;font-weight:700">Cabeça</h3><p style="font-size:26px;line-height:1.4">Média global</p><p style="font-size:26px;line-height:1.4">128 → 64 → 1 · dropout 0,2</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:28px;background:#F3F5F8"><h3 style="font-size:30px;font-weight:700">Saída</h3><p style="font-size:26px;line-height:1.4">Sigmoide × 100</p><p style="font-size:26px;line-height:1.4">BIS 0–100 por janela</p></div>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:8px"><p style="font-size:64px;font-weight:800;color:#305080">0,15 M</p><p style="font-size:24px;color:#4D4D4D">parâmetros — roda em CPU</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px"><p style="font-size:64px;font-weight:800;color:#305080">4</p><p style="font-size:24px;color:#4D4D4D">blocos convolucionais com batch norm + GELU</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px"><p style="font-size:64px;font-weight:800;color:#305080">1</p><p style="font-size:24px;color:#4D4D4D">número por janela: o BIS estimado</p></div>
+</div>
+<p style="position:absolute;left:128px;bottom:140px;width:1600px;font-size:22px;line-height:1.3;color:#7A7A7A"><b style="color:#305080">Fonte:</b> Kiranyaz et al. (2021); Craik et al. (2019).</p>
+<aside>Rede pequena de propósito: quatro blocos convolucionais, canais de 1 a 32, 64, 128 e 128; kernels 7 e 5; batch norm e GELU; pooling nos três primeiros, de 640 para 80. Depois média global, cabeça 128-64-1 com dropout e sigmoide vezes 100. São 0,15 milhão de parâmetros, roda em CPU. (≈50 s)</aside>
+</section>
