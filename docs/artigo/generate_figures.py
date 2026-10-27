@@ -129,7 +129,6 @@ SUKRITI_LAG_MAX_SECONDS = 5.0 * (1.0 - SUKRITI_ALPHA_MIN) / SUKRITI_ALPHA_MIN
 EWMA_SWEEP_STYLE = (
     ("ativo", "CNN ativo", "o", COLOR_ACTIVE, True, "-"),
     ("misto", "CNN misto", "s", COLOR_MIXED, False, "--"),
-    ("rf_spectral", "RF espectral", "D", COLOR_BASELINE, True, ":"),
 )
 # Chave no relatório de calibração -> chave no relatório de EWMA.
 EWMA_FOR_CALIBRATION = {
