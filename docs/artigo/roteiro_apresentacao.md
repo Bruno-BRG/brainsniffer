@@ -132,14 +132,18 @@ Não leia os limiares dos gates.
 > No holdout Figshare, cinco casos e 5.523 janelas, o checkpoint ativo teve **MAE de 7,03 pontos BIS**, abaixo da escala de leitura de 10 pontos.
 >
 > A ordenação, medida pelo PK, foi 0,773: sorteados dois momentos, a rede os ordena como o BIS em 77% das vezes. Com cinco casos, é exploratório.
+>
+> Esses números vêm da avaliação offline. Reexecutei o mesmo checkpoint em replay, em fluxo, nos mesmos cinco casos, com passo de 5 s: as predições bateram até a quinta casa decimal (diferença máxima de 1,5·10⁻⁵). No VitalDB eu não medi o replay.
 
 ### 15. Trajetória — 35 s
 > Aqui a predição ao longo de toda a cirurgia do caso 19, escolhido antes da inferência. A rede acompanha a queda na indução e a subida no despertar, mas **superestima o patamar do meio**: viés de mais 4,79.
 >
+> Em cima, a linha contínua é o BIS, a tracejada é a predição bruta e a pontilhada é a suavizada (EWMA, span 10); embaixo, o erro. Entre os minutos 20 e 58 a rede fica em 40–50 e a referência em 25–40. Esta é a inferência offline, posicionada no início da janela: a estimativa só existe 5 s depois.
+>
 > A correlação dentro do caso é alta, 0,91: associação alta não elimina erro sistemático.
 
 ### 16. Comparação — 45 s
-> Os dois checkpoints nos dois benchmarks, com intervalos de 95% por bootstrap de casos inteiros. Três dos quatro MAE ficam abaixo de 10 pontos, a diferença considerada aceitável entre duas medições do próprio BIS: é a minha régua de leitura, não um critério clínico.
+> Os dois checkpoints nos dois benchmarks, com intervalos de 95% por bootstrap de casos inteiros. Três dos quatro MAE ficam abaixo de 10 pontos. Esse 10 é uma régua de leitura que tirei de estudos que comparam montagens do próprio BIS; não é a variabilidade geral do monitor nem um critério clínico.
 >
 > No Figshare, o misto não é significativamente melhor que o ativo.
 
@@ -211,6 +215,12 @@ Total possível: **−1:20**.
 
 **Você não comparou com um modelo mais simples?**
 > Explorei um controle espectral, mas não o validei com o mesmo rigor da rede, então não o uso como evidência. A comparação que sustenta o trabalho é com o modelo publicado e com o próprio limite de variabilidade do monitor.
+
+**Os números são do sistema ao vivo ou offline?**
+> Offline, em janelas de 5 s. No Figshare conferi em replay causal, com passo de 5 s: as predições coincidem até 1,5·10⁻⁵ ponto BIS, então o número é o da cadeia em replay. No VitalDB não medi: lá o offline interpola amostras que o replay rejeitaria, e os números tendem a ser otimistas.
+
+**Por que não um Transformer?**
+> Não testei. Com 24 casos e a meta de rodar ao vivo em CPU, a CNN era a escolha mais defensável: tem o viés certo para sinal local e poucos parâmetros. Transformer é extensão natural quando houver mais fontes.
 
 **Isso pode ser usado clinicamente?**
 > Não. É uma base auditável para testar hipóteses; não mede consciência, não prescreve dose e não deve acionar alarme.

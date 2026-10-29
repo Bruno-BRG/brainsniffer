@@ -1,0 +1,79 @@
+{
+  "scope": "research_only",
+  "checkpoint": "models/brainsniffer_cnn.pt",
+  "cases": [
+    "case19",
+    "case3",
+    "case4",
+    "case5",
+    "case9"
+  ],
+  "min_quality": 0.2,
+  "n_paired_windows": 5523,
+  "replay": {
+    "n": 5523.0,
+    "mae": 7.025415619451802,
+    "rmse": 11.084903589293038,
+    "bias": 0.7891795223829389,
+    "pearson_r": 0.7836897078177162,
+    "ccc": 0.780359767540163,
+    "stage_accuracy": 0.5850081477457904,
+    "stage_macro_f1": 0.5484804424163702,
+    "pk": 0.7727122754281407
+  },
+  "offline_same_windows": {
+    "n": 5523.0,
+    "mae": 7.025415627740117,
+    "rmse": 11.084903612670539,
+    "bias": 0.7891795120225444,
+    "pearson_r": 0.7836897065132338,
+    "ccc": 0.780359766109954,
+    "stage_accuracy": 0.5850081477457904,
+    "stage_macro_f1": 0.5484804424163702,
+    "pk": 0.7727122754281407
+  },
+  "replay_vs_offline_max_abs_diff": 1.52587890625e-05,
+  "per_case": {
+    "case19": {
+      "replay_emissions": 871,
+      "offline_windows": 850,
+      "paired_windows": 850,
+      "max_abs_diff": 1.52587890625e-05,
+      "mae_replay": 8.715155128030217,
+      "mae_offline": 8.71515521329992
+    },
+    "case3": {
+      "replay_emissions": 2614,
+      "offline_windows": 2324,
+      "paired_windows": 2324,
+      "max_abs_diff": 1.52587890625e-05,
+      "mae_replay": 6.500898970999529,
+      "mae_offline": 6.500898992338197
+    },
+    "case4": {
+      "replay_emissions": 779,
+      "offline_windows": 761,
+      "paired_windows": 761,
+      "max_abs_diff": 1.52587890625e-05,
+      "mae_replay": 8.256127283544954,
+      "mae_offline": 8.256127373774325
+    },
+    "case5": {
+      "replay_emissions": 483,
+      "offline_windows": 458,
+      "paired_windows": 458,
+      "max_abs_diff": 1.52587890625e-05,
+      "mae_replay": 6.454917587047061,
+      "mae_offline": 6.454917587047061
+    },
+    "case9": {
+      "replay_emissions": 1195,
+      "offline_windows": 1130,
+      "paired_windows": 1130,
+      "max_abs_diff": 1.52587890625e-05,
+      "mae_replay": 6.235517062972077,
+      "mae_offline": 6.235516934690223
+    }
+  },
+  "retrained": false
+}
